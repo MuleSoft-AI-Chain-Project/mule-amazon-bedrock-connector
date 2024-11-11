@@ -8,7 +8,7 @@
     <artifactId>mulechain-bedrock</artifactId>
     <version>0.2-0</version>
     <packaging>mule-extension</packaging>
-    <name>Aws-bedrock Extension</name>
+    <name>Amazon Bedrock</name>
 
     <parent>
         <groupId>org.mule.extensions</groupId>
