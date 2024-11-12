@@ -20,7 +20,7 @@
         </config>
     </configs>
     <connections/>
-    <extension name="MAC AWS Bedrock">
+    <extension name="Amazon Bedrock">
         <description><![CDATA[This is the main class of an extension, is the entry point from which configurations, connection providers, operations and sources are going to be declared.]]></description>
         <parameters/>
     </extension>

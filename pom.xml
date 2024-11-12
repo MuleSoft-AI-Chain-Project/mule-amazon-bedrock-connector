@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.mule.mulechain</groupId>
     <artifactId>mulechain-bedrock</artifactId>
-    <version>0.2-0</version>
+    <version>0.2.1-SNAPSHOT</version>
     <packaging>mule-extension</packaging>
     <name>Amazon Bedrock</name>
 
