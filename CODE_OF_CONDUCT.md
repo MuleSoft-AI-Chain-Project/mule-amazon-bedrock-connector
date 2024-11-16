@@ -1,5 +1,5 @@
 # Salesforce Open Source Community Code of Conduct
-
+ 
 ## About the Code of Conduct
 
 Equality is a core value at Salesforce. We believe a diverse and inclusive

@@ -1,1 +1,1 @@
-[How to contribute](https://mac-project.ai/docs/contribute)
+[How to contribute](https://mac-project.ai/docs/contribute) 
