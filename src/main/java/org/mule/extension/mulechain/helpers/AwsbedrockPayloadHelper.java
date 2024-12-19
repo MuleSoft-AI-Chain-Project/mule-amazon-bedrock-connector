@@ -139,6 +139,39 @@ public class AwsbedrockPayloadHelper {
     return jsonRequest.toString();
 }
 
+private static String getAmazonNovaText(String prompt, AwsbedrockParameters awsBedrockParameters) {
+
+    JSONObject textObject = new JSONObject();
+    textObject.put("text", prompt);
+
+    // Create the "content" array containing the "text" object
+    JSONArray contentArray = new JSONArray();
+    contentArray.put(textObject);
+
+    // Create the "messages" array and add the "user" message
+    JSONObject userMessage = new JSONObject();
+    userMessage.put("role", "user");
+    userMessage.put("content", contentArray);
+
+    JSONArray messagesArray = new JSONArray();
+    messagesArray.put(userMessage);
+
+    // Create the "inferenceConfig" object with optional parameters
+    JSONObject inferenceConfig = new JSONObject();
+    inferenceConfig.put("max_new_tokens", awsBedrockParameters.getMaxTokenCount());
+    inferenceConfig.put("temperature", awsBedrockParameters.getTemperature());
+    inferenceConfig.put("top_p", awsBedrockParameters.getTopP());
+    inferenceConfig.put("top_k", awsBedrockParameters.getTopK());
+
+    // Combine everything into the root JSON object
+    JSONObject rootObject = new JSONObject();
+    rootObject.put("messages", messagesArray);
+    rootObject.put("inferenceConfig", inferenceConfig);
+
+    return rootObject.toString();
+
+}
+
 
 private static String getStabilityTitanText(String prompt) {
     JSONObject jsonRequest = new JSONObject();
@@ -210,7 +243,10 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
   private static String identifyPayload(String prompt, AwsbedrockParameters awsBedrockParameters){
     if (awsBedrockParameters.getModelName().contains("amazon.titan-text")) {
         return getAmazonTitanText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
+    } else if (awsBedrockParameters.getModelName().contains("amazon.nova")) {
+        System.out.println("Generating payload for nova");
+        return getAmazonNovaText(prompt, awsBedrockParameters);
+    }else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
         return getAnthropicClaudeText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("ai21.j2")) {
         return getAI21Text(prompt, awsBedrockParameters);
@@ -228,7 +264,8 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 
   }
 
-  private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters){
+
+    private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters){
         // Initialize the AWS credentials
         //AwsCredentials awsCredentials;
 

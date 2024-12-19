@@ -47,6 +47,11 @@ public class AwsbedrockImagePayloadHelper {
                 .toString();
 }
 
+private static String getAmazonNovaImage(String prompt, String avoidInImage, AwsbedrockImageParameters awsBedrockParameters) {
+      //Since the payload is the same as Titan models, we'll simply call the getAmazonTitanImage to avoid code duplication
+    return getAmazonTitanImage(prompt, avoidInImage, awsBedrockParameters);
+}
+
 private static String getStabilityAiDiffusionImage(String prompt, String avoidInImage, AwsbedrockImageParameters awsBedrockParameters) {
         JSONArray textPromptsArray = new JSONArray()
                 .put(new JSONObject()
@@ -68,7 +73,10 @@ private static String getStabilityAiDiffusionImage(String prompt, String avoidIn
   private static String identifyPayload(String prompt, String avoidInImage, AwsbedrockImageParameters awsBedrockParameters){
     if (awsBedrockParameters.getModelName().contains("amazon.titan-image")) {
         return getAmazonTitanImage(prompt, avoidInImage, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("stability.stable-diffusion-xl")) {
+    } else if (awsBedrockParameters.getModelName().contains("amazon.nova")) {
+        return getAmazonNovaImage(prompt, avoidInImage, awsBedrockParameters);
+    }
+    else if (awsBedrockParameters.getModelName().contains("stability.stable-diffusion-xl")) {
         return getStabilityAiDiffusionImage(prompt, avoidInImage, awsBedrockParameters);
     } else {
 
@@ -78,7 +86,8 @@ private static String getStabilityAiDiffusionImage(String prompt, String avoidIn
   }
 
 
-private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
+
+    private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
 
     // Initialize the AWS credentials
     
@@ -123,7 +132,7 @@ public static byte[] generateImage(String modelId, String body, AwsbedrockConfig
 
     byte[] imageBytes = null;
 
-    if (modelId.contains("amazon.titan-image")) {
+    if (modelId.contains("amazon.titan-image") || modelId.contains("amazon.nova") ) {
         String base64Image = responseBody.getJSONArray("images").getString(0);
        imageBytes = Base64.getDecoder().decode(base64Image);
     } else if (modelId.contains("stability.stable-diffusion-xl")) {

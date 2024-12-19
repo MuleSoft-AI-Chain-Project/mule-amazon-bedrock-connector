@@ -1,5 +1,6 @@
 package org.mule.extension.mulechain.helpers;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
@@ -54,6 +55,37 @@ public class AwsbedrockChatMemoryHelper {
     jsonRequest.put("textGenerationConfig", textGenerationConfig);
 
     return jsonRequest.toString();
+}
+
+private static String getAmazonNovaText(String prompt, AwsbedrockParameters awsBedrockParameters) {
+    JSONObject textObject = new JSONObject();
+    textObject.put("text", prompt);
+
+    // Create the "content" array containing the "text" object
+    JSONArray contentArray = new JSONArray();
+    contentArray.put(textObject);
+
+    // Create the "messages" array and add the "user" message
+    JSONObject userMessage = new JSONObject();
+    userMessage.put("role", "user");
+    userMessage.put("content", contentArray);
+
+    JSONArray messagesArray = new JSONArray();
+    messagesArray.put(userMessage);
+
+    // Create the "inferenceConfig" object with optional parameters
+    JSONObject inferenceConfig = new JSONObject();
+    inferenceConfig.put("max_new_tokens", awsBedrockParameters.getMaxTokenCount());
+    inferenceConfig.put("temperature", awsBedrockParameters.getTemperature());
+    inferenceConfig.put("top_p", awsBedrockParameters.getTopP());
+    inferenceConfig.put("top_k", awsBedrockParameters.getTopK());
+
+    // Combine everything into the root JSON object
+    JSONObject rootObject = new JSONObject();
+    rootObject.put("messages", messagesArray);
+    rootObject.put("inferenceConfig", inferenceConfig);
+
+    return rootObject.toString();
 }
 
 
@@ -127,6 +159,8 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
   private static String identifyPayload(String prompt, AwsbedrockParameters awsBedrockParameters){
     if (awsBedrockParameters.getModelName().contains("amazon.titan-text")) {
         return getAmazonTitanText(prompt, awsBedrockParameters);
+    } else if (awsBedrockParameters.getModelName().contains("amazon.nova")) {
+        return getAmazonNovaText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
         return getAnthropicClaudeText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("ai21.j2")) {
@@ -147,7 +181,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 
   }
 
-  private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters){
+    private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters){
         // Initialize the AWS credentials
         //AwsBasicCredentials awsCreds = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey());
         // Create Bedrock Client 

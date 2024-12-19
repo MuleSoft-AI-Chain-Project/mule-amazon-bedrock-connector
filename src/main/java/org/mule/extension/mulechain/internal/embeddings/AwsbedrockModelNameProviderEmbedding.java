@@ -8,9 +8,12 @@ import org.mule.runtime.extension.api.values.ValueResolvingException;
 public class AwsbedrockModelNameProviderEmbedding implements ValueProvider {
 
 	private static final Set<Value> VALUES_FOR = ValueBuilder.getValuesFor(
-	"amazon.titan-embed-text-v1",
-	"amazon.titan-embed-text-v2:0",
-	"amazon.titan-embed-image-v1"
+			"amazon.titan-embed-text-v1",
+			"amazon.titan-embed-text-v2:0",
+			"amazon.titan-embed-image-v1",
+			"amazon.nova-lite-v1:0",
+			"amazon.nova-micro-v1:0",
+			"amazon.nova-pro-v1:0"
 	);
 
 	@Override

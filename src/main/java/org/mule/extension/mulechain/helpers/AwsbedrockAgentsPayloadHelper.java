@@ -4,24 +4,18 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
-import org.mule.extension.mulechain.internal.AwsbedrockParams;
-import org.mule.extension.mulechain.internal.AwsbedrockParamsModelDetails;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
 import java.util.List;
 import java.util.stream.Collectors;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
-import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponse;
-import software.amazon.awssdk.services.bedrockagentruntime.model.ResponseStream;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
 import software.amazon.awssdk.core.SdkBytes;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -29,22 +23,9 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.core.waiters.Waiter;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
-import software.amazon.awssdk.services.bedrock.model.CustomModelSummary;
-import software.amazon.awssdk.services.bedrock.model.FoundationModelDetails;
-import software.amazon.awssdk.services.bedrock.model.FoundationModelSummary;
-import software.amazon.awssdk.services.bedrock.model.GetCustomModelRequest;
-import software.amazon.awssdk.services.bedrock.model.GetCustomModelResponse;
-import software.amazon.awssdk.services.bedrock.model.GetFoundationModelRequest;
-import software.amazon.awssdk.services.bedrock.model.GetFoundationModelResponse;
-import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
-import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
-import software.amazon.awssdk.services.bedrock.model.ValidationException;
-import software.amazon.awssdk.services.bedrockagent.BedrockAgentAsyncClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentResponse;
@@ -77,15 +58,7 @@ import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
 import java.util.UUID;
-import java.util.Scanner;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelWithResponseStreamRequest;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelWithResponseStreamResponseHandler;
 import java.util.Optional;
-import java.util.logging.Logger;
-import java.util.logging.Level;
-import java.util.Collections;
-import java.util.function.Consumer;
 
 public class AwsbedrockAgentsPayloadHelper {
 
@@ -125,6 +98,36 @@ public class AwsbedrockAgentsPayloadHelper {
     return jsonRequest.toString();
 }
 
+private static String getAmazonNovaText(String prompt, AwsbedrockParameters awsBedrockParameters) {
+    JSONObject textObject = new JSONObject();
+    textObject.put("text", prompt);
+
+    // Create the "content" array containing the "text" object
+    JSONArray contentArray = new JSONArray();
+    contentArray.put(textObject);
+
+    // Create the "messages" array and add the "user" message
+    JSONObject userMessage = new JSONObject();
+    userMessage.put("role", "user");
+    userMessage.put("content", contentArray);
+
+    JSONArray messagesArray = new JSONArray();
+    messagesArray.put(userMessage);
+
+    // Create the "inferenceConfig" object with optional parameters
+    JSONObject inferenceConfig = new JSONObject();
+    inferenceConfig.put("max_new_tokens", awsBedrockParameters.getMaxTokenCount());
+    inferenceConfig.put("temperature", awsBedrockParameters.getTemperature());
+    inferenceConfig.put("top_p", awsBedrockParameters.getTopP());
+    inferenceConfig.put("top_k", awsBedrockParameters.getTopK());
+
+    // Combine everything into the root JSON object
+    JSONObject rootObject = new JSONObject();
+    rootObject.put("messages", messagesArray);
+    rootObject.put("inferenceConfig", inferenceConfig);
+
+    return rootObject.toString();
+}
 
 private static String getStabilityTitanText(String prompt) {
     JSONObject jsonRequest = new JSONObject();
@@ -196,6 +199,8 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
   private static String identifyPayload(String prompt, AwsbedrockParameters awsBedrockParameters){
     if (awsBedrockParameters.getModelName().contains("amazon.titan-text")) {
         return getAmazonTitanText(prompt, awsBedrockParameters);
+    } else if ( awsBedrockParameters.getModelName().contains("amazon.nova")){
+        return getAmazonNovaText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
         return getAnthropicClaudeText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("ai21.j2")) {
