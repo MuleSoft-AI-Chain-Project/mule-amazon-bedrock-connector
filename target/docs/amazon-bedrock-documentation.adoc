@@ -1,5 +1,5 @@
 :toc:               left
-:toc-title:         MAC AWS Bedrock Module
+:toc-title:         Amazon Bedrock Module
 :toclevels:         2
 :last-update-label!:
 :docinfo:
@@ -7,7 +7,7 @@
 :icons: font
 
 
-= MAC AWS Bedrock Module Documentation Reference
+= Amazon Bedrock Module Documentation Reference
 
 +++
 This is the main class of an extension, is the entry point from which configurations, connection providers, operations and sources are going to be declared.
