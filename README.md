@@ -1,5 +1,5 @@
 # AWS Bedrock Overview
-![Maven Central](https://img.shields.io/maven-central/v/cloud.anypoint/mule-amazon-bedrock-connector)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.mulesoft-ai-chain-project/mule4-amazon-bedrock-connector)](https://central.sonatype.com/artifact/io.github.mulesoft-ai-chain-project/mule4-amazon-bedrock-connector/overview)
 
 [**AWS Bedrock**](https://aws.amazon.com/bedrock) is a fully managed service that offers a choice of high-performing foundation models (FMs) from leading AI companies including AI21 Labs, Anthropic, Cohere, Meta, Stability AI, and Amazon, along with a broad set of capabilities that you need to build generative AI applications, simplifying development while maintaining privacy and security.
 - Amazon Bedrock offers a choice of leading FM’s through a Single API
