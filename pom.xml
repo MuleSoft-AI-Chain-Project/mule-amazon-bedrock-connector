@@ -4,26 +4,44 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.mule.mulechain</groupId>
-    <artifactId>mulechain-bedrock</artifactId>
-    <version>0.3.0</version>
-  
+    <groupId>com.mulesoft.connectors</groupId>
+    <artifactId>mule4-amazon-bedrock-connector</artifactId>
+    <version>0.2.100-SNAPSHOT</version>
     <packaging>mule-extension</packaging>
-    <name>Amazon Bedrock Extension</name>
+    <name>MuleSoft Amazon Bedrock Connector - Mule 4</name>
     <description>The MuleSoft Amazon Bedrock connector is designed to provide access to Amazon Bedrock foundational models from mule applications</description>
     <url>https://mac-project.ai/docs/aws-bedrock/connector-overview</url>
+    <scm>
+        <connection>scm:git:git://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</connection>
+        <developerConnection>scm:git:ssh://github.com:MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</developerConnection>
+        <url>https://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector/tree/master</url>
+    </scm>
+
     <licenses>
         <license>
             <name>MIT License</name>
             <url>https://www.opensource.org/licenses/mit-license.php</url>
         </license>
     </licenses>
+
     <developers>
         <developer>
             <name>Amir Khan</name>
             <email>amir.khan@mulesoft.com</email>
             <organization>Salesforce</organization>
             <organizationUrl>https://www.mulesoft.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Nico Balestra</name>
+            <email>nbalestra@salesforce.com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.salesforce.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Tommaso Bolis</name>
+            <email>tbolis-at-salesforce-dot-com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.salesforce.com</organizationUrl>
         </developer>
         <developer>
             <name>Ryan Hoegg</name>
@@ -47,6 +65,31 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>1.5</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                    <checksums>all</checksums>
+                    <deploymentName>MuleSoft Amazon Bedrock Connector Mule 4 Deployment</deploymentName>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>com.mulesoft.munit</groupId>
                 <artifactId>munit-extensions-maven-plugin</artifactId>

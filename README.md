@@ -11,13 +11,13 @@
 
 AWS Bedrock provides an unified AI Platform to design, build and manage autonomous agents and the needed architecture. While AWS Bedrock is very strong in connecting multiple LLM providers, the way to interact varies from LLM to LLM. The MAC AWS Bedrock Connector provides the ability to connect to all supported LLMs through an unification layer. 
 
-### Installation (using Cloud.Anypoint Dependency)
+### Installation (using maven central dependency)
 
 ```xml
 <dependency>
-   <groupId>cloud.anypoint</groupId>
-   <artifactId>mule-amazon-bedrock-connector</artifactId>
-   <version>0.2.0</version>
+   <groupId>io.github.mulesoft-ai-chain-project</groupId>
+   <artifactId>mule4-amazon-bedrock-connector</artifactId>
+   <version>{version}</version>
    <classifier>mule-plugin</classifier>
 </dependency>
 ```
@@ -29,10 +29,10 @@ Then add the following dependency to your application's `pom.xml`:
 
 ```xml
 <dependency>
-   <groupId>com.mule.mulechain</groupId>
-   <artifactId>mulechain-bedrock</artifactId>
-   <version>{version}</version>
-   <classifier>mule-plugin</classifier>
+    <groupId>com.mulesoft.connectors</groupId>
+    <artifactId>mule4-amazon-bedrock-connector</artifactId>
+    <version>{version}</version>
+    <classifier>mule-plugin</classifier>
 </dependency>
 ```
 
