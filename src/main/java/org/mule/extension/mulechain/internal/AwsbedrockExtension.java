@@ -13,7 +13,7 @@ import static org.mule.sdk.api.meta.JavaVersion.JAVA_8;
  * and sources are going to be declared.
  */
 @Xml(prefix = "mac-bedrock")
-@Extension(name = "MAC AWS Bedrock")
+@Extension(name = "Amazon Bedrock")
 @Configurations(AwsbedrockConfiguration.class)
 @JavaVersionSupport({JAVA_8, JAVA_11, JAVA_17})
 public class AwsbedrockExtension {
