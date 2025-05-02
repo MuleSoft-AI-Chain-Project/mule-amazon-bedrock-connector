@@ -29,6 +29,8 @@ import software.amazon.awssdk.services.bedrock.model.GetFoundationModelResponse;
 import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ValidationException;
+import software.amazon.awssdk.services.bedrockruntime.model.InferenceConfiguration;
+import software.amazon.awssdk.services.bedrockruntime.model.GuardrailConfiguration;
 import java.util.List;
 
 public class AwsbedrockPayloadHelper {
@@ -49,13 +51,57 @@ public class AwsbedrockPayloadHelper {
   }
 
 
-  private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
-    return InvokeModelRequest.builder()
-          .body(SdkBytes.fromUtf8String(nativeRequest))
-          .modelId(modelId)
-          .build();
+  private static InvokeModelRequest createInvokeRequest(AwsbedrockParameters awsBedrockParameters, String nativeRequest) {
+	  
+	  String modelId = awsBedrockParameters.getModelName();
+      System.out.println("modelId: " + modelId);
 
+	  String region = awsBedrockParameters.getRegion();
+	  
+	  //for Anthropic Claude 3-x, mistral.pxtral, meta.llama3, prep the model id using the following format
+	  //arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0	  
+	  //arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.mistral.pixtral-large-2502-v1:0
+	  //arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.meta.llama3-3-70b-instruct-v1:0
+	  
+	  if (modelId.contains("amazon.nova-premier") ||
+			  modelId.contains("anthropic.claude-3") ||
+			    modelId.contains("mistral.pixtral") ||
+			    modelId.contains("meta.llama4") ||
+			    modelId.contains("meta.llama3-3") ||
+			    modelId.contains("meta.llama3-2") ||			    
+			    modelId.contains("meta.llama3-1")) {
+
+			    modelId = "arn:aws:bedrock:" + region + ":076261412953:inference-profile/us." + modelId;
+	  }
+	  
+	  String guardrailIdentifier = awsBedrockParameters.getGuardrailIdentifier();
+	  String guardrailVersion = awsBedrockParameters.getGuardrailVersion();
+	  
+	  InvokeModelRequest request; 
+	  if (guardrailIdentifier != null && !guardrailIdentifier.isEmpty() &&
+			    guardrailVersion != null && !guardrailVersion.isEmpty()) {
+		
+			    // Both values are present — specify guardrail
+		   request = InvokeModelRequest.builder()
+				    .modelId(modelId)
+				    .body(SdkBytes.fromUtf8String(nativeRequest))
+				    .contentType("application/json")
+				    .guardrailIdentifier(guardrailIdentifier) 
+				    .guardrailVersion(guardrailVersion) 
+				    .build();
+
+	  } else {
+		  request = InvokeModelRequest.builder()
+				  	.body(SdkBytes.fromUtf8String(nativeRequest))
+				  	.modelId(modelId)
+				  	.build();
+	  }
+	  
+	  return request;
   }
+  
+  
+
 
   public static Region getRegion(String region){
     switch (region) {
@@ -185,36 +231,73 @@ private static String getStabilityTitanText(String prompt) {
 
 
 private static String getAnthropicClaudeText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("top_k", awsBedrockParameters.getTopK());
-    jsonRequest.put("max_tokens_to_sample", awsBedrockParameters.getMaxTokenCount());
+	
+	// Build the user message
+	JSONObject userMessage = new JSONObject();
+	userMessage.put("role", "user");
+	userMessage.put("content", prompt);  // no need to prepend Human/Assistant here
 
+	// Add to messages array
+	JSONArray messages = new JSONArray();
+	messages.put(userMessage);
+
+	// Construct the request body for Claude 3.x
+	JSONObject jsonRequest = new JSONObject();
+	jsonRequest.put("messages", messages);
+	jsonRequest.put("anthropic_version", "bedrock-2023-05-31");
+	jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
+	jsonRequest.put("top_p", awsBedrockParameters.getTopP());
+	jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
+
+	
     return jsonRequest.toString();
 }
 
 private static String getMistralAIText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
+	JSONObject jsonRequest = new JSONObject();
+	
+	if (awsBedrockParameters.getModelName().contains("mistral.pixtral")) {   //for mistral.pixtral
+		// Create user message object
+		JSONObject userMessage = new JSONObject();
+		userMessage.put("role", "user");
+		userMessage.put("content", prompt);  // No need for "Human:" and "Assistant:"
+
+		// Wrap in messages array
+		JSONArray messages = new JSONArray();
+		messages.put(userMessage);
+
+		// Construct the full request body
+		jsonRequest.put("messages", messages);
+	} else {
+		//default for mistral.mistral
+		jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
+	}
+	
     jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-   //jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    //jsonRequest.put("top_k", awsBedrockParameters.getTopK());
-    jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
+	jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
 
     return jsonRequest.toString();
 }
 
 
   private static String getAI21Text(String prompt, AwsbedrockParameters awsBedrockParameters){
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("topP", awsBedrockParameters.getTopP());
-    jsonRequest.put("maxTokens", awsBedrockParameters.getMaxTokenCount());
-    
-    return jsonRequest.toString();
+	// Create message object
+      JSONObject message = new JSONObject();
+      message.put("role", "user");
+      message.put("content", prompt);
+
+      // Wrap it into messages array
+      JSONArray messages = new JSONArray();
+      messages.put(message);
+
+      // Create body object
+      JSONObject body = new JSONObject();
+      body.put("messages", messages);
+      body.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
+      body.put("top_p", awsBedrockParameters.getTopP());
+      body.put("temperature", awsBedrockParameters.getTemperature());
+
+      return body.toString();
 }
 
 private static String getCohereText(String prompt, AwsbedrockParameters awsBedrockParameters){
@@ -229,12 +312,11 @@ private static String getCohereText(String prompt, AwsbedrockParameters awsBedro
 }
 
 private static String getLlamaText(String prompt, AwsbedrockParameters awsBedrockParameters){
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("max_gen_len", awsBedrockParameters.getMaxTokenCount());
-    
+	JSONObject jsonRequest = new JSONObject(); jsonRequest.put("prompt", prompt);
+	jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
+	jsonRequest.put("top_p", awsBedrockParameters.getTopP());
+	jsonRequest.put("max_gen_len", awsBedrockParameters.getMaxTokenCount());
+	    
     return jsonRequest.toString();
 }
 
@@ -248,9 +330,9 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         return getAmazonNovaText(prompt, awsBedrockParameters);
     }else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
         return getAnthropicClaudeText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("ai21.j2")) {
+    } else if (awsBedrockParameters.getModelName().contains("ai21.jamba")) {
         return getAI21Text(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("mistral.mistral")) {
+    } else if (awsBedrockParameters.getModelName().contains("mistral")) {
         return getMistralAIText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("cohere.command")) {
         return getCohereText(prompt, awsBedrockParameters);
@@ -290,29 +372,155 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 
     try {
         // Encode and send the request to the Bedrock Runtime.
-        InvokeModelRequest request = createInvokeRequest(awsBedrockParameters.getModelName(), nativeRequest);
+        InvokeModelRequest request = createInvokeRequest(awsBedrockParameters, nativeRequest);
 
         System.out.println("Native request: " + nativeRequest);
 
         InvokeModelResponse response = client.invokeModel(request);
         
-
-        // Decode the response body.
-        JSONObject responseBody = new JSONObject(response.body().asUtf8String());
-
-
-        //System.out.println(responseBody);
-        // Retrieve the generated text from the model's response.
-        //String text = new JSONPointer("/completions/0/data/text").queryFrom(responseBody).toString();
-        //System.out.println(text);
-
-        return responseBody.toString();
-
+        return formatBedrockResponse(awsBedrockParameters, response);
+        
     } catch (SdkClientException e) {
         System.err.printf("ERROR: Can't invoke '%s'. Reason: %s", awsBedrockParameters.getModelName(), e.getMessage());
         throw new RuntimeException(e);
     }
-}
+  }
+  
+  private static String formatBedrockResponse(AwsbedrockParameters awsBedrockParameters, InvokeModelResponse response) {
+	  
+	 String modelId = awsBedrockParameters.getModelName();
+	  
+	 String responseStr;
+	 
+     String modelGroup;
+
+     // Normalize model type using contains
+     if (modelId.contains("claude")) {
+         modelGroup = "claude";
+     } else if (modelId.contains("mistral.pixtral")) {
+         modelGroup = "pixtral";
+     } else if (modelId.contains("jamba")) {
+         modelGroup = "jamba";
+     } else {
+         modelGroup = "default";
+     }
+
+     // Switch on model group
+     switch (modelGroup) {
+     	case "claude":
+     		return formatClaudeResponse(response);
+     	case "pixtral":
+     		return formatMistralPixtralResponse(response);
+     	case "jamba":
+     		return formatJambaResponse(response);
+     	default:
+     		// Default case: pretty-print the raw response
+     		JSONObject responseBody = new JSONObject(response.body().asUtf8String());
+     		responseStr = responseBody.toString();
+     		break;
+     }
+     
+     return responseStr;
+	 	 
+  }
+  
+  private static String formatJambaResponse(InvokeModelResponse response) {
+      // Step 1: Convert raw response body to string
+      String rawJson = response.body().asUtf8String();
+
+      // Step 2: Parse into JSON object
+      JSONObject original = new JSONObject(rawJson);
+
+      JSONArray choices = original.getJSONArray("choices");
+      JSONObject firstChoice = choices.getJSONObject(0);
+      String stopReason = firstChoice.optString("finish_reason", "unknown");
+
+      // Step 3: Extract message content
+      String content = firstChoice
+              .getJSONObject("message")
+              .optString("content", "");
+
+      // Step 4: Build unified output format
+      JSONObject outputItem = new JSONObject();
+      outputItem.put("stop_reason", stopReason);
+      outputItem.put("text", content);
+
+      JSONArray outputsArray = new JSONArray();
+      outputsArray.put(outputItem);
+
+      JSONObject finalOutput = new JSONObject();
+      finalOutput.put("outputs", outputsArray);
+
+      return finalOutput.toString(); 
+  }
+  
+  private static String formatClaudeResponse(InvokeModelResponse response) {
+	  
+	// Step 1: Convert the raw JSON string from the response body
+      String rawJson = response.body().asUtf8String();
+      JSONObject original = new JSONObject(rawJson);
+
+
+      // Extract stop reason
+      String stopReason = original.optString("stop_reason", "unknown");
+
+      // Extract the text content (first content item with type = text)
+      JSONArray contentArray = original.optJSONArray("content");
+      StringBuilder text = new StringBuilder();
+
+      if (contentArray != null) {
+          for (int i = 0; i < contentArray.length(); i++) {
+              JSONObject part = contentArray.getJSONObject(i);
+              if ("text".equals(part.optString("type"))) {
+                  text.append(part.optString("text", ""));
+              }
+          }
+      }
+
+      // Build the output JSON
+      JSONObject outputItem = new JSONObject();
+      outputItem.put("stop_reason", stopReason);
+      outputItem.put("text", text.toString());
+
+      JSONArray outputsArray = new JSONArray();
+      outputsArray.put(outputItem);
+
+      JSONObject finalOutput = new JSONObject();
+      finalOutput.put("outputs", outputsArray);
+
+      return finalOutput.toString(); 
+  }
+  
+  private static String formatMistralPixtralResponse(InvokeModelResponse response) {
+	  
+	  
+		      // Step 1: Convert the raw JSON string from the response body
+		      String rawJson = response.body().asUtf8String();
+		      JSONObject original = new JSONObject(rawJson);
+		
+		      // Step 2: Extract choice
+		      JSONArray choices = original.getJSONArray("choices");
+		      JSONObject firstChoice = choices.getJSONObject(0);
+		
+		      // Step 3: Extract values
+		      String stopReason = firstChoice.optString("finish_reason", "unknown");
+		      String content = firstChoice.getJSONObject("message").optString("content", "");
+		
+		      // Step 4: Build formatted output
+		      JSONObject outputItem = new JSONObject();
+		      outputItem.put("stop_reason", stopReason);
+		      outputItem.put("text", content);
+		
+		      JSONArray outputsArray = new JSONArray();
+		      outputsArray.put(outputItem);
+		
+		      JSONObject finalOutput = new JSONObject();
+		      finalOutput.put("outputs", outputsArray);
+		
+		      return finalOutput.toString(); 
+	  
+		  
+  }
 
 
 private static BedrockClient createBedrockClient(AwsbedrockConfiguration configuration, AwsbedrockParams awsBedrockParameters) {

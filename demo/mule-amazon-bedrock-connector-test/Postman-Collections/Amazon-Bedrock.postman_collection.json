@@ -1,0 +1,371 @@
+{
+	"info": {
+		"_postman_id": "09b5322f-5209-4955-87c7-9b61db68c878",
+		"name": "Amazon-Bedrock",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "915932",
+		"_collection_link": "https://interstellar-crater-482967.postman.co/workspace/MAC-workspace~02af7a19-39d7-412d-93ff-fcf7e207bdb9/collection/915932-09b5322f-5209-4955-87c7-9b61db68c878?action=share&source=collection_link&creator=915932"
+	},
+	"item": [
+		{
+			"name": "Chat-AnswerPrompt",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Response</th>",
+							"    </tr>",
+							"    <tr>",
+							"        <td>{{response}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json().response}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\n    \"prompt\": \"What is Penang famous free? i only have 48 hours.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/bedrock?operation=prompt",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"bedrock"
+					],
+					"query": [
+						{
+							"key": "operation",
+							"value": "prompt"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "image generate",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Response</th>",
+							"    </tr>",
+							"    <tr>",
+							"        <td>{{response}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json().response}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\n    \"prompt\": \"A small island in the middle of a blue lake with a golf hole on it. There's a green patch of grass with a red flag, and a wooden bridge that connects the island to the land. A few palm trees are around the green, and the sky is sunny with a few clouds. The water is calm and clear, and the whole place feels peaceful and tropical.\",\n    \"avoid\": \"snake\"\n\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/bedrock?operation=imageGenerate",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"bedrock"
+					],
+					"query": [
+						{
+							"key": "operation",
+							"value": "imageGenerate"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Agent Prompt Template",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Response</th>",
+							"    </tr>",
+							"    <tr>",
+							"        <td>{{response}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json().response}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\n    \"template\": \"You are an agent for the county\\\\'s performing and fine arts program. You help students decide what course they will take during the summer.\",\n    \"instructions\": \"Please follow these guidelines.\\n\\n1. DO NOT HALLUCINATE.\\n2. Use only English.\\n3. Output a short letter to the student with your recommendation.\\n4. Use a fun, motivational tone.\\n5. Congratulate the student, whether it is for continuing with a certain discipline or trying something new.\\n6. Empower them about developing as an artist, making them feel good about their summer plans.\\n7. Include a greeting and sign-off that lean into the fun and motivational persona.\\n8. Do not use the internet.\\n9. Follow each step, one at a time.\\n\\nStep 1: Decide which art the student likes from 2 choices: \\\"Performing Arts\\\" or \\\"Fine Arts.\\\"\\n1a. If they answer \\\"Performing Arts,\\\" move to step 2.\\n1b. If they answer \\\"Fine Arts,\\\" move to step 3.\\n\\nStep 2:\\n2a. In this section, if the student has taken Theater 1A, make a recommendation that they enroll in Theater 2A.\\n2b. If the student has taken Theater 2A, make a recommendation to enroll in Theater 3B.\\n\\nStep 3:\\n3a. Decide which option the student likes the most: Photography, Sculpting, or Painting\\n3b. If they are interested in \\\"Photography,\\\" move to step 4.\\n3c. If they are interested in \\\"Sculpting,\\\" move to step 5.\\n3d. If they are interested in \\\"Painting,\\\" move to step 6.\\n\\nStep 4: For \\\"Photography,\\\" suggest the course Photography 1A: Stills.\\n\\nStep 5. For \\\"Sculpting,\\\" suggest the course Sculpture Garden 1A.\\n\\nStep 6: For \\\"Painting,\\\" suggest Self-Portrait Oils 1A.\",\n    \"dataset\": \"I am interested in Performing Arts. I have taken Theater 1A.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/bedrock?operation=promptTemplate",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"bedrock"
+					],
+					"query": [
+						{
+							"key": "operation",
+							"value": "promptTemplate"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET model details",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Response</th>",
+							"    </tr>",
+							"    <tr>",
+							"        <td>{{response}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json().response}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\n    \"modelName\": \"amazon.nova-canvas-v1:0\"\n\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/bedrock?operation=modelDetails",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"bedrock"
+					],
+					"query": [
+						{
+							"key": "operation",
+							"value": "modelDetails"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Sentiment-Analyse",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Response</th>",
+							"    </tr>",
+							"    <tr>",
+							"        <td>{{response}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json().response}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\n    \"text\": \"I’ve contacted your support team three times this week and still haven’t received a proper response. This is extremely frustrating and disappointing.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/bedrock?operation=sentimentAnalyse",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"bedrock"
+					],
+					"query": [
+						{
+							"key": "operation",
+							"value": "sentimentAnalyse"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
