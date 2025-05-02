@@ -63,6 +63,23 @@ public class AwsbedrockParameters {
 		return maxTokenCount;
 	}
 
+	@Parameter
+	@Expression(ExpressionSupport.SUPPORTED)
+	@Optional()
+	private String guardrailIdentifier;
+
+	public String getGuardrailIdentifier() {
+		return guardrailIdentifier;
+	}
+
+	@Parameter
+	@Expression(ExpressionSupport.SUPPORTED)
+	@Optional(defaultValue = "1")
+	private String guardrailVersion;
+
+	public String getGuardrailVersion() {
+		return guardrailVersion;
+	}
 
 
 }

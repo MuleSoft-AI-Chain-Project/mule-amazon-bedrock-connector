@@ -48,3 +48,4 @@ generated-test-sources/
 *.sh
 
 .java-version
+/bin/
