@@ -398,24 +398,35 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
      if (modelId.contains("claude")) {
          modelGroup = "claude";
      } else if (modelId.contains("mistral.pixtral")) {
-         modelGroup = "pixtral";
+         modelGroup = "mistral.pixtral";
+     } else if (modelId.contains("mistral.mistral")) {
+         modelGroup = "mistral.mistral";
      } else if (modelId.contains("jamba")) {
          modelGroup = "jamba";
+     } else if (modelId.contains("llama")) {
+         modelGroup = "llama";
      } else {
          modelGroup = "default";
      }
 
+     JSONObject responseBody;
+     
      // Switch on model group
      switch (modelGroup) {
      	case "claude":
      		return formatClaudeResponse(response);
-     	case "pixtral":
+     	case "mistral.pixtral":
      		return formatMistralPixtralResponse(response);
+     	case "mistral.mistral":
+     		return formatMistralMistralResponse(response);
      	case "jamba":
      		return formatJambaResponse(response);
+     	case "llama":
+     		return formatLlamaResponse(response);
      	default:
+     		//Amazon models & the rest
      		// Default case: pretty-print the raw response
-     		JSONObject responseBody = new JSONObject(response.body().asUtf8String());
+     		responseBody = new JSONObject(response.body().asUtf8String());
      		responseStr = responseBody.toString();
      		break;
      }
@@ -427,101 +438,259 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
   private static String formatJambaResponse(InvokeModelResponse response) {
       // Step 1: Convert raw response body to string
       String rawJson = response.body().asUtf8String();
-
-      // Step 2: Parse into JSON object
+      
+   // Parse original response
       JSONObject original = new JSONObject(rawJson);
+      
+   // Extract content and metadata
+      JSONObject choice = original.getJSONArray("choices").getJSONObject(0);
+      JSONObject message = choice.getJSONObject("message");
+      String role = message.getString("role");
+      String text = message.getString("content").trim();
+      String stopReason = choice.optString("finish_reason", "stop");
 
-      JSONArray choices = original.getJSONArray("choices");
-      JSONObject firstChoice = choices.getJSONObject(0);
-      String stopReason = firstChoice.optString("finish_reason", "unknown");
+      int inputTokens = original.getJSONObject("usage").getInt("prompt_tokens");
+      int outputTokens = original.getJSONObject("usage").getInt("completion_tokens");
+      int totalTokens = original.getJSONObject("usage").getInt("total_tokens");
+      String guardrail = original.optString("amazon-bedrock-guardrailAction", "NONE");
 
-      // Step 3: Extract message content
-      String content = firstChoice
-              .getJSONObject("message")
-              .optString("content", "");
+   // Create new JSON format
+      JSONObject textObj = new JSONObject();
+      textObj.put("text", text);
 
-      // Step 4: Build unified output format
-      JSONObject outputItem = new JSONObject();
-      outputItem.put("stop_reason", stopReason);
-      outputItem.put("text", content);
+      JSONArray contentArray = new JSONArray().put(textObj);
 
-      JSONArray outputsArray = new JSONArray();
-      outputsArray.put(outputItem);
+      JSONObject newMessage = new JSONObject();
+      newMessage.put("role", role);
+      newMessage.put("content", contentArray);
 
-      JSONObject finalOutput = new JSONObject();
-      finalOutput.put("outputs", outputsArray);
+      JSONObject output = new JSONObject();
+      output.put("message", newMessage);
 
-      return finalOutput.toString(); 
+      JSONObject usage = new JSONObject();
+      usage.put("inputTokens", inputTokens);
+      usage.put("outputTokens", outputTokens);
+      usage.put("totalTokens", totalTokens);
+
+      JSONObject finalResult = new JSONObject();
+      finalResult.put("output", output);
+      finalResult.put("stopReason", stopReason.equals("stop") ? "end_turn" : stopReason);
+      finalResult.put("usage", usage);
+      finalResult.put("amazon-bedrock-guardrailAction", guardrail);   
+   
+      // Output the normalized JSON
+      System.out.println(finalResult.toString(2));
+
+      return finalResult.toString(); 
   }
   
   private static String formatClaudeResponse(InvokeModelResponse response) {
 	  
-	// Step 1: Convert the raw JSON string from the response body
-      String rawJson = response.body().asUtf8String();
+	// Step 1: Read the raw JSON string from response
+      String rawJson = response.body().asUtf8String(); // your actual response object here
+
+      // Step 2: Parse the original JSON
+      JSONObject original = new JSONObject(rawJson);
+
+      // Step 3: Extract the content text
+      JSONArray contentArray = original.getJSONArray("content");
+      JSONObject firstContentObj = contentArray.getJSONObject(0);
+      String originalText = firstContentObj.getString("text");
+      
+      //get token usage
+      JSONObject usageOriginal = original.getJSONObject("usage");
+
+      // Map existing keys to normalized token usage
+      int inputTokens = usageOriginal.getInt("input_tokens");
+      int outputTokens = usageOriginal.getInt("output_tokens");
+      int totalTokens = inputTokens + outputTokens;
+      
+   // Build normalized usage block
+      JSONObject usage = new JSONObject();
+      usage.put("inputTokens", inputTokens);
+      usage.put("outputTokens", outputTokens);
+      usage.put("totalTokens", totalTokens);
+      
+   // Step 4: Build the new content array
+      JSONArray newContentArray = new JSONArray();
+      JSONObject textObject = new JSONObject();
+      textObject.put("text", originalText);
+      newContentArray.put(textObject);
+
+      // Step 5: Build the message
+      JSONObject message = new JSONObject();
+      message.put("role", original.getString("role"));
+      message.put("content", newContentArray);
+
+      // Step 6: Wrap it in the new output format
+      JSONObject output = new JSONObject();
+      output.put("message", message);
+
+      JSONObject finalPayload = new JSONObject();
+      finalPayload.put("output", output);
+      finalPayload.put("stopReason", original.optString("stop_reason", "end_turn"));
+      finalPayload.put("usage", usage);
+      finalPayload.put("amazon-bedrock-guardrailAction", original.optString("amazon-bedrock-guardrailAction", "NONE"));
+
+      // Step 7: Print the result
+      System.out.println(finalPayload.toString(2));
+      	  
+      return finalPayload.toString(); 
+  }
+  
+  private static String formatLlamaResponse(InvokeModelResponse response) {
+	  
+	// Step 1: Read the raw JSON string from response
+      String rawJson = response.body().asUtf8String(); // your actual response object here
+	  
+	// Step 2: Parse original response
       JSONObject original = new JSONObject(rawJson);
 
 
-      // Extract stop reason
-      String stopReason = original.optString("stop_reason", "unknown");
+      // Step 3: Extract the content text
+      String generationText = original.getString("generation");
+      int inputTokens = original.getInt("prompt_token_count");
+      int outputTokens = original.getInt("generation_token_count");
+      String stopReason = original.optString("stop_reason", "stop");
 
-      // Extract the text content (first content item with type = text)
-      JSONArray contentArray = original.optJSONArray("content");
-      StringBuilder text = new StringBuilder();
+      // Wrap generation text in content array
+      JSONObject textObj = new JSONObject();
+      textObj.put("text", generationText.trim());
 
-      if (contentArray != null) {
-          for (int i = 0; i < contentArray.length(); i++) {
-              JSONObject part = contentArray.getJSONObject(i);
-              if ("text".equals(part.optString("type"))) {
-                  text.append(part.optString("text", ""));
-              }
-          }
-      }
+      JSONArray contentArray = new JSONArray().put(textObj);
 
-      // Build the output JSON
-      JSONObject outputItem = new JSONObject();
-      outputItem.put("stop_reason", stopReason);
-      outputItem.put("text", text.toString());
+      // Build message object
+      JSONObject message = new JSONObject();
+      message.put("role", "assistant");
+      message.put("content", contentArray);
 
-      JSONArray outputsArray = new JSONArray();
-      outputsArray.put(outputItem);
+      // Wrap message into output
+      JSONObject output = new JSONObject();
+      output.put("message", message);
 
-      JSONObject finalOutput = new JSONObject();
-      finalOutput.put("outputs", outputsArray);
+      // Build usage block
+      JSONObject usage = new JSONObject();
+      usage.put("inputTokens", inputTokens);
+      usage.put("outputTokens", outputTokens);
+      usage.put("totalTokens", inputTokens + outputTokens);
 
-      return finalOutput.toString(); 
+      // Final output structure
+      JSONObject finalPayload = new JSONObject();
+      finalPayload.put("output", output);
+      finalPayload.put("stopReason", stopReason.equals("stop") ? "end_turn" : stopReason);  //covert stop to end_turn
+      finalPayload.put("usage", usage);
+      finalPayload.put("amazon-bedrock-guardrailAction", original.optString("amazon-bedrock-guardrailAction", "NONE"));
+
+      // Print final JSON
+      System.out.println(finalPayload.toString(2));
+	  
+      return finalPayload.toString(); 
   }
   
-  private static String formatMistralPixtralResponse(InvokeModelResponse response) {
+
+  private static String formatMistralMistralResponse(InvokeModelResponse response) {
 	  
 	  
 		      // Step 1: Convert the raw JSON string from the response body
 		      String rawJson = response.body().asUtf8String();
-		      JSONObject original = new JSONObject(rawJson);
+		      
+		   // Parse raw JSON
+		        JSONObject original = new JSONObject(rawJson);
+		        JSONArray outputs = original.getJSONArray("outputs");
+		        JSONObject output0 = outputs.getJSONObject(0);
+
+		        String text = output0.getString("text").trim();
+		        String stopReason = output0.optString("stop_reason", "stop");
+		        String guardrail = original.optString("amazon-bedrock-guardrailAction", "NONE");
+
+		        // Create assistant message block
+		        JSONObject textObj = new JSONObject();
+		        textObj.put("text", text);
+		        JSONArray contentArray = new JSONArray().put(textObj);
+
+		        JSONObject message = new JSONObject();
+		        message.put("role", "assistant");
+		        message.put("content", contentArray);
+
+		        JSONObject output = new JSONObject();
+		        output.put("message", message);
+
+		     // Create usage block with nulls (or you can skip this block)
+		        JSONObject usage = new JSONObject();
+		        usage.put("inputTokens", JSONObject.NULL);
+		        usage.put("outputTokens", JSONObject.NULL);
+		        usage.put("totalTokens", JSONObject.NULL);
+
+		        // Assemble final response
+		        JSONObject finalPayload = new JSONObject();
+		        finalPayload.put("output", output);
+		        finalPayload.put("stopReason", stopReason.equals("stop") ? "end_turn" : stopReason);
+		        finalPayload.put("usage", usage);
+		        finalPayload.put("amazon-bedrock-guardrailAction", guardrail);
+
+		        // Print the final JSON
+		        System.out.println(finalPayload.toString(2));
 		
-		      // Step 2: Extract choice
-		      JSONArray choices = original.getJSONArray("choices");
-		      JSONObject firstChoice = choices.getJSONObject(0);
-		
-		      // Step 3: Extract values
-		      String stopReason = firstChoice.optString("finish_reason", "unknown");
-		      String content = firstChoice.getJSONObject("message").optString("content", "");
-		
-		      // Step 4: Build formatted output
-		      JSONObject outputItem = new JSONObject();
-		      outputItem.put("stop_reason", stopReason);
-		      outputItem.put("text", content);
-		
-		      JSONArray outputsArray = new JSONArray();
-		      outputsArray.put(outputItem);
-		
-		      JSONObject finalOutput = new JSONObject();
-		      finalOutput.put("outputs", outputsArray);
-		
-		      return finalOutput.toString(); 
-	  
-		  
+		      return finalPayload.toString(); 		  
   }
 
+
+  private static String formatMistralPixtralResponse(InvokeModelResponse response) {
+	  
+	  
+      // Step 1: Convert the raw JSON string from the response body
+      String rawJson = response.body().asUtf8String();
+      
+   // Parse original JSON
+      JSONObject original = new JSONObject(rawJson);
+      JSONObject choice = original.getJSONArray("choices").getJSONObject(0);
+      JSONObject messageObj = choice.getJSONObject("message");
+
+      String content = messageObj.getString("content").trim();
+      String role = messageObj.optString("role", "assistant");
+      String stopReason = choice.optString("finish_reason", "stop");
+      String guardrail = original.optString("amazon-bedrock-guardrailAction", "NONE");
+
+      // Extract token usage if available
+      JSONObject usageObj = original.optJSONObject("usage");
+      Object inputTokens = (usageObj != null && usageObj.has("prompt_tokens")) ? usageObj.get("prompt_tokens") : JSONObject.NULL;
+      Object outputTokens = (usageObj != null && usageObj.has("completion_tokens")) ? usageObj.get("completion_tokens") : JSONObject.NULL;
+      Object totalTokens = (usageObj != null && usageObj.has("total_tokens")) ? usageObj.get("total_tokens") : JSONObject.NULL;
+
+      // Build content array
+      JSONObject textObj = new JSONObject();
+      textObj.put("text", content);
+      JSONArray contentArray = new JSONArray().put(textObj);
+      
+   // Build message
+      JSONObject message = new JSONObject();
+      message.put("role", role);
+      message.put("content", contentArray);
+
+      // Wrap into output object
+      JSONObject output = new JSONObject();
+      output.put("message", message);
+
+      // Usage section
+      JSONObject usage = new JSONObject();
+      usage.put("inputTokens", inputTokens);
+      usage.put("outputTokens", outputTokens);
+      usage.put("totalTokens", totalTokens);
+      
+      // Assemble final response
+      JSONObject finalPayload = new JSONObject();
+      finalPayload.put("output", output);
+      finalPayload.put("stopReason", stopReason.equals("stop") ? "end_turn" : stopReason);
+      finalPayload.put("usage", usage);
+      finalPayload.put("amazon-bedrock-guardrailAction", guardrail);
+
+      // Print the final JSON
+      System.out.println(finalPayload.toString(2));
+
+      return finalPayload.toString(); 
+
+  
+}
 
 private static BedrockClient createBedrockClient(AwsbedrockConfiguration configuration, AwsbedrockParams awsBedrockParameters) {
     AwsCredentials awsCredentials;
