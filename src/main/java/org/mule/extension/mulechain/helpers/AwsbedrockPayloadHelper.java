@@ -405,11 +405,35 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
          modelGroup = "jamba";
      } else if (modelId.contains("llama")) {
          modelGroup = "llama";
+     } else if (modelId.contains("titan")) {
+         modelGroup = "titan";
      } else {
          modelGroup = "default";
      }
 
      JSONObject responseBody;
+     
+     //convert the response for all models to match Nova response..
+     //ex:
+//{
+  //   "output": {
+    //     "message": {
+      //       "role": "assistant",
+        //     "content": [
+          //       {
+            //         "text": "Penang is renowned for its rich cultural heritage, delicious food, and historical landmarks, ..."
+              //      	                  }
+             //]
+         //}
+     //},
+     //"stopReason": "end_turn",
+     //"usage": {
+       //  "inputTokens": 14,
+       //  "outputTokens": 636,
+       //  "totalTokens": 650
+     //},
+    // "amazon-bedrock-guardrailAction": "NONE"
+//}
      
      // Switch on model group
      switch (modelGroup) {
@@ -423,8 +447,11 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
      		return formatJambaResponse(response);
      	case "llama":
      		return formatLlamaResponse(response);
+     	case "titan":
+     		//Amazon Titan
+     		return formatTitanResponse(response);
      	default:
-     		//Amazon models & the rest
+     		//Amazon Nova models & the rest
      		// Default case: pretty-print the raw response
      		responseBody = new JSONObject(response.body().asUtf8String());
      		responseStr = responseBody.toString();
@@ -435,6 +462,55 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 	 	 
   }
   
+  
+  private static String formatTitanResponse(InvokeModelResponse response) {
+      // Step 1: Convert raw response body to string
+      String rawJson = response.body().asUtf8String();
+      
+   // Parse raw JSON
+      JSONObject original = new JSONObject(rawJson);
+      JSONArray results = original.getJSONArray("results");
+      JSONObject result0 = results.getJSONObject(0);
+
+      // Extract values
+      String text = result0.getString("outputText").trim();
+      String stopReason = result0.optString("completionReason", "").equalsIgnoreCase("FINISH") ? "end_turn" : "unknown";
+      String guardrail = original.optString("amazon-bedrock-guardrailAction", "NONE");
+
+      int inputTokens = original.optInt("inputTextTokenCount", 0);
+      int outputTokens = result0.optInt("tokenCount", 0);
+      int totalTokens = inputTokens + outputTokens;
+      
+   // Construct message content
+      JSONObject textObj = new JSONObject();
+      textObj.put("text", text);
+
+      JSONArray contentArray = new JSONArray().put(textObj);
+
+      JSONObject message = new JSONObject();
+      message.put("role", "assistant");
+      message.put("content", contentArray);
+
+      JSONObject output = new JSONObject();
+      output.put("message", message);
+
+      JSONObject usage = new JSONObject();
+      usage.put("inputTokens", inputTokens);
+      usage.put("outputTokens", outputTokens);
+      usage.put("totalTokens", totalTokens);
+
+      // Final result
+      JSONObject finalResult = new JSONObject();
+      finalResult.put("output", output);
+      finalResult.put("stopReason", stopReason);
+      finalResult.put("usage", usage);
+      finalResult.put("amazon-bedrock-guardrailAction", guardrail);
+
+      // Print the result
+      System.out.println(finalResult.toString(2));
+      return finalResult.toString(); 
+  }
+
   private static String formatJambaResponse(InvokeModelResponse response) {
       // Step 1: Convert raw response body to string
       String rawJson = response.body().asUtf8String();
