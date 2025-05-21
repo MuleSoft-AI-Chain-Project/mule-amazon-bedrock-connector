@@ -405,6 +405,8 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
          modelGroup = "default";
      }
 
+     JSONObject responseBody;
+     
      // Switch on model group
      switch (modelGroup) {
      	case "claude":
@@ -415,7 +417,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
      		return formatJambaResponse(response);
      	default:
      		// Default case: pretty-print the raw response
-     		JSONObject responseBody = new JSONObject(response.body().asUtf8String());
+     		responseBody = new JSONObject(response.body().asUtf8String());
      		responseStr = responseBody.toString();
      		break;
      }
@@ -456,39 +458,42 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
   
   private static String formatClaudeResponse(InvokeModelResponse response) {
 	  
-	// Step 1: Convert the raw JSON string from the response body
-      String rawJson = response.body().asUtf8String();
+	// Step 1: Read the raw JSON string from response
+      String rawJson = response.body().asUtf8String(); // your actual response object here
+
+      // Step 2: Parse the original JSON
       JSONObject original = new JSONObject(rawJson);
 
+      // Step 3: Extract the content text
+      JSONArray contentArray = original.getJSONArray("content");
+      JSONObject firstContentObj = contentArray.getJSONObject(0);
+      String originalText = firstContentObj.getString("text");
+      
+   // Step 4: Build the new content array
+      JSONArray newContentArray = new JSONArray();
+      JSONObject textObject = new JSONObject();
+      textObject.put("text", originalText);
+      newContentArray.put(textObject);
 
-      // Extract stop reason
-      String stopReason = original.optString("stop_reason", "unknown");
+      // Step 5: Build the message
+      JSONObject message = new JSONObject();
+      message.put("role", original.getString("role"));
+      message.put("content", newContentArray);
 
-      // Extract the text content (first content item with type = text)
-      JSONArray contentArray = original.optJSONArray("content");
-      StringBuilder text = new StringBuilder();
+      // Step 6: Wrap it in the new output format
+      JSONObject output = new JSONObject();
+      output.put("message", message);
 
-      if (contentArray != null) {
-          for (int i = 0; i < contentArray.length(); i++) {
-              JSONObject part = contentArray.getJSONObject(i);
-              if ("text".equals(part.optString("type"))) {
-                  text.append(part.optString("text", ""));
-              }
-          }
-      }
+      JSONObject finalPayload = new JSONObject();
+      finalPayload.put("output", output);
+      finalPayload.put("stopReason", original.optString("stop_reason", "end_turn"));
+      finalPayload.put("usage", original.getJSONObject("usage"));
+      finalPayload.put("amazon-bedrock-guardrailAction", original.optString("amazon-bedrock-guardrailAction", "NONE"));
 
-      // Build the output JSON
-      JSONObject outputItem = new JSONObject();
-      outputItem.put("stop_reason", stopReason);
-      outputItem.put("text", text.toString());
-
-      JSONArray outputsArray = new JSONArray();
-      outputsArray.put(outputItem);
-
-      JSONObject finalOutput = new JSONObject();
-      finalOutput.put("outputs", outputsArray);
-
-      return finalOutput.toString(); 
+      // Step 7: Print the result
+      System.out.println(finalPayload.toString(2));
+      	  
+      return finalPayload.toString(); 
   }
   
   private static String formatMistralPixtralResponse(InvokeModelResponse response) {
