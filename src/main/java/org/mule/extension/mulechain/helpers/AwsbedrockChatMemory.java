@@ -1,44 +1,37 @@
 package org.mule.extension.mulechain.helpers;
 
-import org.mapdb.*;
+import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStore;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 public class AwsbedrockChatMemory {
-    private DB db;
-    private Map<Long, String> chatMap;
+    private MVStore store;
+    private MVMap<Long, String> chatMap;
 
     public AwsbedrockChatMemory(String dbFile, String memoryName) {
-        // Open or create the DB file
-        db = DBMaker.fileDB(new File(dbFile))
-                .transactionEnable()
-                .fileLockDisable()
-                .make();
-
+        // Open or create the MVStore file
+        store = MVStore.open(dbFile);
+        
         // Create or retrieve the chat map
-        chatMap = db.hashMap(memoryName)
-                .keySerializer(Serializer.LONG)
-                .valueSerializer(Serializer.STRING)
-                .createOrOpen();
+        chatMap = store.openMap(memoryName);
     }
 
     public void addMessage(long messageId, String messageContent) {
         chatMap.put(messageId, messageContent);
-        db.commit(); // Save changes
+        store.commit(); // Save changes
     }
 
     public void deleteMessage(long messageId) {
         chatMap.remove(messageId);
-        db.commit(); // Save changes
+        store.commit(); // Save changes
     }
 
     public void deleteAllMessages() {
         chatMap.clear();
-        db.commit(); // Save changes
+        store.commit(); // Save changes
     }
 
     public String getMessage(long messageId) {
@@ -79,8 +72,7 @@ public class AwsbedrockChatMemory {
         return messages;
     }
 
-
     public void close() {
-        db.close();
+        store.close();
     }
 }
