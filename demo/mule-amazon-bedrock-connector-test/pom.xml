@@ -50,7 +50,7 @@
 		    <dependency>    
     <groupId>com.mulesoft.connectors</groupId>
     <artifactId>mule4-amazon-bedrock-connector</artifactId>
-    <version>0.3.10-SNAPSHOT</version>
+    <version>0.3.10</version>
     <classifier>mule-plugin</classifier>
      </dependency>
    
