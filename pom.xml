@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.mulesoft.connectors</groupId>
     <artifactId>mule4-amazon-bedrock-connector</artifactId>
-    <version>0.3.10-SNAPSHOT</version>
+    <version>0.3.10</version>
     <packaging>mule-extension</packaging>
     <name>MuleSoft Amazon Bedrock Connector - Mule 4</name>
     <description>The MuleSoft Amazon Bedrock connector is designed to provide access to Amazon Bedrock foundational models from mule applications</description>
@@ -82,11 +82,12 @@
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.6.0</version>
+                <version>0.8.0</version>
                 <extensions>true</extensions>
                 <configuration>
                     <publishingServerId>central</publishingServerId>
                     <checksums>all</checksums>
+                    <centralSnapshotsUrl>https://central.sonatype.com/repository/maven-snapshots/</centralSnapshotsUrl>
                     <deploymentName>MuleSoft Amazon Bedrock Connector Mule 4 Deployment</deploymentName>
                 </configuration>
             </plugin>
