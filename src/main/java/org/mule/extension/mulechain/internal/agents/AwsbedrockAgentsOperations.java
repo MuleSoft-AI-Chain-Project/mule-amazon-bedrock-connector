@@ -1,5 +1,8 @@
 package org.mule.extension.mulechain.internal.agents;
 
+import org.mule.sdk.api.annotation.param.Parameter;
+import org.mule.sdk.api.annotation.param.Optional;
+
 import static org.apache.commons.io.IOUtils.toInputStream;
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -110,14 +113,17 @@ public class AwsbedrockAgentsOperations {
     return toInputStream(response, StandardCharsets.UTF_8);
   }
 
+  
 
    /**
    * Chat with an agent
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("AGENT-chat")
-  public InputStream chatWithAgent(String agentId, String agentAliasId, String prompt, @Config AwsbedrockConfiguration configuration, @ParameterGroup(name= "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters){
-      String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, prompt, configuration, awsBedrockParameters);
+  public InputStream chatWithAgent(String agentId, String agentAliasId, 
+		  @Optional String sessionId, // <-- NEW parameter for sessionId,
+		  String prompt, @Config AwsbedrockConfiguration configuration, @ParameterGroup(name= "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters){
+      String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, sessionId, prompt, configuration, awsBedrockParameters);
     return toInputStream(response, StandardCharsets.UTF_8);
   }
   

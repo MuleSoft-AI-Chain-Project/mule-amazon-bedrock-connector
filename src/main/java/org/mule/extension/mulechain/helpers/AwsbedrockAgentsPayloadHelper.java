@@ -796,9 +796,17 @@ private void chatWithAgent(AgentAlias agentAlias, BedrockAgentRuntimeClient bedr
 
 
 
-public static String chatWithAgent(String agentAlias, String agentId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters){
+public static String chatWithAgent(String agentAlias, String agentId, String sessionId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters){
     BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration, awsBedrockParameters);
-    String sessionId = UUID.randomUUID().toString();
+
+    if (sessionId != null && !sessionId.isEmpty()) {
+        System.out.println("Using provided sessionId: " + sessionId);
+    } else {
+        sessionId = UUID.randomUUID().toString();
+        System.out.println("Generated new sessionId: " + sessionId);
+    }
+    
+    //String sessionId = UUID.randomUUID().toString();
     //CompletableFuture<String> completableFuture=null;
     String response = "";
     try {
