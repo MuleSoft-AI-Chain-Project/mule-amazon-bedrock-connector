@@ -12,6 +12,8 @@ import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbedding;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbeddingDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
 import java.io.File;
@@ -35,6 +37,8 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
 
 public class AwsbedrockEmbeddingPayloadHelper {
+
+    private static final Logger logger = LoggerFactory.getLogger(AwsbedrockEmbeddingPayloadHelper.class);
 
 private static String getAmazonTitanEmbeddingG1(String prompt) {
 
@@ -227,7 +231,7 @@ public static String invokeModel(String prompt, AwsbedrockConfiguration configur
 
         String body = identifyPayload(prompt, awsBedrockParameters); 
 
-        System.out.println(body);
+        logger.info(body);
 
         try {
             JSONObject response = generateEmbedding(modelId, body, configuration, region);
@@ -235,7 +239,7 @@ public static String invokeModel(String prompt, AwsbedrockConfiguration configur
             return response.toString();
 
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            logger.error("Error: " + e.getMessage());
             e.printStackTrace();
             return null;
 
@@ -270,7 +274,7 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
             List<JSONArray> corpusEmbeddings = new ArrayList<>();
             for (String text : corpus) {
                 corpusBody = identifyPayloadDoc(text, awsBedrockParameters); 
-                //System.out.println(corpusBody);
+                //logger.info(corpusBody);
                 if (text != null && !text.isEmpty()) {
                     body = identifyPayloadDoc(corpusBody, awsBedrockParameters);
                     corpusEmbeddings.add(generateEmbedding(modelId, body, configuration, region).getJSONArray("embedding"));
@@ -292,7 +296,7 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
             return jsonArray.toString();
 
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            logger.error("Error: " + e.getMessage());
             e.printStackTrace();
             return null;
 
@@ -317,17 +321,17 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
 
     private static List<String> rankAndPrintResults(List<String> corpus, List<Double> similarityScores) {
         List<Integer> indices = new ArrayList<>();
-        System.out.println(corpus.size());
+        logger.info("Corpus size: {}", corpus.size());
         for (int i = 0; i < corpus.size(); i++) {
             indices.add(i);
         }
 
         indices.sort((i, j) -> Double.compare(similarityScores.get(j), similarityScores.get(i)));
 
-        System.out.println("Ranked results:");
+        logger.info("Ranked results:");
         List<String> results = new ArrayList<>();
         for (int index : indices) {
-            System.out.println("Score: " + similarityScores.get(index) + " - Text: " + corpus.get(index));
+            logger.info("Score: {} - Text: {}", similarityScores.get(index), corpus.get(index));
             results.add(similarityScores.get(index) + " - " + corpus.get(index));
         }
 

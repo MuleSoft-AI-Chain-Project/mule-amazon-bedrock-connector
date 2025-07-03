@@ -269,7 +269,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         // Encode and send the request to the Bedrock Runtime.
         InvokeModelRequest request = createInvokeRequest(awsBedrockParameters.getModelName(), nativeRequest);
 
-        //System.out.println("Native request: " + nativeRequest);
+        //logger.info("Native request: " + nativeRequest);
 
         InvokeModelResponse response = client.invokeModel(request);
         
