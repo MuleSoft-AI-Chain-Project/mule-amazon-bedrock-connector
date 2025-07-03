@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.mulesoft.connectors</groupId>
     <artifactId>mule4-amazon-bedrock-connector</artifactId>
-    <version>0.3.10</version>
+    <version>0.3.11</version>
     <packaging>mule-extension</packaging>
     <name>MuleSoft Amazon Bedrock Connector - Mule 4</name>
     <description>The MuleSoft Amazon Bedrock connector is designed to provide access to Amazon Bedrock foundational models from mule applications</description>
@@ -144,13 +144,20 @@
         <dependency>
             <groupId>org.mule.sdk</groupId>
             <artifactId>mule-sdk-api</artifactId>
-            <version>0.9.0-rc1</version>
-        </dependency>    
-        <!--<dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>aws-sdk-java</artifactId>
-            <version>2.26.7</version> 
-        </dependency>-->
+            <version>0.11.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.20.0</version>
+        </dependency>
 
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
@@ -191,6 +198,16 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>iam</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>netty-nio-client</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+        </dependency>
             
         <dependency>
             <groupId>org.json</groupId>
@@ -218,11 +235,6 @@
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parser-pdf-module</artifactId>
             <version>2.9.4</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>17</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
