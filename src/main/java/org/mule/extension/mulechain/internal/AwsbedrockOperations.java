@@ -13,13 +13,15 @@ import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
 
 import org.mule.extension.mulechain.helpers.AwsbedrockPayloadHelper;
 import org.mule.extension.mulechain.helpers.AwsbedrockPromptTemplateHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class is a container for operations, every public method in this class will be taken as an extension operation.
  */
 public class AwsbedrockOperations {
 
-
+  private static final Logger logger = LoggerFactory.getLogger(AwsbedrockOperations.class);
 
   /**
    * Implements a simple Chat agent
@@ -41,7 +43,7 @@ public class AwsbedrockOperations {
 
 
     String finalPromptTemplate = AwsbedrockPromptTemplateHelper.definePromptTemplate(template, instructions, dataset);
-    System.out.println(finalPromptTemplate);
+    logger.info(finalPromptTemplate);
 
     String response = AwsbedrockPayloadHelper.invokeModel(finalPromptTemplate, configuration, awsBedrockParameters);
 

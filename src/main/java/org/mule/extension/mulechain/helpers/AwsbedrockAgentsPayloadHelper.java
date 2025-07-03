@@ -5,10 +5,20 @@ import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
+
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Collectors;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
+import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
 import software.amazon.awssdk.core.SdkBytes;
@@ -61,6 +71,8 @@ import java.util.UUID;
 import java.util.Optional;
 
 public class AwsbedrockAgentsPayloadHelper {
+
+    private static final Logger logger = LoggerFactory.getLogger(AwsbedrockAgentsPayloadHelper.class);
 
   private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region) {
     return BedrockRuntimeClient.builder()
@@ -248,7 +260,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         // Encode and send the request to the Bedrock Runtime.
         InvokeModelRequest request = createInvokeRequest(awsBedrockParameters.getModelName(), nativeRequest);
 
-        //System.out.println("Native request: " + nativeRequest);
+        //logger.info("Native request: " + nativeRequest);
 
         InvokeModelResponse response = client.invokeModel(request);
         
@@ -257,10 +269,10 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         JSONObject responseBody = new JSONObject(response.body().asUtf8String());
 
 
-        //System.out.println(responseBody);
+        //logger.info(responseBody);
         // Retrieve the generated text from the model's response.
         //String text = new JSONPointer("/completions/0/data/text").queryFrom(responseBody).toString();
-        //System.out.println(text);
+        //logger.info(text);
 
         return responseBody.toString();
 
@@ -274,22 +286,41 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 private static BedrockClient createBedrockClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
 
     BedrockClient bedrockClient = BedrockClient.builder()
-    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion())) 
+    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
     .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
     .build();
 
     return bedrockClient;
 }
 
-private static BedrockAgentClient createBedrockAgentClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
+    private static BedrockAgentClient createBedrockAgentClient(
+            AwsbedrockConfiguration configuration,
+            AwsbedrockAgentsParameters awsBedrockParameters) {
 
-    BedrockAgentClient bedrockAgentClient = BedrockAgentClient.builder()
-    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion())) 
-    .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-    .build();
+        BedrockAgentClientBuilder bedrockAgentClientBuilder = BedrockAgentClient.builder()
+                .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
-    return bedrockAgentClient;
-}
+        if (configuration.getProxyConfig() != null) {
+            software.amazon.awssdk.http.apache.ProxyConfiguration proxyConfig = software.amazon.awssdk.http.apache.ProxyConfiguration.builder()
+                    .endpoint(URI.create(String.format("%s://%s:%d",
+                            configuration.getProxyConfig().getScheme(),
+                            configuration.getProxyConfig().getHost(),
+                            configuration.getProxyConfig().getPort())))
+                    .username(configuration.getProxyConfig().getUsername())
+                    .password(configuration.getProxyConfig().getPassword())
+                    .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
+                    .build();
+
+            SdkHttpClient httpClient = ApacheHttpClient.builder()
+                    .proxyConfiguration(proxyConfig)
+                    .build();
+
+            bedrockAgentClientBuilder.httpClient(httpClient);
+        }
+
+        return bedrockAgentClientBuilder.build();
+    }
 
 
 private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
@@ -302,14 +333,34 @@ private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(Awsbedr
 }
 
 
-private static BedrockAgentRuntimeAsyncClient createBedrockAgentRuntimeAsyncClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
-    BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeClient = BedrockAgentRuntimeAsyncClient.builder()
-    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion())) 
-    .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-    .build();
+    private static BedrockAgentRuntimeAsyncClient createBedrockAgentRuntimeAsyncClient(
+            AwsbedrockConfiguration configuration,
+            AwsbedrockAgentsParameters awsBedrockParameters) {
 
-    return bedrockAgentRuntimeClient;
-}
+        BedrockAgentRuntimeAsyncClientBuilder clientBuilder = BedrockAgentRuntimeAsyncClient.builder()
+                .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
+
+        // Only configure proxy if proxy configuration is available
+        if (configuration.getProxyConfig() != null) {
+            software.amazon.awssdk.http.nio.netty.ProxyConfiguration proxyConfig =
+                    software.amazon.awssdk.http.nio.netty.ProxyConfiguration.builder()
+                            .host(configuration.getProxyConfig().getHost())
+                            .port(configuration.getProxyConfig().getPort())
+                            .username(configuration.getProxyConfig().getUsername())
+                            .password(configuration.getProxyConfig().getPassword())
+                            .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
+                            .build();
+
+            SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder()
+                    .proxyConfiguration(proxyConfig)
+                    .build();
+
+            clientBuilder.httpClient(httpClient);
+        }
+
+        return clientBuilder.build();
+    }
 
 
 
@@ -538,7 +589,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
     String modelArn = "arn:aws:bedrock:" + awsBedrockParameters.getRegion() + "::foundation-model/" + awsBedrockParameters.getModelName() + "*";
     String ROLE_POLICY_NAME = RolePolicyName;
 
-    System.out.println("Creating an execution role for the agent...");
+    logger.info("Creating an execution role for the agent...");
 
     // Create an IAM client
     IamClient iamClient = createIamClient(configuration, awsBedrockParameters);
@@ -547,7 +598,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
     try {
         GetRoleResponse getRoleResponse = iamClient.getRole(GetRoleRequest.builder().roleName(roleName).build());
         agentRole = getRoleResponse.role();
-        System.out.println("Role already exists: " + agentRole.arn());
+        logger.info("Role already exists: " + agentRole.arn());
     } catch (NoSuchEntityException e) {
         // Role does not exist, create it
         try {
@@ -557,10 +608,10 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .build());
 
             
-            System.out.println(modelArn);
+            logger.info(modelArn);
             //String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Sid\": \"Agents for Amazon Bedrock permissions\",\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"" + modelArn + "\"}]}";
             String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"*\"}]}";
-            System.out.println(policyDocument);
+            logger.info(policyDocument);
             iamClient.putRolePolicy(PutRolePolicyRequest.builder()
                     .roleName(roleName)
                     .policyName(ROLE_POLICY_NAME)
@@ -573,7 +624,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .arn(createRoleResponse.role().arn())
                     .build();
         } catch (IamException ex) {
-            System.out.println("Couldn't create role " + roleName + ". Here's why: " + ex.getMessage());
+            logger.info("Couldn't create role " + roleName + ". Here's why: " + ex.getMessage());
             throw ex;
         }
     }
@@ -581,7 +632,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
 }
 
 private static Agent createAgent(String name, String instruction, String modelId, Role agentRole, BedrockAgentClient bedrockAgentClient) {
-    System.out.println("Creating the agent...");
+    logger.info("Creating the agent...");
 
     //String instruction = "You are a friendly chat bot. You have access to a function called that returns information about the current date and time. When responding with date or time, please make sure to add the timezone UTC.";
     CreateAgentResponse createAgentResponse = bedrockAgentClient.createAgent(CreateAgentRequest.builder()
@@ -603,8 +654,8 @@ private static void waitForAgentStatus(String agentId, String status, BedrockAge
                 .agentId(agentId)
                 .build());
         
-        //System.out.println("Status: " + status);
-        //System.out.println("response.agent.agentStatus: " + response.agent().agentStatus().toString());
+        //logger.info("Status: " + status);
+        //logger.info("response.agent.agentStatus: " + response.agent().agentStatus().toString());
 
         if (response.agent().agentStatus().toString().equals(status)) {
 
@@ -612,7 +663,7 @@ private static void waitForAgentStatus(String agentId, String status, BedrockAge
         }
 
         try {
-            System.out.println("Waiting for agent get prepared...");
+            logger.info("Waiting for agent get prepared...");
             Thread.sleep(2000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -623,7 +674,7 @@ private static void waitForAgentStatus(String agentId, String status, BedrockAge
 
 
 private static PrepareAgentResponse prepareAgent(String agentId, BedrockAgentClient bedrockAgentClient) {
-    System.out.println("Preparing the agent...");
+    logger.info("Preparing the agent...");
 
     //String agentId = agent.agentId();
     PrepareAgentResponse preparedAgentDetails = bedrockAgentClient.prepareAgent(PrepareAgentRequest.builder()
@@ -636,8 +687,8 @@ private static PrepareAgentResponse prepareAgent(String agentId, BedrockAgentCli
 
 
 private static AgentAlias createAgentAlias(String alias, String agentId, BedrockAgentClient bedrockAgentClient) {
-    System.out.println("Creating an agent alias...");    
-    System.out.println("agentId: " + agentId);
+    logger.info("Creating an agent alias...");    
+    logger.info("agentId: " + agentId);
     CreateAgentAliasRequest request = CreateAgentAliasRequest.builder()
             .agentId(agentId)
             .agentAliasName(alias)
@@ -731,10 +782,10 @@ private static DeleteAgentAliasResponse deleteAgentAliasByName(String agentId, S
         // Call the deleteAgentAlias method of the BedrockAgentClient instance
         DeleteAgentAliasResponse deleteAgentAliasResponse = bedrockAgentClient.deleteAgentAlias(deleteAgentAliasRequest);
 
-        System.out.println("Agent alias with name " + agentAliasName + " deleted successfully.");
+        logger.info("Agent alias with name " + agentAliasName + " deleted successfully.");
         response = deleteAgentAliasResponse;
     } else {
-        System.out.println("No agent alias with name " + agentAliasName + " found.");
+        logger.info("No agent alias with name " + agentAliasName + " found.");
     }
     return response;
 }
@@ -770,9 +821,9 @@ private static DeleteAgentResponse deleteAgentById(String agentId, BedrockAgentC
 /*
 
 private void chatWithAgent(AgentAlias agentAlias, BedrockAgentRuntimeClient bedrockAgentRuntimeClient) {
-    System.out.println(String.join("", Collections.nCopies(88, "-")));
-    System.out.println("The agent is ready to chat.");
-    System.out.println("Try asking for the date or time. Type 'exit' to quit.");
+    logger.info(String.join("", Collections.nCopies(88, "-")));
+    logger.info("The agent is ready to chat.");
+    logger.info("Try asking for the date or time. Type 'exit' to quit.");
 
     // Create a unique session ID for the conversation
     String sessionId = UUID.randomUUID().toString();
@@ -788,7 +839,7 @@ private void chatWithAgent(AgentAlias agentAlias, BedrockAgentRuntimeClient bedr
 
         String response = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgentRuntimeClient);
 
-        System.out.println("Agent: " + response);
+        logger.info("Agent: " + response);
     }
 }
 
@@ -796,24 +847,32 @@ private void chatWithAgent(AgentAlias agentAlias, BedrockAgentRuntimeClient bedr
 
 
 
-public static String chatWithAgent(String agentAlias, String agentId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters){
+public static String chatWithAgent(String agentAlias, String agentId, String sessionId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters){
     BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration, awsBedrockParameters);
-    String sessionId = UUID.randomUUID().toString();
+
+    if (sessionId != null && !sessionId.isEmpty()) {
+        logger.info("Using provided sessionId: " + sessionId);
+    } else {
+        sessionId = UUID.randomUUID().toString();
+        logger.info("Generated new sessionId: " + sessionId);
+    }
+    
+    //String sessionId = UUID.randomUUID().toString();
     //CompletableFuture<String> completableFuture=null;
     String response = "";
     try {
         //completableFuture = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent);
         /*invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent).thenAccept(response -> {
-            System.out.println(response);
+            logger.info(response);
         });*/
 
         response = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent).get();
-        System.out.println(response);
+        logger.info(response);
 
     } catch (InterruptedException | ExecutionException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
-        System.out.println(e.getMessage());
+        logger.info(e.getMessage());
     }
 
     return response.substring(4);

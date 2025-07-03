@@ -7,6 +7,8 @@ import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.AwsbedrockParams;
 import org.mule.extension.mulechain.internal.AwsbedrockParamsModelDetails;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -35,6 +37,8 @@ import java.util.List;
 
 public class AwsbedrockPayloadHelper {
 
+    private static final Logger logger = LoggerFactory.getLogger(AwsbedrockPayloadHelper.class);
+            
   private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region) {
     return BedrockRuntimeClient.builder()
     .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
@@ -54,7 +58,7 @@ public class AwsbedrockPayloadHelper {
   private static InvokeModelRequest createInvokeRequest(AwsbedrockParameters awsBedrockParameters, String nativeRequest) {
 	  
 	  String modelId = awsBedrockParameters.getModelName();
-      System.out.println("modelId: " + modelId);
+      logger.info("modelId: " + modelId);
 
 	  String region = awsBedrockParameters.getRegion();
 	  
@@ -326,7 +330,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
     if (awsBedrockParameters.getModelName().contains("amazon.titan-text")) {
         return getAmazonTitanText(prompt, awsBedrockParameters);
     } else if (awsBedrockParameters.getModelName().contains("amazon.nova")) {
-        System.out.println("Generating payload for nova");
+        logger.info("Generating payload for nova");
         return getAmazonNovaText(prompt, awsBedrockParameters);
     }else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
         return getAnthropicClaudeText(prompt, awsBedrockParameters);
@@ -374,7 +378,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         // Encode and send the request to the Bedrock Runtime.
         InvokeModelRequest request = createInvokeRequest(awsBedrockParameters, nativeRequest);
 
-        System.out.println("Native request: " + nativeRequest);
+        logger.info("Native request: " + nativeRequest);
 
         InvokeModelResponse response = client.invokeModel(request);
         
@@ -507,7 +511,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
       finalResult.put("amazon-bedrock-guardrailAction", guardrail);
 
       // Print the result
-      System.out.println(finalResult.toString(2));
+      logger.info(finalResult.toString(2));
       return finalResult.toString(); 
   }
 
@@ -555,7 +559,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
       finalResult.put("amazon-bedrock-guardrailAction", guardrail);   
    
       // Output the normalized JSON
-      System.out.println(finalResult.toString(2));
+      logger.info(finalResult.toString(2));
 
       return finalResult.toString(); 
   }
@@ -609,7 +613,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
       finalPayload.put("amazon-bedrock-guardrailAction", original.optString("amazon-bedrock-guardrailAction", "NONE"));
 
       // Step 7: Print the result
-      System.out.println(finalPayload.toString(2));
+      logger.info(finalPayload.toString(2));
       	  
       return finalPayload.toString(); 
   }
@@ -658,7 +662,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
       finalPayload.put("amazon-bedrock-guardrailAction", original.optString("amazon-bedrock-guardrailAction", "NONE"));
 
       // Print final JSON
-      System.out.println(finalPayload.toString(2));
+      logger.info(finalPayload.toString(2));
 	  
       return finalPayload.toString(); 
   }
@@ -705,7 +709,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
 		        finalPayload.put("amazon-bedrock-guardrailAction", guardrail);
 
 		        // Print the final JSON
-		        System.out.println(finalPayload.toString(2));
+		        logger.info(finalPayload.toString(2));
 		
 		      return finalPayload.toString(); 		  
   }
@@ -761,7 +765,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
       finalPayload.put("amazon-bedrock-guardrailAction", guardrail);
 
       // Print the final JSON
-      System.out.println(finalPayload.toString(2));
+      logger.info(finalPayload.toString(2));
 
       return finalPayload.toString(); 
 
@@ -850,7 +854,7 @@ public static String getFoundationModel(AwsbedrockConfiguration configuration, A
     } catch (ValidationException e) {
         throw new IllegalArgumentException(e.getMessage());
     } catch (SdkException e) {
-        System.err.println(e.getMessage());
+        logger.error(e.getMessage());
         throw new RuntimeException(e);
     }
 
@@ -866,13 +870,13 @@ public static String listFoundationModels(AwsbedrockConfiguration configuration,
 
             List<FoundationModelSummary> models = response.modelSummaries();
 
-            System.out.println(response.toString());
-            System.out.println(models.toString());
+            logger.info(response.toString());
+            logger.info(models.toString());
             
             JSONArray modelsArray = new JSONArray();
 
             if (models.isEmpty()) {
-                System.out.println("No available foundation models" );
+                logger.info("No available foundation models" );
             } else {
                 for (FoundationModelSummary model : models) {
 
@@ -896,7 +900,7 @@ public static String listFoundationModels(AwsbedrockConfiguration configuration,
             return modelsArray.toString();
 
         } catch (SdkClientException e) {
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
             throw new RuntimeException(e);
         }
     }
@@ -914,13 +918,13 @@ public static String listCustomModels(AwsbedrockConfiguration configuration, Aws
 
             List<CustomModelSummary> models = response.modelSummaries();
 
-            System.out.println(response.toString());
-            System.out.println(models.toString());
+            logger.info(response.toString());
+            logger.info(models.toString());
             
             JSONArray modelsArray = new JSONArray();
 
             if (models.isEmpty()) {
-                System.out.println("No available foundation models.");
+                logger.info("No available foundation models.");
             } else {
                 for (CustomModelSummary model : models) {
                     // Create a JSONObject for each model and add to JSONArray
@@ -938,7 +942,7 @@ public static String listCustomModels(AwsbedrockConfiguration configuration, Aws
             return modelsArray.toString();
 
         } catch (SdkClientException e) {
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
             throw new RuntimeException(e);
         }
     }
@@ -975,7 +979,7 @@ public static String listCustomModels(AwsbedrockConfiguration configuration, Aws
         } catch (ValidationException e) {
             throw new IllegalArgumentException(e.getMessage());
         } catch (SdkException e) {
-            System.err.println(e.getMessage());
+            logger.error(e.getMessage());
             throw new RuntimeException(e);
         }
     

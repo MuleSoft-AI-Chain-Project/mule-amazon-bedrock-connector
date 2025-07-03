@@ -13,6 +13,8 @@ import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.image.AwsbedrockImageParameters;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -28,8 +30,8 @@ import java.awt.image.BufferedImage;
 
 public class AwsbedrockImagePayloadHelper {
 
-  
 
+    private static final Logger logger = LoggerFactory.getLogger(AwsbedrockImagePayloadHelper.class);
 
   private static String getAmazonTitanImage(String prompt, String avoidInImage, AwsbedrockImageParameters awsBedrockParameters) {
 
@@ -167,7 +169,7 @@ public static byte[] generateImage(String modelId, String body, AwsbedrockConfig
 
          String body = identifyPayload(prompt, avoidInImage, awsBedrockParameters); 
 
-        System.out.println(body);
+        logger.info(body);
 
         try {
             byte[] imageBytes = generateImage(modelId, body, configuration, region);
@@ -184,14 +186,14 @@ public static byte[] generateImage(String modelId, String body, AwsbedrockConfig
            
             // Display image
             if (bufferedImage != null) {
-                System.out.println("Successfully generated image.");
+                logger.info("Successfully generated image.");
             } else {
-                System.out.println("Failed to generate image.");
+                logger.info("Failed to generate image.");
             }
             return filePath;
 
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            logger.error("Error: " + e.getMessage());
             e.printStackTrace();
             return null;
 
