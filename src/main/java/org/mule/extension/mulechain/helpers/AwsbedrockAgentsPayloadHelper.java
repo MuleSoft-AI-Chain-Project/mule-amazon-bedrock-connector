@@ -5,16 +5,21 @@ import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
+import org.mule.runtime.api.event.Event;
+import org.mule.runtime.core.api.event.CoreEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.TlsKeyManagersProvider;
+import software.amazon.awssdk.http.TlsTrustManagersProvider;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
 
+import java.io.FileInputStream;
 import java.net.URI;
+import java.security.KeyStore;
 import java.util.List;
 import java.util.stream.Collectors;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
@@ -67,6 +72,9 @@ import software.amazon.awssdk.services.bedrockagent.model.AgentStatus;
 import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import java.util.UUID;
 import java.util.Optional;
 
@@ -302,6 +310,8 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
                 .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
         if (configuration.getProxyConfig() != null) {
+            ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder();
+
             software.amazon.awssdk.http.apache.ProxyConfiguration proxyConfig = software.amazon.awssdk.http.apache.ProxyConfiguration.builder()
                     .endpoint(URI.create(String.format("%s://%s:%d",
                             configuration.getProxyConfig().getScheme(),
@@ -312,11 +322,20 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
                     .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
                     .build();
 
-            SdkHttpClient httpClient = ApacheHttpClient.builder()
-                    .proxyConfiguration(proxyConfig)
-                    .build();
+            httpClientBuilder.proxyConfiguration(proxyConfig);
 
-            bedrockAgentClientBuilder.httpClient(httpClient);
+            // Configure truststore if available
+            if (configuration.getProxyConfig().getTrustStorePath() != null) {
+                TlsTrustManagersProvider tlsTrustManagersProvider = createTlsKeyManagersProvider(
+                            configuration.getProxyConfig().getTrustStorePath(),
+                            configuration.getProxyConfig().getTrustStorePassword(),
+                            configuration.getProxyConfig().getTrustStoreType().name()
+                );
+
+                httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
+            }
+
+            bedrockAgentClientBuilder.httpClient(httpClientBuilder.build());
         }
 
         return bedrockAgentClientBuilder.build();
@@ -341,8 +360,10 @@ private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(Awsbedr
                 .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
-        // Only configure proxy if proxy configuration is available
+        // Configure HTTP client if proxy or truststore is needed
         if (configuration.getProxyConfig() != null) {
+            NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
+
             software.amazon.awssdk.http.nio.netty.ProxyConfiguration proxyConfig =
                     software.amazon.awssdk.http.nio.netty.ProxyConfiguration.builder()
                             .host(configuration.getProxyConfig().getHost())
@@ -352,14 +373,40 @@ private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(Awsbedr
                             .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
                             .build();
 
-            SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder()
-                    .proxyConfiguration(proxyConfig)
-                    .build();
+            httpClientBuilder.proxyConfiguration(proxyConfig);
 
-            clientBuilder.httpClient(httpClient);
+            // Configure truststore if available
+            if (configuration.getProxyConfig().getTrustStorePath() != null) {
+                TlsTrustManagersProvider tlsTrustManagersProvider = createTlsKeyManagersProvider(
+                        configuration.getProxyConfig().getTrustStorePath(),
+                        configuration.getProxyConfig().getTrustStorePassword(),
+                        configuration.getProxyConfig().getTrustStoreType().name()
+                );
+
+                httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
+            }
+
+            clientBuilder.httpClient(httpClientBuilder.build());
         }
 
         return clientBuilder.build();
+    }
+
+    private static TlsTrustManagersProvider createTlsKeyManagersProvider(String trustStorePath, String trustStorePassword, String trustStoreType) {
+        try {
+            // Load the truststore (supports JKS, PKCS12, etc.)
+            KeyStore trustStore = KeyStore.getInstance(trustStoreType);
+            try (FileInputStream fis = new FileInputStream(trustStorePath)) {
+                trustStore.load(fis, trustStorePassword != null ? trustStorePassword.toCharArray() : null);
+            }
+
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trustManagerFactory.init(trustStore);
+
+            return () -> trustManagerFactory.getTrustManagers();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to configure JKS truststore", e);
+        }
     }
 
 
@@ -598,7 +645,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
     try {
         GetRoleResponse getRoleResponse = iamClient.getRole(GetRoleRequest.builder().roleName(roleName).build());
         agentRole = getRoleResponse.role();
-        logger.info("Role already exists: " + agentRole.arn());
+        logger.info("Role already exists: {}", agentRole.arn());
     } catch (NoSuchEntityException e) {
         // Role does not exist, create it
         try {
@@ -608,10 +655,10 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .build());
 
             
-            logger.info(modelArn);
+            logger.info("Model ARN: {}", modelArn);
             //String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Sid\": \"Agents for Amazon Bedrock permissions\",\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"" + modelArn + "\"}]}";
             String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"*\"}]}";
-            logger.info(policyDocument);
+            logger.info("Policy Document: {}", policyDocument);
             iamClient.putRolePolicy(PutRolePolicyRequest.builder()
                     .roleName(roleName)
                     .policyName(ROLE_POLICY_NAME)
@@ -624,7 +671,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .arn(createRoleResponse.role().arn())
                     .build();
         } catch (IamException ex) {
-            logger.info("Couldn't create role " + roleName + ". Here's why: " + ex.getMessage());
+            logger.error("Couldn't create role {}. Here's why: {}", roleName, ex.getMessage(), ex);
             throw ex;
         }
     }
@@ -687,8 +734,7 @@ private static PrepareAgentResponse prepareAgent(String agentId, BedrockAgentCli
 
 
 private static AgentAlias createAgentAlias(String alias, String agentId, BedrockAgentClient bedrockAgentClient) {
-    logger.info("Creating an agent alias...");    
-    logger.info("agentId: " + agentId);
+    logger.info("Creating an agent alias for agentId: {}", agentId);
     CreateAgentAliasRequest request = CreateAgentAliasRequest.builder()
             .agentId(agentId)
             .agentAliasName(alias)
@@ -851,10 +897,10 @@ public static String chatWithAgent(String agentAlias, String agentId, String ses
     BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration, awsBedrockParameters);
 
     if (sessionId != null && !sessionId.isEmpty()) {
-        logger.info("Using provided sessionId: " + sessionId);
+        logger.info("Using provided sessionId: {}", sessionId);
     } else {
         sessionId = UUID.randomUUID().toString();
-        logger.info("Generated new sessionId: " + sessionId);
+        logger.info("Generated new sessionId: {}", sessionId);
     }
     
     //String sessionId = UUID.randomUUID().toString();
@@ -870,12 +916,10 @@ public static String chatWithAgent(String agentAlias, String agentId, String ses
         logger.info(response);
 
     } catch (InterruptedException | ExecutionException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-        logger.info(e.getMessage());
+        logger.error(e.getMessage(), e);
     }
 
-    return response.substring(4);
+    return "".equals(response) ? "" : response.substring(4);
 }
 
 private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt, String sessionId, BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) throws InterruptedException, ExecutionException {

@@ -11,4 +11,8 @@ public interface ProxyConfig {
     public String getPassword();
     public Set<String> getNonProxyHosts();
 
+    public String getTrustStorePath();
+    public String getTrustStorePassword();
+    public TrustStoreType getTrustStoreType();
+
 }

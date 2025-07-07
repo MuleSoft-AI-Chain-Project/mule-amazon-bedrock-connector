@@ -188,13 +188,12 @@ public static byte[] generateImage(String modelId, String body, AwsbedrockConfig
             if (bufferedImage != null) {
                 logger.info("Successfully generated image.");
             } else {
-                logger.info("Failed to generate image.");
+                logger.warn("Failed to generate image.");
             }
             return filePath;
 
         } catch (Exception e) {
-            logger.error("Error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error: {}", e.getMessage(), e);
             return null;
 
         }
