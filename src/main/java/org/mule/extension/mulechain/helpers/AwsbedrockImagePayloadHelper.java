@@ -112,6 +112,7 @@ private static String getStabilityAiDiffusionImage(String prompt, String avoidIn
 
     return BedrockRuntimeClient.builder()
             .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
+            .fipsEnabled(configuration.getFipsModeEnabled())
             .region(region)
             .build();
 }

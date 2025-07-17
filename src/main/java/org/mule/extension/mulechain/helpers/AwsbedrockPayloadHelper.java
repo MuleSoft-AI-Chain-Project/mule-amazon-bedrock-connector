@@ -788,7 +788,8 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
     }
 
     BedrockClient bedrockClient = BedrockClient.builder()
-    .region(getRegion(awsBedrockParameters.getRegion())) 
+    .region(getRegion(awsBedrockParameters.getRegion()))
+    .fipsEnabled(configuration.getFipsModeEnabled())
     .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
     .build();
 
@@ -812,7 +813,8 @@ private static BedrockClient createBedrockClientDetails(AwsbedrockConfiguration 
     }
 
     BedrockClient bedrockClient = BedrockClient.builder()
-    .region(getRegion(awsBedrockParameters.getRegion())) 
+    .region(getRegion(awsBedrockParameters.getRegion()))
+    .fipsEnabled(configuration.getFipsModeEnabled())
     .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
     .build();
 

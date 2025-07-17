@@ -196,6 +196,7 @@ private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configu
     return BedrockRuntimeClient.builder()
             .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
             .region(region)
+            .fipsEnabled(configuration.getFipsModeEnabled())
             .build();
 }
 
