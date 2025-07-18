@@ -196,6 +196,7 @@ private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configu
     return BedrockRuntimeClient.builder()
             .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
             .region(region)
+            .fipsEnabled(configuration.getFipsModeEnabled())
             .build();
 }
 
@@ -239,10 +240,8 @@ public static String invokeModel(String prompt, AwsbedrockConfiguration configur
             return response.toString();
 
         } catch (Exception e) {
-            logger.error("Error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error: {}", e.getMessage(), e);
             return null;
-
         }
     }
 
@@ -296,8 +295,7 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
             return jsonArray.toString();
 
         } catch (Exception e) {
-            logger.error("Error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error: {}", e.getMessage(), e);
             return null;
 
         }

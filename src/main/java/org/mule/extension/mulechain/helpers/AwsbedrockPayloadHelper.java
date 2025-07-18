@@ -58,7 +58,7 @@ public class AwsbedrockPayloadHelper {
   private static InvokeModelRequest createInvokeRequest(AwsbedrockParameters awsBedrockParameters, String nativeRequest) {
 	  
 	  String modelId = awsBedrockParameters.getModelName();
-      logger.info("modelId: " + modelId);
+      logger.info("modelId: {}", modelId);
 
 	  String region = awsBedrockParameters.getRegion();
 	  
@@ -378,7 +378,7 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         // Encode and send the request to the Bedrock Runtime.
         InvokeModelRequest request = createInvokeRequest(awsBedrockParameters, nativeRequest);
 
-        logger.info("Native request: " + nativeRequest);
+        logger.info("Native request: {}", nativeRequest);
 
         InvokeModelResponse response = client.invokeModel(request);
         
@@ -788,7 +788,8 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
     }
 
     BedrockClient bedrockClient = BedrockClient.builder()
-    .region(getRegion(awsBedrockParameters.getRegion())) 
+    .region(getRegion(awsBedrockParameters.getRegion()))
+    .fipsEnabled(configuration.getFipsModeEnabled())
     .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
     .build();
 
@@ -812,7 +813,8 @@ private static BedrockClient createBedrockClientDetails(AwsbedrockConfiguration 
     }
 
     BedrockClient bedrockClient = BedrockClient.builder()
-    .region(getRegion(awsBedrockParameters.getRegion())) 
+    .region(getRegion(awsBedrockParameters.getRegion()))
+    .fipsEnabled(configuration.getFipsModeEnabled())
     .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
     .build();
 
@@ -854,7 +856,7 @@ public static String getFoundationModel(AwsbedrockConfiguration configuration, A
     } catch (ValidationException e) {
         throw new IllegalArgumentException(e.getMessage());
     } catch (SdkException e) {
-        logger.error(e.getMessage());
+        logger.error(e.getMessage(), e);
         throw new RuntimeException(e);
     }
 

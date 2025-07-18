@@ -19,16 +19,16 @@ import java.util.List;
 
 public class AwsbedrockChatMemoryHelper {
 
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region) {
+  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode) {
     return BedrockRuntimeClient.builder()
-    .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+    .credentialsProvider(StaticCredentialsProvider.create(awsCreds)).fipsEnabled(useFipsMode)
     .region(region)
     .build();
   }
 
-  private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region) {
+  private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region, Boolean useFipsMode) {
     return BedrockRuntimeClient.builder()
-    .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+    .credentialsProvider(StaticCredentialsProvider.create(awsCreds)).fipsEnabled(useFipsMode)
     .region(region)
     .build();
   }
@@ -188,10 +188,10 @@ private static String getLlamaText(String prompt, AwsbedrockParameters awsBedroc
         //return createClient(awsCreds, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
         if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
             AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey());
-            return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
+            return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()), configuration.getFipsModeEnabled());
         } else {
             AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey(), configuration.getAwsSessionToken());
-            return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
+            return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()), configuration.getFipsModeEnabled());
         }
 
   }

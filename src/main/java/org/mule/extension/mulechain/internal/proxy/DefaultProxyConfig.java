@@ -1,11 +1,11 @@
 package org.mule.extension.mulechain.internal.proxy;
 
+import org.mule.runtime.api.meta.model.display.PathModel;
 import org.mule.runtime.extension.api.annotation.Alias;
 import org.mule.runtime.extension.api.annotation.dsl.xml.TypeDsl;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.Optional;
-import org.mule.runtime.extension.api.annotation.param.display.Example;
-import org.mule.runtime.extension.api.annotation.param.display.Password;
+import org.mule.runtime.extension.api.annotation.param.display.*;
 
 import java.util.Set;
 
@@ -39,6 +39,21 @@ public class DefaultProxyConfig implements ProxyConfig {
     @Optional
     private Set<String> nonProxyHosts;
 
+    @Parameter
+    @Example("trustStore.jks")
+    @Path(type = PathModel.Type.FILE)
+    @Optional
+    private String trustStore;
+
+    @Parameter
+    @Password
+    @Optional
+    private String trustStorePassword;
+
+    @Parameter
+    @Optional
+    private TrustStoreType trustStoreType;
+
     public String getScheme() {
         return scheme;
     }
@@ -61,6 +76,18 @@ public class DefaultProxyConfig implements ProxyConfig {
 
     public Set<String> getNonProxyHosts() {
         return nonProxyHosts;
+    }
+
+    public String getTrustStorePath() {
+        return trustStore;
+    }
+
+    public String getTrustStorePassword() {
+        return trustStorePassword;
+    }
+
+    public TrustStoreType getTrustStoreType() {
+        return trustStoreType;
     }
 
 }

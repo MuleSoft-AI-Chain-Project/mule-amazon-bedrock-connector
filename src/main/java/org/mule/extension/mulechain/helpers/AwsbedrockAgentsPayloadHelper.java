@@ -3,25 +3,25 @@ package org.mule.extension.mulechain.helpers;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
-import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.TlsTrustManagersProvider;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
 
+import java.io.FileInputStream;
 import java.net.URI;
-import java.util.List;
+import java.security.KeyStore;
+import java.util.*;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
-import software.amazon.awssdk.core.SdkBytes;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -30,16 +30,9 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
-import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentResponse;
-import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
 import software.amazon.awssdk.services.iam.model.CreateRoleResponse;
@@ -67,231 +60,12 @@ import software.amazon.awssdk.services.bedrockagent.model.AgentStatus;
 import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
-import java.util.UUID;
-import java.util.Optional;
+
+import javax.net.ssl.TrustManagerFactory;
 
 public class AwsbedrockAgentsPayloadHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(AwsbedrockAgentsPayloadHelper.class);
-
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region) {
-    return BedrockRuntimeClient.builder()
-    .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-    .region(region)
-    .build();
-  }
-
-  private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region) {
-    return BedrockRuntimeClient.builder()
-    .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-    .region(region)
-    .build();
-  }
-
-  private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
-    return InvokeModelRequest.builder()
-          .body(SdkBytes.fromUtf8String(nativeRequest))
-          .modelId(modelId)
-          .build();
-
-  }
-
-  private static String getAmazonTitanText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("inputText", prompt);
-
-    JSONObject textGenerationConfig = new JSONObject();
-    textGenerationConfig.put("temperature", awsBedrockParameters.getTemperature());
-    textGenerationConfig.put("topP", awsBedrockParameters.getTopP());
-    textGenerationConfig.put("maxTokenCount", awsBedrockParameters.getMaxTokenCount());
-
-    jsonRequest.put("textGenerationConfig", textGenerationConfig);
-
-    return jsonRequest.toString();
-}
-
-private static String getAmazonNovaText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject textObject = new JSONObject();
-    textObject.put("text", prompt);
-
-    // Create the "content" array containing the "text" object
-    JSONArray contentArray = new JSONArray();
-    contentArray.put(textObject);
-
-    // Create the "messages" array and add the "user" message
-    JSONObject userMessage = new JSONObject();
-    userMessage.put("role", "user");
-    userMessage.put("content", contentArray);
-
-    JSONArray messagesArray = new JSONArray();
-    messagesArray.put(userMessage);
-
-    // Create the "inferenceConfig" object with optional parameters
-    JSONObject inferenceConfig = new JSONObject();
-    inferenceConfig.put("max_new_tokens", awsBedrockParameters.getMaxTokenCount());
-    inferenceConfig.put("temperature", awsBedrockParameters.getTemperature());
-    inferenceConfig.put("top_p", awsBedrockParameters.getTopP());
-    inferenceConfig.put("top_k", awsBedrockParameters.getTopK());
-
-    // Combine everything into the root JSON object
-    JSONObject rootObject = new JSONObject();
-    rootObject.put("messages", messagesArray);
-    rootObject.put("inferenceConfig", inferenceConfig);
-
-    return rootObject.toString();
-}
-
-private static String getStabilityTitanText(String prompt) {
-    JSONObject jsonRequest = new JSONObject();
-    JSONObject textGenerationConfig = new JSONObject();
-    textGenerationConfig.put("text", prompt);
-
-    jsonRequest.put("text_prompts", textGenerationConfig);
-
-    return jsonRequest.toString();
-}
-
-
-private static String getAnthropicClaudeText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("top_k", awsBedrockParameters.getTopK());
-    jsonRequest.put("max_tokens_to_sample", awsBedrockParameters.getMaxTokenCount());
-
-    return jsonRequest.toString();
-}
-
-private static String getMistralAIText(String prompt, AwsbedrockParameters awsBedrockParameters) {
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("top_k", awsBedrockParameters.getTopK());
-    jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
-
-    return jsonRequest.toString();
-}
-
-
-  private static String getAI21Text(String prompt, AwsbedrockParameters awsBedrockParameters){
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("topP", awsBedrockParameters.getTopP());
-    jsonRequest.put("maxTokens", awsBedrockParameters.getMaxTokenCount());
-    
-    return jsonRequest.toString();
-}
-
-private static String getCohereText(String prompt, AwsbedrockParameters awsBedrockParameters){
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("p", awsBedrockParameters.getTopP());
-    jsonRequest.put("k", awsBedrockParameters.getTopK());
-    jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
-    
-    return jsonRequest.toString();
-}
-
-private static String getLlamaText(String prompt, AwsbedrockParameters awsBedrockParameters){
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("max_gen_len", awsBedrockParameters.getMaxTokenCount());
-    
-    return jsonRequest.toString();
-}
-
-
-
-  private static String identifyPayload(String prompt, AwsbedrockParameters awsBedrockParameters){
-    if (awsBedrockParameters.getModelName().contains("amazon.titan-text")) {
-        return getAmazonTitanText(prompt, awsBedrockParameters);
-    } else if ( awsBedrockParameters.getModelName().contains("amazon.nova")){
-        return getAmazonNovaText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("anthropic.claude")) {
-        return getAnthropicClaudeText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("ai21.j2")) {
-        return getAI21Text(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("mistral.mistral")) {
-        return getMistralAIText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("cohere.command")) {
-        return getCohereText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("meta.llama")) {
-        return getLlamaText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("mistral.")) {
-        return getLlamaText(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("mistral.")) {
-        return getStabilityTitanText(prompt);
-    } else {
-        return "Unsupported model";
-    }
-
-  }
-
-  private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters){
-        // Initialize the AWS credentials
-        //AwsBasicCredentials awsCreds = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey());
-        // Create Bedrock Client 
-        //return createClient(awsCreds, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
-        if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-            AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey());
-            return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
-        } else {
-            AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey(), configuration.getAwsSessionToken());
-            return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
-        }
-
-  }
-
-
-  private static String invokeModel(String prompt, AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters) {
-
-    // Create Bedrock Client 
-    BedrockRuntimeClient client = InitiateClient(configuration, awsBedrockParameters);
-
-    String nativeRequest = identifyPayload(prompt, awsBedrockParameters);
-
-    try {
-        // Encode and send the request to the Bedrock Runtime.
-        InvokeModelRequest request = createInvokeRequest(awsBedrockParameters.getModelName(), nativeRequest);
-
-        //logger.info("Native request: " + nativeRequest);
-
-        InvokeModelResponse response = client.invokeModel(request);
-        
-
-        // Decode the response body.
-        JSONObject responseBody = new JSONObject(response.body().asUtf8String());
-
-
-        //logger.info(responseBody);
-        // Retrieve the generated text from the model's response.
-        //String text = new JSONPointer("/completions/0/data/text").queryFrom(responseBody).toString();
-        //logger.info(text);
-
-        return responseBody.toString();
-
-    } catch (SdkClientException e) {
-        System.err.printf("ERROR: Can't invoke '%s'. Reason: %s", awsBedrockParameters.getModelName(), e.getMessage());
-        throw new RuntimeException(e);
-    }
-}
-
-
-private static BedrockClient createBedrockClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
-
-    BedrockClient bedrockClient = BedrockClient.builder()
-    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
-    .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-    .build();
-
-    return bedrockClient;
-}
 
     private static BedrockAgentClient createBedrockAgentClient(
             AwsbedrockConfiguration configuration,
@@ -299,9 +73,12 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
 
         BedrockAgentClientBuilder bedrockAgentClientBuilder = BedrockAgentClient.builder()
                 .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
+                .fipsEnabled(configuration.getFipsModeEnabled())
                 .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
         if (configuration.getProxyConfig() != null) {
+            ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder();
+
             software.amazon.awssdk.http.apache.ProxyConfiguration proxyConfig = software.amazon.awssdk.http.apache.ProxyConfiguration.builder()
                     .endpoint(URI.create(String.format("%s://%s:%d",
                             configuration.getProxyConfig().getScheme(),
@@ -312,26 +89,24 @@ private static BedrockClient createBedrockClient(AwsbedrockConfiguration configu
                     .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
                     .build();
 
-            SdkHttpClient httpClient = ApacheHttpClient.builder()
-                    .proxyConfiguration(proxyConfig)
-                    .build();
+            httpClientBuilder.proxyConfiguration(proxyConfig);
 
-            bedrockAgentClientBuilder.httpClient(httpClient);
+            // Configure truststore if available
+            if (configuration.getProxyConfig().getTrustStorePath() != null) {
+                TlsTrustManagersProvider tlsTrustManagersProvider = createTlsKeyManagersProvider(
+                            configuration.getProxyConfig().getTrustStorePath(),
+                            configuration.getProxyConfig().getTrustStorePassword(),
+                            configuration.getProxyConfig().getTrustStoreType().name()
+                );
+
+                httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
+            }
+
+            bedrockAgentClientBuilder.httpClient(httpClientBuilder.build());
         }
 
         return bedrockAgentClientBuilder.build();
     }
-
-
-private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
-    BedrockAgentRuntimeClient bedrockAgentRuntimeClient = BedrockAgentRuntimeClient.builder()
-    .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion())) 
-    .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-    .build();
-
-    return bedrockAgentRuntimeClient;
-}
-
 
     private static BedrockAgentRuntimeAsyncClient createBedrockAgentRuntimeAsyncClient(
             AwsbedrockConfiguration configuration,
@@ -339,10 +114,13 @@ private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(Awsbedr
 
         BedrockAgentRuntimeAsyncClientBuilder clientBuilder = BedrockAgentRuntimeAsyncClient.builder()
                 .region(AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()))
+                .fipsEnabled(configuration.getFipsModeEnabled())
                 .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
-        // Only configure proxy if proxy configuration is available
+        // Configure HTTP client if proxy or truststore is needed
         if (configuration.getProxyConfig() != null) {
+            NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
+
             software.amazon.awssdk.http.nio.netty.ProxyConfiguration proxyConfig =
                     software.amazon.awssdk.http.nio.netty.ProxyConfiguration.builder()
                             .host(configuration.getProxyConfig().getHost())
@@ -352,14 +130,40 @@ private static BedrockAgentRuntimeClient createBedrockAgentRuntimeClient(Awsbedr
                             .nonProxyHosts(configuration.getProxyConfig().getNonProxyHosts())
                             .build();
 
-            SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder()
-                    .proxyConfiguration(proxyConfig)
-                    .build();
+            httpClientBuilder.proxyConfiguration(proxyConfig);
 
-            clientBuilder.httpClient(httpClient);
+            // Configure truststore if available
+            if (configuration.getProxyConfig().getTrustStorePath() != null) {
+                TlsTrustManagersProvider tlsTrustManagersProvider = createTlsKeyManagersProvider(
+                        configuration.getProxyConfig().getTrustStorePath(),
+                        configuration.getProxyConfig().getTrustStorePassword(),
+                        configuration.getProxyConfig().getTrustStoreType().name()
+                );
+
+                httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
+            }
+
+            clientBuilder.httpClient(httpClientBuilder.build());
         }
 
         return clientBuilder.build();
+    }
+
+    private static TlsTrustManagersProvider createTlsKeyManagersProvider(String trustStorePath, String trustStorePassword, String trustStoreType) {
+        try {
+            // Load the truststore (supports JKS, PKCS12, etc.)
+            KeyStore trustStore = KeyStore.getInstance(trustStoreType);
+            try (FileInputStream fis = new FileInputStream(trustStorePath)) {
+                trustStore.load(fis, trustStorePassword != null ? trustStorePassword.toCharArray() : null);
+            }
+
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trustManagerFactory.init(trustStore);
+
+            return () -> trustManagerFactory.getTrustManagers();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to configure JKS truststore", e);
+        }
     }
 
 
@@ -598,7 +402,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
     try {
         GetRoleResponse getRoleResponse = iamClient.getRole(GetRoleRequest.builder().roleName(roleName).build());
         agentRole = getRoleResponse.role();
-        logger.info("Role already exists: " + agentRole.arn());
+        logger.info("Role already exists: {}", agentRole.arn());
     } catch (NoSuchEntityException e) {
         // Role does not exist, create it
         try {
@@ -608,10 +412,10 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .build());
 
             
-            logger.info(modelArn);
+            logger.info("Model ARN: {}", modelArn);
             //String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Sid\": \"Agents for Amazon Bedrock permissions\",\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"" + modelArn + "\"}]}";
             String policyDocument = "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Action\": [\"bedrock:ListFoundationModels\",\"bedrock:GetFoundationModel\",\"bedrock:TagResource\",\"bedrock:UntagResource\",\"bedrock:ListTagsForResource\",\"bedrock:CreateAgent\",\"bedrock:UpdateAgent\",\"bedrock:GetAgent\",\"bedrock:ListAgents\",\"bedrock:DeleteAgent\",\"bedrock:CreateAgentActionGroup\",\"bedrock:UpdateAgentActionGroup\",\"bedrock:GetAgentActionGroup\",\"bedrock:ListAgentActionGroups\",\"bedrock:DeleteAgentActionGroup\",\"bedrock:GetAgentVersion\",\"bedrock:ListAgentVersions\",\"bedrock:DeleteAgentVersion\",\"bedrock:CreateAgentAlias\",\"bedrock:UpdateAgentAlias\",\"bedrock:GetAgentAlias\",\"bedrock:ListAgentAliases\",\"bedrock:DeleteAgentAlias\",\"bedrock:AssociateAgentKnowledgeBase\",\"bedrock:DisassociateAgentKnowledgeBase\",\"bedrock:GetKnowledgeBase\",\"bedrock:ListKnowledgeBases\",\"bedrock:PrepareAgent\",\"bedrock:InvokeAgent\",\"bedrock:InvokeModel\"],\"Resource\": \"*\"}]}";
-            logger.info(policyDocument);
+            logger.info("Policy Document: {}", policyDocument);
             iamClient.putRolePolicy(PutRolePolicyRequest.builder()
                     .roleName(roleName)
                     .policyName(ROLE_POLICY_NAME)
@@ -624,7 +428,7 @@ private static Role createAgentRole(String postfix, String RolePolicyName, Awsbe
                     .arn(createRoleResponse.role().arn())
                     .build();
         } catch (IamException ex) {
-            logger.info("Couldn't create role " + roleName + ". Here's why: " + ex.getMessage());
+            logger.error("Couldn't create role {}. Here's why: {}", roleName, ex.getMessage(), ex);
             throw ex;
         }
     }
@@ -653,9 +457,6 @@ private static void waitForAgentStatus(String agentId, String status, BedrockAge
         GetAgentResponse response = bedrockAgentClient.getAgent(GetAgentRequest.builder()
                 .agentId(agentId)
                 .build());
-        
-        //logger.info("Status: " + status);
-        //logger.info("response.agent.agentStatus: " + response.agent().agentStatus().toString());
 
         if (response.agent().agentStatus().toString().equals(status)) {
 
@@ -687,8 +488,7 @@ private static PrepareAgentResponse prepareAgent(String agentId, BedrockAgentCli
 
 
 private static AgentAlias createAgentAlias(String alias, String agentId, BedrockAgentClient bedrockAgentClient) {
-    logger.info("Creating an agent alias...");    
-    logger.info("agentId: " + agentId);
+    logger.info("Creating an agent alias for agentId: {}", agentId);
     CreateAgentAliasRequest request = CreateAgentAliasRequest.builder()
             .agentId(agentId)
             .agentAliasName(alias)
@@ -816,98 +616,138 @@ private static DeleteAgentResponse deleteAgentById(String agentId, BedrockAgentC
     return deleteAgentResponse;
 }
 
+    public static String chatWithAgent(String agentAlias, String agentId, String sessionId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
 
+        BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration, awsBedrockParameters);
 
-/*
+        String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId : UUID.randomUUID().toString();
+        logger.info("Using sessionId: {}", effectiveSessionId);
 
-private void chatWithAgent(AgentAlias agentAlias, BedrockAgentRuntimeClient bedrockAgentRuntimeClient) {
-    logger.info(String.join("", Collections.nCopies(88, "-")));
-    logger.info("The agent is ready to chat.");
-    logger.info("Try asking for the date or time. Type 'exit' to quit.");
-
-    // Create a unique session ID for the conversation
-    String sessionId = UUID.randomUUID().toString();
-
-    Scanner scanner = new Scanner(System.in);
-    while (true) {
-        System.out.print("Prompt: ");
-        String prompt = scanner.nextLine();
-
-        if (prompt.equals("exit")) {
-            break;
+        try {
+            return invokeAgent(agentAlias, agentId, prompt, effectiveSessionId, bedrockAgent)
+                    .thenApply(response -> {
+                        logger.debug(response);
+                        return response;
+                    })
+                    .exceptionally(e -> {
+                        logger.error("Error during agent invocation: {}", e.getMessage(), e);
+                        throw new CompletionException("Failed to chat with agent", e);
+                    })
+                    .join();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
-
-        String response = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgentRuntimeClient);
-
-        logger.info("Agent: " + response);
-    }
-}
-
-*/
-
-
-
-public static String chatWithAgent(String agentAlias, String agentId, String sessionId, String prompt, AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters){
-    BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration, awsBedrockParameters);
-
-    if (sessionId != null && !sessionId.isEmpty()) {
-        logger.info("Using provided sessionId: " + sessionId);
-    } else {
-        sessionId = UUID.randomUUID().toString();
-        logger.info("Generated new sessionId: " + sessionId);
-    }
-    
-    //String sessionId = UUID.randomUUID().toString();
-    //CompletableFuture<String> completableFuture=null;
-    String response = "";
-    try {
-        //completableFuture = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent);
-        /*invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent).thenAccept(response -> {
-            logger.info(response);
-        });*/
-
-        response = invokeAgent(agentAlias, agentId, prompt, sessionId, bedrockAgent).get();
-        logger.info(response);
-
-    } catch (InterruptedException | ExecutionException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-        logger.info(e.getMessage());
     }
 
-    return response.substring(4);
-}
+    private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt, String sessionId, BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) throws InterruptedException, ExecutionException {
+        InvokeAgentRequest request = InvokeAgentRequest.builder()
+                .agentId(agentId)
+                .agentAliasId(agentAlias)
+                .sessionId(sessionId)
+                .inputText(prompt)
+                .enableTrace(false)
+                .build();
 
-private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt, String sessionId, BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) throws InterruptedException, ExecutionException {
-    InvokeAgentRequest request = InvokeAgentRequest.builder()
-            .agentId(agentId)
-            .agentAliasId(agentAlias)
-            .sessionId(sessionId)
-            .inputText(prompt)
-            .build();
+        CompletableFuture<String> completionFuture = new CompletableFuture<>();
 
-    CompletableFuture<String> completionFuture = new CompletableFuture<>();
+        // Thread-safe collection to store different chunks
+        List<JSONObject> chunks = Collections.synchronizedList(new ArrayList<>());
 
-    InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
-            .onChunk(chunk -> {
-                SdkBytes bytes = chunk.bytes();
-                String text = new String(bytes.asByteArray(), StandardCharsets.UTF_8);
-                completionFuture.complete(completionFuture.getNow(null) + text);
-            })
-            .build();
+        InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
+                .onChunk(chunk -> {
+                    try {
+                        JSONObject chunkData = new JSONObject();
+                        chunkData.put("type", "chunk");
+                        chunkData.put("timestamp", System.currentTimeMillis());
 
-    InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
-            .subscriber(visitor)
-            .build();
+                        if (chunk.bytes() != null) {
+                            String text = new String(chunk.bytes().asByteArray(), StandardCharsets.UTF_8);
+                            chunkData.put("text", text);
+                        }
 
-    bedrockAgentRuntimeAsyncClient.invokeAgent(request, handler).get();
+                        // Add attribution/citations if present
+                        if (chunk.attribution() != null && chunk.attribution().citations() != null) {
+                            JSONArray citationsArray = new JSONArray();
+                            chunk.attribution().citations().forEach(citation -> {
+                                JSONObject citationData = new JSONObject();
 
+                                if (citation.generatedResponsePart() != null && citation.generatedResponsePart().textResponsePart() != null) {
+                                    citationData.put("generatedResponsePart", citation.generatedResponsePart().textResponsePart().text());
+                                }
 
+                                if (citation.retrievedReferences() != null) {
+                                    JSONArray referencesArray = new JSONArray();
+                                    citation.retrievedReferences().forEach(ref -> {
+                                        JSONObject refData = new JSONObject();
+                                        if (ref.content() != null && ref.content().text() != null) {
+                                            refData.put("content", ref.content().text());
+                                        }
+                                        if (ref.location() != null) {
+                                            refData.put("location", ref.location().toString());
+                                        }
+                                        if (ref.metadata() != null) {
+                                            JSONObject metadataObject = new JSONObject(ref.metadata());
+                                            refData.put("metadata", metadataObject);
+                                        }
+                                        referencesArray.put(refData);
+                                    });
+                                    citationData.put("retrievedReferences", referencesArray);
+                                }
+                                citationsArray.put(citationData);
+                            });
+                            chunkData.put("citations", citationsArray);
+                        }
 
-    
-    return completionFuture;
-}
+                        chunks.add(chunkData);
+                    } catch (Exception e) {
+                        logger.error("Error processing chunk: {}", e.getMessage(), e);
+                    }
+                })
+                .build();
 
+        InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
+                .subscriber(visitor)
+                .build();
 
+        CompletableFuture<Void> invocationFuture = bedrockAgentRuntimeAsyncClient.invokeAgent(request, handler);
 
+        invocationFuture.whenComplete((result, throwable) -> {
+            if (throwable != null) {
+                completionFuture.completeExceptionally(throwable);
+            } else {
+                try {
+                    JSONObject finalResult = new JSONObject();
+                    finalResult.put("sessionId", sessionId);
+                    finalResult.put("agentId", agentId);
+                    finalResult.put("agentAlias", agentAlias);
+                    finalResult.put("prompt", prompt);
+                    finalResult.put("processedAt", System.currentTimeMillis());
+                    finalResult.put("chunks", new JSONArray(chunks));
+
+                    // Add summary statistics
+                    JSONObject summary = new JSONObject();
+                    summary.put("totalChunks", chunks.size());
+
+                    // Concatenate all chunk text for full response
+                    StringBuilder fullText = new StringBuilder();
+                    chunks.forEach(chunk -> {
+                        if (chunk.has("text")) {
+                            fullText.append(chunk.getString("text"));
+                        }
+                    });
+                    summary.put("fullResponse", fullText.toString());
+
+                    finalResult.put("summary", summary);
+
+                    String finalJson = finalResult.toString(4);
+                    completionFuture.complete(finalJson);
+                } catch (Exception e) {
+                    logger.error("Error creating final JSON: {}", e.getMessage(), e);
+                    completionFuture.completeExceptionally(e);
+                }
+            }
+        });
+
+        return completionFuture;
+    }
 }

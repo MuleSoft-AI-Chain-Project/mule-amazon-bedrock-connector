@@ -37,6 +37,10 @@ public class AwsbedrockConfiguration {
   @Optional
   private String awsSessionToken;
 
+  @Parameter
+  @Optional
+  private boolean fipsModeEnabled;
+
   /**
    * Reusable configuration element for outbound connections through a proxy. A proxy element must define a host name and a port
    * attributes, and optionally can define a username and a password.
@@ -61,6 +65,10 @@ public class AwsbedrockConfiguration {
 
   public ProxyConfig getProxyConfig() {
     return proxyConfig;
+  }
+
+  public Boolean getFipsModeEnabled() {
+    return fipsModeEnabled;
   }
 
 }
