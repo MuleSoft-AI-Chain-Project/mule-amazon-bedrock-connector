@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.agents;
+
 import org.mule.extension.mulechain.internal.AwsbedrockRegionNameProvider;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;

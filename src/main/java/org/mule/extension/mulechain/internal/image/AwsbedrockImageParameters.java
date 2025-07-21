@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.image;
+
 import org.mule.extension.mulechain.internal.AwsbedrockRegionNameProvider;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
@@ -45,7 +46,6 @@ public class AwsbedrockImageParameters {
 		return height;
 	}
 
-
 	@Parameter
 	@Expression(ExpressionSupport.SUPPORTED)
 	@Optional(defaultValue = "512")
@@ -54,7 +54,6 @@ public class AwsbedrockImageParameters {
 	public Integer getWidth() {
 		return width;
 	}
-
 
 	@Parameter
 	@Expression(ExpressionSupport.SUPPORTED)
@@ -73,8 +72,5 @@ public class AwsbedrockImageParameters {
 	public Integer getSeed() {
 		return seed;
 	}
-
-
-
 
 }

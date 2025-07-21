@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.embeddings;
+
 import java.util.Set;
 import org.mule.runtime.api.value.Value;
 import org.mule.runtime.extension.api.values.ValueBuilder;
@@ -13,12 +14,11 @@ public class AwsbedrockModelNameProviderEmbedding implements ValueProvider {
 			"amazon.titan-embed-image-v1",
 			"amazon.nova-lite-v1:0",
 			"amazon.nova-micro-v1:0",
-			"amazon.nova-pro-v1:0"
-	);
+			"amazon.nova-pro-v1:0");
 
 	@Override
 	public Set<Value> resolve() throws ValueResolvingException {
-		
+
 		return VALUES_FOR;
 	}
 
