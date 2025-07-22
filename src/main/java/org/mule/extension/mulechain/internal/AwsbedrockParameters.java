@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal;
+
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -53,7 +54,6 @@ public class AwsbedrockParameters {
 		return topK;
 	}
 
-
 	@Parameter
 	@Expression(ExpressionSupport.SUPPORTED)
 	@Optional(defaultValue = "512")
@@ -80,6 +80,5 @@ public class AwsbedrockParameters {
 	public String getGuardrailVersion() {
 		return guardrailVersion;
 	}
-
 
 }

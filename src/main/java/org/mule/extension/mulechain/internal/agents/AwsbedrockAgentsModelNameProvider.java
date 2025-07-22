@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.agents;
+
 import java.util.Set;
 import org.mule.runtime.api.value.Value;
 import org.mule.runtime.extension.api.values.ValueBuilder;
@@ -8,7 +9,7 @@ import org.mule.runtime.extension.api.values.ValueResolvingException;
 public class AwsbedrockAgentsModelNameProvider implements ValueProvider {
 
 	private static final Set<Value> VALUES_FOR = ValueBuilder.getValuesFor(
-	
+
 			"anthropic.claude-v2",
 			"anthropic.claude-instant-v1",
 			"anthropic.claude-v2:1",
@@ -24,7 +25,7 @@ public class AwsbedrockAgentsModelNameProvider implements ValueProvider {
 
 	@Override
 	public Set<Value> resolve() throws ValueResolvingException {
-		
+
 		return VALUES_FOR;
 	}
 

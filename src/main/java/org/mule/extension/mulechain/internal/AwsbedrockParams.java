@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal;
+
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -16,8 +17,5 @@ public class AwsbedrockParams {
 	public String getRegion() {
 		return region;
 	}
-
-
-
 
 }

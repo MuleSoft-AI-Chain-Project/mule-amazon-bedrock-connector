@@ -13,25 +13,25 @@ import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
 import org.mule.runtime.extension.api.annotation.Configuration;
 
 /**
- * This class represents an extension configuration, values set in this class are commonly used across multiple
+ * This class represents an extension configuration, values set in this class
+ * are commonly used across multiple
  * operations since they represent something core from the extension.
  */
-@Configuration(name="Config") 
+@Configuration(name = "Config")
 @Operations({
-          AwsbedrockOperations.class, 
-          AwsbedrockImageModelOperations.class,
-          AwsbedrockEmbeddingOperations.class,
-          AwsbedrockMemoryOperations.class,
-          AwsbedrockAgentsOperations.class
-        })
+    AwsbedrockOperations.class,
+    AwsbedrockImageModelOperations.class,
+    AwsbedrockEmbeddingOperations.class,
+    AwsbedrockMemoryOperations.class,
+    AwsbedrockAgentsOperations.class
+})
 public class AwsbedrockConfiguration {
 
   @Parameter
   private String awsAccessKeyId;
-  
+
   @Parameter
   private String awsSecretAccessKey;
-
 
   @Parameter
   @Optional
@@ -42,7 +42,8 @@ public class AwsbedrockConfiguration {
   private boolean fipsModeEnabled;
 
   /**
-   * Reusable configuration element for outbound connections through a proxy. A proxy element must define a host name and a port
+   * Reusable configuration element for outbound connections through a proxy. A
+   * proxy element must define a host name and a port
    * attributes, and optionally can define a username and a password.
    */
   @Parameter
@@ -51,15 +52,15 @@ public class AwsbedrockConfiguration {
   @Placement(tab = "Proxy")
   private ProxyConfig proxyConfig;
 
-  public String getAwsAccessKeyId(){
+  public String getAwsAccessKeyId() {
     return awsAccessKeyId;
   }
 
-  public String getAwsSecretAccessKey(){
+  public String getAwsSecretAccessKey() {
     return awsSecretAccessKey;
   }
 
-  public String getAwsSessionToken(){
+  public String getAwsSessionToken() {
     return awsSessionToken;
   }
 

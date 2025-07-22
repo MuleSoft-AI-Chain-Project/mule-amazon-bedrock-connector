@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.embeddings;
+
 import org.mule.extension.mulechain.internal.AwsbedrockRegionNameProvider;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
@@ -27,7 +28,6 @@ public class AwsbedrockParametersEmbeddingDocument {
 		return region;
 	}
 
-
 	@Parameter
 	@Expression(ExpressionSupport.SUPPORTED)
 	@Optional(defaultValue = "1024")
@@ -45,7 +45,6 @@ public class AwsbedrockParametersEmbeddingDocument {
 	public boolean getNormalize() {
 		return normalize;
 	}
-
 
 	@Parameter
 	@Expression(ExpressionSupport.SUPPORTED)

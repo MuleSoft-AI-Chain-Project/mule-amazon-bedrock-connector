@@ -1,12 +1,17 @@
 package org.mule.extension.mulechain.helpers;
 
-
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
+import org.apache.tika.exception.TikaException;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.pdf.PDFParser;
+import org.apache.tika.sax.BodyContentHandler;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
@@ -15,15 +20,6 @@ import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbe
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
-
-import java.io.File;
-import java.io.FileInputStream;
-
-import org.apache.tika.exception.TikaException;
-import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.pdf.*;
-import org.apache.tika.sax.BodyContentHandler;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -35,202 +31,202 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
-
 public class AwsbedrockEmbeddingPayloadHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(AwsbedrockEmbeddingPayloadHelper.class);
 
-private static String getAmazonTitanEmbeddingG1(String prompt) {
+    private static String getAmazonTitanEmbeddingG1(String prompt) {
 
-    return new JSONObject()
+        return new JSONObject()
                 .put("inputText", prompt)
                 .toString();
-}
-
-private static String getAmazonTitanEmbeddingG2(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
-
-    return new JSONObject()
-                .put("inputText", prompt)
-                .put("dimensions", awsBedrockParameters.getDimension())
-                .put("normalize",awsBedrockParameters.getNormalize())
-                .toString();
-}
-
-private static String getAmazonTitanImageEmbeddingG1(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
-
-    JSONObject embeddingConfig = new JSONObject();
-        embeddingConfig.put("outputEmbeddingLength", 256);
-
-    JSONObject body = new JSONObject();
-        body.put("inputText", prompt);
-        body.put("embeddingConfig", embeddingConfig);
-    
-    return body.toString(); 
-
-}
-
-
-private static String getCoherEmbeddingModel(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
-
-    JSONObject jsonObject = new JSONObject();
-
-    // Add "texts" array
-    JSONArray textsArray = new JSONArray();
-    for (String text : prompt.split(".")) {
-        textsArray.put(text);
-    }
-    jsonObject.put("texts", textsArray);
-
-    // Add other fields
-    jsonObject.put("input_type", "search_query");
-
-    return jsonObject.toString();
-}
-
-
-
-  private static String identifyPayload(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters){
-    if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-text-v1")) {
-        return getAmazonTitanEmbeddingG1(prompt);
-    } else if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-text-v2:0")) {
-        return getAmazonTitanEmbeddingG2(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-image-v1")) {
-        return getAmazonTitanImageEmbeddingG1(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("cohere.embed")) {
-        return getCoherEmbeddingModel(prompt, awsBedrockParameters);
-    } else {
-
-        return "Unsupported model";
     }
 
-  }
+    private static String getAmazonTitanEmbeddingG2(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
 
-
-
-
-private static String getAmazonTitanEmbeddingG1Doc(String prompt) {
-
-    return new JSONObject()
-                .put("inputText", prompt)
-                .toString();
-}
-
-private static String getAmazonTitanEmbeddingG2Doc(String prompt, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
-
-    return new JSONObject()
+        return new JSONObject()
                 .put("inputText", prompt)
                 .put("dimensions", awsBedrockParameters.getDimension())
-                .put("normalize",awsBedrockParameters.getNormalize())
+                .put("normalize", awsBedrockParameters.getNormalize())
                 .toString();
-}
+    }
 
-private static String getAmazonTitanImageEmbeddingG1Doc(String prompt, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
+    private static String getAmazonTitanImageEmbeddingG1(String prompt,
+            AwsbedrockParametersEmbedding awsBedrockParameters) {
 
-    JSONObject embeddingConfig = new JSONObject();
+        JSONObject embeddingConfig = new JSONObject();
         embeddingConfig.put("outputEmbeddingLength", 256);
 
-    JSONObject body = new JSONObject();
+        JSONObject body = new JSONObject();
         body.put("inputText", prompt);
         body.put("embeddingConfig", embeddingConfig);
-    
-    return body.toString(); 
 
-}
+        return body.toString();
 
-
-private static String getCoherEmbeddingModelDoc(String prompt, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
-
-    JSONObject jsonObject = new JSONObject();
-
-    // Add "texts" array
-    JSONArray textsArray = new JSONArray();
-    for (String text : prompt.split(".")) {
-        textsArray.put(text);
-    }
-    jsonObject.put("texts", textsArray);
-
-    // Add other fields
-    jsonObject.put("input_type", "search_query");
-
-    return jsonObject.toString();
-}
-
-
-
-  private static String identifyPayloadDoc(String prompt, AwsbedrockParametersEmbeddingDocument awsBedrockParameters){
-    if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-text-v1")) {
-        return getAmazonTitanEmbeddingG1Doc(prompt);
-    } else if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-text-v2:0")) {
-        return getAmazonTitanEmbeddingG2Doc(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("amazon.titan-embed-image-v1")) {
-        return getAmazonTitanImageEmbeddingG1Doc(prompt, awsBedrockParameters);
-    } else if (awsBedrockParameters.getModelName().contains("cohere.embed")) {
-        return getCoherEmbeddingModelDoc(prompt, awsBedrockParameters);
-    } else {
-
-        return "Unsupported model";
     }
 
-  }
+    private static String getCoherEmbeddingModel(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
 
-private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
+        JSONObject jsonObject = new JSONObject();
 
-    // Initialize the AWS credentials
-    //AwsBasicCredentials awsCredentials = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(), configuration.getAwsSecretAccessKey());
+        // Add "texts" array
+        JSONArray textsArray = new JSONArray();
+        for (String text : prompt.split(".")) {
+            textsArray.put(text);
+        }
+        jsonObject.put("texts", textsArray);
 
-    AwsCredentials awsCredentials;
+        // Add other fields
+        jsonObject.put("input_type", "search_query");
 
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-        awsCredentials = AwsBasicCredentials.create(
-            configuration.getAwsAccessKeyId(), 
-            configuration.getAwsSecretAccessKey()
-        );
-    } else {
-        awsCredentials = AwsSessionCredentials.create(
-            configuration.getAwsAccessKeyId(), 
-            configuration.getAwsSecretAccessKey(), 
-            configuration.getAwsSessionToken());
+        return jsonObject.toString();
     }
 
+    private static String identifyPayload(String prompt, AwsbedrockParametersEmbedding awsBedrockParameters) {
+        return identifyPayloadInternal(prompt, awsBedrockParameters.getModelName(), awsBedrockParameters);
+    }
 
-    return BedrockRuntimeClient.builder()
-            .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
-            .region(region)
-            .fipsEnabled(configuration.getFipsModeEnabled())
-            .build();
-}
+    private static String identifyPayloadDoc(String prompt,
+            AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
+        return identifyPayloadInternal(prompt, awsBedrockParameters.getModelName(), awsBedrockParameters);
+    }
 
-private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
+    private static String identifyPayloadInternal(String prompt, String modelName, Object awsBedrockParameters) {
+        if (modelName.contains("amazon.titan-embed-text-v1")) {
+            return getAmazonTitanEmbeddingG1(prompt);
+        } else if (modelName.contains("amazon.titan-embed-text-v2:0")) {
+            if (awsBedrockParameters instanceof AwsbedrockParametersEmbedding) {
+                return getAmazonTitanEmbeddingG2(prompt, (AwsbedrockParametersEmbedding) awsBedrockParameters);
+            } else {
+                return getAmazonTitanEmbeddingG2Doc(prompt,
+                        (AwsbedrockParametersEmbeddingDocument) awsBedrockParameters);
+            }
+        } else if (modelName.contains("amazon.titan-embed-image-v1")) {
+            if (awsBedrockParameters instanceof AwsbedrockParametersEmbedding) {
+                return getAmazonTitanImageEmbeddingG1(prompt, (AwsbedrockParametersEmbedding) awsBedrockParameters);
+            } else {
+                return getAmazonTitanImageEmbeddingG1Doc(prompt,
+                        (AwsbedrockParametersEmbeddingDocument) awsBedrockParameters);
+            }
+        } else if (modelName.contains("cohere.embed")) {
+            if (awsBedrockParameters instanceof AwsbedrockParametersEmbedding) {
+                return getCoherEmbeddingModel(prompt, (AwsbedrockParametersEmbedding) awsBedrockParameters);
+            } else {
+                return getCoherEmbeddingModelDoc(prompt, (AwsbedrockParametersEmbeddingDocument) awsBedrockParameters);
+            }
+        } else {
+            return "Unsupported model";
+        }
+    }
 
-    return InvokeModelRequest.builder()
-            .body(SdkBytes.fromUtf8String(nativeRequest))
-            .accept("application/json")
-            .contentType("application/json")
-            .modelId(modelId)
-            .build();
-}
+    private static String getAmazonTitanEmbeddingG1Doc(String prompt) {
 
-public static JSONObject generateEmbedding(String modelId, String body, AwsbedrockConfiguration configuration, Region region) throws IOException {
-    BedrockRuntimeClient bedrock = createClient(configuration, region);
+        return new JSONObject()
+                .put("inputText", prompt)
+                .toString();
+    }
 
-    InvokeModelRequest request = createInvokeRequest(modelId, body);
+    private static String getAmazonTitanEmbeddingG2Doc(String prompt,
+            AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
 
-    InvokeModelResponse response = bedrock.invokeModel(request);
+        return new JSONObject()
+                .put("inputText", prompt)
+                .put("dimensions", awsBedrockParameters.getDimension())
+                .put("normalize", awsBedrockParameters.getNormalize())
+                .toString();
+    }
 
-    String responseBody = new String(response.body().asByteArray(), StandardCharsets.UTF_8);
+    private static String getAmazonTitanImageEmbeddingG1Doc(String prompt,
+            AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
 
-    return new JSONObject(responseBody);
+        JSONObject embeddingConfig = new JSONObject();
+        embeddingConfig.put("outputEmbeddingLength", 256);
 
-}
+        JSONObject body = new JSONObject();
+        body.put("inputText", prompt);
+        body.put("embeddingConfig", embeddingConfig);
 
-public static String invokeModel(String prompt, AwsbedrockConfiguration configuration, AwsbedrockParametersEmbedding awsBedrockParameters) {
+        return body.toString();
+
+    }
+
+    private static String getCoherEmbeddingModelDoc(String prompt,
+            AwsbedrockParametersEmbeddingDocument awsBedrockParameters) {
+
+        JSONObject jsonObject = new JSONObject();
+
+        // Add "texts" array
+        JSONArray textsArray = new JSONArray();
+        for (String text : prompt.split(".")) {
+            textsArray.put(text);
+        }
+        jsonObject.put("texts", textsArray);
+
+        // Add other fields
+        jsonObject.put("input_type", "search_query");
+
+        return jsonObject.toString();
+    }
+
+    private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
+
+        // Initialize the AWS credentials
+        // AwsBasicCredentials awsCredentials =
+        // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
+        // configuration.getAwsSecretAccessKey());
+
+        AwsCredentials awsCredentials;
+
+        if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
+            awsCredentials = AwsBasicCredentials.create(
+                    configuration.getAwsAccessKeyId(),
+                    configuration.getAwsSecretAccessKey());
+        } else {
+            awsCredentials = AwsSessionCredentials.create(
+                    configuration.getAwsAccessKeyId(),
+                    configuration.getAwsSecretAccessKey(),
+                    configuration.getAwsSessionToken());
+        }
+
+        return BedrockRuntimeClient.builder()
+                .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
+                .region(region)
+                .fipsEnabled(configuration.getFipsModeEnabled())
+                .build();
+    }
+
+    private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
+
+        return InvokeModelRequest.builder()
+                .body(SdkBytes.fromUtf8String(nativeRequest))
+                .accept("application/json")
+                .contentType("application/json")
+                .modelId(modelId)
+                .build();
+    }
+
+    public static JSONObject generateEmbedding(String modelId, String body, AwsbedrockConfiguration configuration,
+            Region region) throws IOException {
+        BedrockRuntimeClient bedrock = createClient(configuration, region);
+
+        InvokeModelRequest request = createInvokeRequest(modelId, body);
+
+        InvokeModelResponse response = bedrock.invokeModel(request);
+
+        String responseBody = new String(response.body().asByteArray(), StandardCharsets.UTF_8);
+
+        return new JSONObject(responseBody);
+
+    }
+
+    public static String invokeModel(String prompt, AwsbedrockConfiguration configuration,
+            AwsbedrockParametersEmbedding awsBedrockParameters) {
 
         Region region = AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion());
 
         String modelId = awsBedrockParameters.getModelName();
 
-
-        String body = identifyPayload(prompt, awsBedrockParameters); 
+        String body = identifyPayload(prompt, awsBedrockParameters);
 
         logger.info(body);
 
@@ -245,38 +241,38 @@ public static String invokeModel(String prompt, AwsbedrockConfiguration configur
         }
     }
 
-
-public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockConfiguration configuration, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) throws IOException, SAXException, TikaException {
+    public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockConfiguration configuration,
+            AwsbedrockParametersEmbeddingDocument awsBedrockParameters)
+            throws IOException, SAXException, TikaException {
 
         Region region = AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion());
 
         String modelId = awsBedrockParameters.getModelName();
         List<String> corpus;
         if (awsBedrockParameters.getOptionType().equals("FULL")) {
-            corpus = Arrays.asList(splitFullDocument(filePath,awsBedrockParameters));
+            corpus = Arrays.asList(splitFullDocument(filePath, awsBedrockParameters));
         } else {
-            corpus = Arrays.asList(splitByType(filePath,awsBedrockParameters));
+            corpus = Arrays.asList(splitByType(filePath, awsBedrockParameters));
         }
 
-        String body = identifyPayloadDoc(prompt, awsBedrockParameters); 
-
+        String body = identifyPayloadDoc(prompt, awsBedrockParameters);
 
         try {
 
-
             JSONObject queryResponse = generateEmbedding(modelId, body, configuration, region);
-            //Generate embedding for query
+            // Generate embedding for query
             JSONArray queryEmbedding = queryResponse.getJSONArray("embedding");
 
-            String corpusBody=null;
+            String corpusBody = null;
             // Generate embeddings for the corpus
             List<JSONArray> corpusEmbeddings = new ArrayList<>();
             for (String text : corpus) {
-                corpusBody = identifyPayloadDoc(text, awsBedrockParameters); 
-                //logger.info(corpusBody);
+                corpusBody = identifyPayloadDoc(text, awsBedrockParameters);
+                // logger.info(corpusBody);
                 if (text != null && !text.isEmpty()) {
                     body = identifyPayloadDoc(corpusBody, awsBedrockParameters);
-                    corpusEmbeddings.add(generateEmbedding(modelId, body, configuration, region).getJSONArray("embedding"));
+                    corpusEmbeddings
+                            .add(generateEmbedding(modelId, body, configuration, region).getJSONArray("embedding"));
                 }
             }
 
@@ -300,8 +296,6 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
 
         }
     }
-
-
 
     private static double calculateCosineSimilarity(JSONArray vec1, JSONArray vec2) {
         double dotProduct = 0.0;
@@ -333,7 +327,6 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
             results.add(similarityScores.get(index) + " - " + corpus.get(index));
         }
 
-         
         return results;
     }
 
@@ -342,26 +335,25 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
         Metadata metadata = new Metadata();
         FileInputStream inputstream = new FileInputStream(new File(filePath));
         ParseContext pcontext = new ParseContext();
-  
+
         // parsing the document using PDF parser
         PDFParser pdfparser = new PDFParser();
         pdfparser.parse(inputstream, handler, metadata, pcontext);
         return handler.toString();
-    }    
+    }
 
-    private static String splitFullDocument(String filePath, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) throws IOException, SAXException, TikaException {
+    private static String splitFullDocument(String filePath, AwsbedrockParametersEmbeddingDocument awsBedrockParameters)
+            throws IOException, SAXException, TikaException {
         String content = getContentFromFile(filePath);
         return content;
     }
 
-
-    private static String[] splitByType(String filePath, AwsbedrockParametersEmbeddingDocument awsBedrockParameters) throws IOException, SAXException, TikaException {
+    private static String[] splitByType(String filePath, AwsbedrockParametersEmbeddingDocument awsBedrockParameters)
+            throws IOException, SAXException, TikaException {
         String content = getContentFromFile(filePath);
         String[] parts = splitContent(content, awsBedrockParameters.getOptionType());
         return parts;
     }
-
-
 
     private static String[] splitContent(String text, String option) {
         switch (option) {
@@ -372,21 +364,20 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
             default:
                 throw new IllegalArgumentException("Unknown split option: " + option);
         }
-      }
-      
-      private static String[] splitByParagraphs(String text) {
+    }
+
+    private static String[] splitByParagraphs(String text) {
         // Assuming paragraphs are separated by two or more newlines
-       
+
         return removeEmptyStrings(text.split("\\r?\\n\\r?\\n"));
-      }
-      
-      private static String[] splitBySentences(String text) {
+    }
+
+    private static String[] splitBySentences(String text) {
         // Split by sentences (simple implementation using period followed by space)
         return removeEmptyStrings(text.split("(?<!Mr|Mrs|Ms|Dr|Sr|Jr|Prof)\\.\\s+"));
-      }
+    }
 
-
-      public static String[] removeEmptyStrings(String[] array) {
+    public static String[] removeEmptyStrings(String[] array) {
         // Convert array to list
         List<String> list = new ArrayList<>(Arrays.asList(array));
 
@@ -396,9 +387,5 @@ public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockCo
         // Convert list back to array
         return list.toArray(new String[0]);
     }
-     
-      
-
-
 
 }

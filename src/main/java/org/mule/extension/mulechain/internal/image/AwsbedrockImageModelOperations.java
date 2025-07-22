@@ -15,23 +15,22 @@ import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.helpers.AwsbedrockImagePayloadHelper;
 
 /**
- * This class is a container for operations, every public method in this class will be taken as an extension operation.
+ * This class is a container for operations, every public method in this class
+ * will be taken as an extension operation.
  */
 public class AwsbedrockImageModelOperations {
-
-
 
   /**
    * Generates an image based on text.
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("IMAGE-generate")
-  public InputStream generateImage(String TextToImage, String AvoidInImage, String fullPathOutput, @Config AwsbedrockConfiguration configuration, @ParameterGroup(name= "Additional properties") AwsbedrockImageParameters awsBedrockParameters){
-      String response= AwsbedrockImagePayloadHelper.invokeModel(TextToImage, AvoidInImage, fullPathOutput, configuration, awsBedrockParameters);
-      return toInputStream(response, StandardCharsets.UTF_8);
+  public InputStream generateImage(String TextToImage, String AvoidInImage, String fullPathOutput,
+      @Config AwsbedrockConfiguration configuration,
+      @ParameterGroup(name = "Additional properties") AwsbedrockImageParameters awsBedrockParameters) {
+    String response = AwsbedrockImagePayloadHelper.invokeModel(TextToImage, AvoidInImage, fullPathOutput, configuration,
+        awsBedrockParameters);
+    return toInputStream(response, StandardCharsets.UTF_8);
   }
-
-  
-
 
 }
