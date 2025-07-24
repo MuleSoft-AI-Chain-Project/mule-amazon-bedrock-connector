@@ -41,6 +41,10 @@ public class AwsbedrockConfiguration {
   @Optional
   private boolean fipsModeEnabled;
 
+  @Parameter
+  @Optional
+  private String endpointOverride;
+
   /**
    * Reusable configuration element for outbound connections through a proxy. A
    * proxy element must define a host name and a port
@@ -71,5 +75,9 @@ public class AwsbedrockConfiguration {
   public Boolean getFipsModeEnabled() {
     return fipsModeEnabled;
   }
+
+  public String getEndpointOverride() {
+	    return endpointOverride;
+	  }
 
 }

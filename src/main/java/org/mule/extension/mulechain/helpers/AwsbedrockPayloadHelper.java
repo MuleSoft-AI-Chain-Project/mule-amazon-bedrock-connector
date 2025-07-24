@@ -1,5 +1,6 @@
 package org.mule.extension.mulechain.helpers;
 
+import java.net.URI;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -31,23 +32,37 @@ import software.amazon.awssdk.services.bedrock.model.GetFoundationModelResponse;
 import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ValidationException;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
+
 
 public class AwsbedrockPayloadHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(AwsbedrockPayloadHelper.class);
 
-    private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region) {
-        return BedrockRuntimeClient.builder()
-                .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-                .region(region)
-                .build();
-    }
+    private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, String endpointOverride) {
+		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
+				.credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+                .region(region);
 
-    private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region) {
-        return BedrockRuntimeClient.builder()
+        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+            builder.endpointOverride(URI.create(endpointOverride));
+        }
+
+        return builder.build();
+                
+    }
+    
+    private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region, String endpointOverride) {
+		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-                .region(region)
-                .build();
+                .region(region);
+
+        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+            builder.endpointOverride(URI.create(endpointOverride));
+        }
+
+        return builder.build();
     }
 
     private static InvokeModelRequest createInvokeRequest(AwsbedrockParameters awsBedrockParameters,
@@ -347,11 +362,11 @@ public class AwsbedrockPayloadHelper {
         if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
             AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
                     configuration.getAwsSecretAccessKey());
-            return createClient(awsCredsBasic, getRegion(awsBedrockParameters.getRegion()));
+            return createClient(awsCredsBasic, getRegion(awsBedrockParameters.getRegion()), configuration.getEndpointOverride());
         } else {
             AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(),
                     configuration.getAwsSecretAccessKey(), configuration.getAwsSessionToken());
-            return createClientSession(awsCredsSession, getRegion(awsBedrockParameters.getRegion()));
+            return createClientSession(awsCredsSession, getRegion(awsBedrockParameters.getRegion()), configuration.getEndpointOverride());
         }
 
     }

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Map;
+import java.net.URI;
 import java.util.function.Function;
 import javax.imageio.ImageIO;
 import org.json.JSONArray;
@@ -25,6 +26,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 
 public class AwsbedrockImagePayloadHelper {
 
@@ -136,12 +139,20 @@ public class AwsbedrockImagePayloadHelper {
                     configuration.getAwsSecretAccessKey(),
                     configuration.getAwsSessionToken());
         }
-
-        return BedrockRuntimeClient.builder()
+        
+        String endpointOverride = configuration.getEndpointOverride();
+        
+		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
                 .fipsEnabled(configuration.getFipsModeEnabled())
-                .region(region)
-                .build();
+                .region(region);
+
+        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+            builder.endpointOverride(URI.create(endpointOverride));
+        }
+
+        return builder.build();
+
     }
 
     private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {

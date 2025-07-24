@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.net.URI;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.ParseContext;
@@ -30,6 +31,9 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
+
 
 public class AwsbedrockEmbeddingPayloadHelper {
 
@@ -187,12 +191,19 @@ public class AwsbedrockEmbeddingPayloadHelper {
                     configuration.getAwsSecretAccessKey(),
                     configuration.getAwsSessionToken());
         }
-
-        return BedrockRuntimeClient.builder()
+        
+        String endpointOverride = configuration.getEndpointOverride();
+        
+		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
                 .region(region)
-                .fipsEnabled(configuration.getFipsModeEnabled())
-                .build();
+                .fipsEnabled(configuration.getFipsModeEnabled());
+
+        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+            builder.endpointOverride(URI.create(endpointOverride));
+        }
+
+        return builder.build();
     }
 
     private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
