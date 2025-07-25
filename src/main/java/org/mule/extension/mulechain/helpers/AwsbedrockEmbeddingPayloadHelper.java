@@ -16,6 +16,7 @@ import org.apache.tika.sax.BodyContentHandler;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.CommonUtils;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbedding;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbeddingDocument;
 import org.slf4j.Logger;
@@ -33,6 +34,10 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
+import org.mule.extension.mulechain.internal.CommonUtils;
+import org.mule.extension.mulechain.internal.TimeUnitEnum;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 
 
 public class AwsbedrockEmbeddingPayloadHelper {
@@ -194,9 +199,16 @@ public class AwsbedrockEmbeddingPayloadHelper {
         
         String endpointOverride = configuration.getEndpointOverride();
         
+        SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
+        	    configuration.getTimeout(),
+        	    configuration.getTimeoutUnit()
+        	);
+
+        
 		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
                 .region(region)
+                .httpClient(httpClient)
                 .fipsEnabled(configuration.getFipsModeEnabled());
 
         if (endpointOverride != null && !endpointOverride.isEmpty()) {
