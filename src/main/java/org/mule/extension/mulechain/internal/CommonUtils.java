@@ -35,7 +35,8 @@ public class CommonUtils {
 
     public static SdkHttpClient buildHttpClientWithTimeout(Integer timeout, TimeUnitEnum unit) {
     	
-    	logger.info("timeout: {}", timeout);
+    	logger.debug("timeout: {}", timeout);
+
         int effectiveTimeout = (timeout != null) ? timeout : 10;
         TimeUnitEnum effectiveUnit = (unit != null) ? unit : TimeUnitEnum.SECONDS;
         Duration timeoutDuration = toDuration(effectiveTimeout, effectiveUnit);
