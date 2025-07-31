@@ -5,20 +5,17 @@ import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICAT
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-
+import org.mule.extension.mulechain.helpers.AwsbedrockPayloadHelper;
+import org.mule.extension.mulechain.helpers.AwsbedrockPromptTemplateHelper;
 import org.mule.runtime.extension.api.annotation.Alias;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
-
-import org.mule.extension.mulechain.helpers.AwsbedrockPayloadHelper;
-import org.mule.extension.mulechain.helpers.AwsbedrockPromptTemplateHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This class is a container for operations, every public method in this class
- * will be taken as an extension operation.
+ * This class is a container for operations, every public method in this class will be taken as an extension operation.
  */
 public class AwsbedrockOperations {
 
@@ -30,7 +27,7 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("CHAT-answer-prompt")
   public InputStream answerPrompt(String prompt, @Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
+                                  @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
     String response = AwsbedrockPayloadHelper.invokeModel(prompt, configuration, awsBedrockParameters);
     return toInputStream(response, StandardCharsets.UTF_8);
   }
@@ -41,8 +38,9 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("AGENT-define-prompt-template")
   public InputStream definePromptTemplate(String template, String instructions, String dataset,
-      @Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
+                                          @Config AwsbedrockConfiguration configuration,
+                                          @ParameterGroup(
+                                              name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
 
     String finalPromptTemplate = AwsbedrockPromptTemplateHelper.definePromptTemplate(template, instructions, dataset);
     logger.info(finalPromptTemplate);
@@ -58,7 +56,8 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("SENTIMENT-analyze")
   public InputStream extractSentiments(String TextToAnalyze, @Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
+                                       @ParameterGroup(
+                                           name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
 
     String SentimentTemplate = "Analyze sentiment of: " + TextToAnalyze
         + ". Does it have a positive sentiment? Respond in JSON with Sentiment (value of POSITIVE, NEGATIVE, NEUTRAL) and IsPositive (true or false)";
@@ -74,7 +73,8 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("FOUNDATIONAL-model-details")
   public InputStream getFoundationalModelByModelId(@Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParamsModelDetails awsBedrockParameters) {
+                                                   @ParameterGroup(
+                                                       name = "Additional properties") AwsbedrockParamsModelDetails awsBedrockParameters) {
 
     String response = AwsbedrockPayloadHelper.getFoundationModel(configuration, awsBedrockParameters);
 
@@ -87,7 +87,8 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("FOUNDATIONAL-models-list")
   public InputStream getFoundationalModelList(@Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParams awsBedrockParameters) {
+                                              @ParameterGroup(
+                                                  name = "Additional properties") AwsbedrockParams awsBedrockParameters) {
 
     String response = AwsbedrockPayloadHelper.listFoundationModels(configuration, awsBedrockParameters);
 
@@ -100,7 +101,8 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("CUSTOM-model-details")
   public InputStream getCustomModelByModelId(@Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParamsModelDetails awsBedrockParameters) {
+                                             @ParameterGroup(
+                                                 name = "Additional properties") AwsbedrockParamsModelDetails awsBedrockParameters) {
 
     String response = AwsbedrockPayloadHelper.getCustomModel(configuration, awsBedrockParameters);
 
@@ -113,7 +115,7 @@ public class AwsbedrockOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("CUSTOM-models-list")
   public InputStream getCustomModelList(@Config AwsbedrockConfiguration configuration,
-      @ParameterGroup(name = "Additional properties") AwsbedrockParams awsBedrockParameters) {
+                                        @ParameterGroup(name = "Additional properties") AwsbedrockParams awsBedrockParameters) {
 
     String response = AwsbedrockPayloadHelper.listCustomModels(configuration, awsBedrockParameters);
 

@@ -8,14 +8,14 @@ import org.mule.runtime.extension.api.annotation.values.OfValues;
 
 public class AwsbedrockParams {
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockRegionNameProvider.class)
-	@Optional(defaultValue = "us-east-1")
-	private String region;
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockRegionNameProvider.class)
+  @Optional(defaultValue = "us-east-1")
+  private String region;
 
-	public String getRegion() {
-		return region;
-	}
+  public String getRegion() {
+    return region;
+  }
 
 }

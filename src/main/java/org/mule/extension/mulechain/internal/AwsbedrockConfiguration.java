@@ -1,22 +1,20 @@
 package org.mule.extension.mulechain.internal;
-import org.mule.extension.mulechain.internal.TimeUnitEnum;
 
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsOperations;
+import org.mule.extension.mulechain.internal.embeddings.AwsbedrockEmbeddingOperations;
+import org.mule.extension.mulechain.internal.image.AwsbedrockImageModelOperations;
+import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
 import org.mule.extension.mulechain.internal.proxy.ProxyConfig;
+import org.mule.runtime.extension.api.annotation.Configuration;
 import org.mule.runtime.extension.api.annotation.Operations;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.Placement;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
-import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsOperations;
-import org.mule.extension.mulechain.internal.embeddings.AwsbedrockEmbeddingOperations;
-import org.mule.extension.mulechain.internal.image.AwsbedrockImageModelOperations;
-import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
-import org.mule.runtime.extension.api.annotation.Configuration;
 
 /**
- * This class represents an extension configuration, values set in this class
- * are commonly used across multiple
- * operations since they represent something core from the extension.
+ * This class represents an extension configuration, values set in this class are commonly used across multiple operations since
+ * they represent something core from the extension.
  */
 @Configuration(name = "Config")
 @Operations({
@@ -27,7 +25,7 @@ import org.mule.runtime.extension.api.annotation.Configuration;
     AwsbedrockAgentsOperations.class
 })
 public class AwsbedrockConfiguration {
-	
+
 
   @Parameter
   private String awsAccessKeyId;
@@ -48,8 +46,7 @@ public class AwsbedrockConfiguration {
   private String endpointOverride;
 
   /**
-   * Reusable configuration element for outbound connections through a proxy. A
-   * proxy element must define a host name and a port
+   * Reusable configuration element for outbound connections through a proxy. A proxy element must define a host name and a port
    * attributes, and optionally can define a username and a password.
    */
   @Parameter
@@ -57,19 +54,19 @@ public class AwsbedrockConfiguration {
   @Summary("Reusable configuration element for outbound connections through a proxy")
   @Placement(tab = "Proxy")
   private ProxyConfig proxyConfig;
-  
-	@Parameter
-	@Optional(defaultValue = "10")
-	@Summary("Maximum time to wait for a response from Bedrock")
-	@Placement(tab = "Connection")
-	private Integer timeout;
 
-	@Parameter
-	@Optional(defaultValue = "SECONDS")
-	@Summary("Unit of time for the timeout")
-	@Placement(tab = "Connection")
-	private TimeUnitEnum timeoutUnit;	
-	
+  @Parameter
+  @Optional(defaultValue = "10")
+  @Summary("Maximum time to wait for a response from Bedrock")
+  @Placement(tab = "Connection")
+  private Integer timeout;
+
+  @Parameter
+  @Optional(defaultValue = "SECONDS")
+  @Summary("Unit of time for the timeout")
+  @Placement(tab = "Connection")
+  private TimeUnitEnum timeoutUnit;
+
 
 
   public String getAwsAccessKeyId() {
@@ -93,16 +90,16 @@ public class AwsbedrockConfiguration {
   }
 
   public String getEndpointOverride() {
-	    return endpointOverride;
-	  }
-  
+    return endpointOverride;
+  }
+
   public Integer getTimeout() {
-	    return timeout;
-	}
-  
+    return timeout;
+  }
+
   public TimeUnitEnum getTimeoutUnit() {
-	    return timeoutUnit;
-	}
+    return timeoutUnit;
+  }
 
 
 }
