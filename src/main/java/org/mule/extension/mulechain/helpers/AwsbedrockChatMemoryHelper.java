@@ -50,7 +50,7 @@ public class AwsbedrockChatMemoryHelper {
 	            .fipsEnabled(useFipsMode)
 	            .region(region);
 
-	    if (endpointOverride != null && !endpointOverride.isEmpty()) {
+	    if (endpointOverride != null && !endpointOverride.isBlank()) {
 	        builder.endpointOverride(URI.create(endpointOverride));
 	    }
 
@@ -64,7 +64,7 @@ public class AwsbedrockChatMemoryHelper {
 		        .fipsEnabled(useFipsMode)
 		        .region(region);
 
-		    if (endpointOverride != null && !endpointOverride.isEmpty()) {
+		    if (endpointOverride != null && !endpointOverride.isBlank()) {
 		        builder.endpointOverride(URI.create(endpointOverride));
 		    }
 

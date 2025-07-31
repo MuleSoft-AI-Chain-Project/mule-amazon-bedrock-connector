@@ -63,7 +63,7 @@ public class AwsbedrockPayloadHelper {
                 .region(region)
                 .httpClient(httpClient);
 
-        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+        if (endpointOverride != null && !endpointOverride.isBlank()) {
             builder.endpointOverride(URI.create(endpointOverride));
         }
 
@@ -85,7 +85,7 @@ public class AwsbedrockPayloadHelper {
                 .region(region)
                 .httpClient(httpClient);
 
-        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+        if (endpointOverride != null && !endpointOverride.isBlank()) {
             builder.endpointOverride(URI.create(endpointOverride));
         }
 

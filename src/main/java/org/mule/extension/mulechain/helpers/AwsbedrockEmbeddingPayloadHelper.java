@@ -211,7 +211,7 @@ public class AwsbedrockEmbeddingPayloadHelper {
                 .httpClient(httpClient)
                 .fipsEnabled(configuration.getFipsModeEnabled());
 
-        if (endpointOverride != null && !endpointOverride.isEmpty()) {
+        if (endpointOverride != null && !endpointOverride.isBlank()) {
             builder.endpointOverride(URI.create(endpointOverride));
         }
 
