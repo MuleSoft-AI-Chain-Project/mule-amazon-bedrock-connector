@@ -6,6 +6,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.net.URI;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.ModelProvider;
@@ -18,6 +19,10 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
+
+
 
 public class AwsbedrockChatMemoryHelper {
 
@@ -38,19 +43,32 @@ public class AwsbedrockChatMemoryHelper {
     payloadGeneratorMap.put(ModelProvider.STABILITY, (prompt, params) -> getStabilityTitanText(prompt));
   }
 
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode) {
-    return BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds)).fipsEnabled(useFipsMode)
-        .region(region)
-        .build();
+  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode, String endpointOverride) {
+	  
+	  BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
+	            .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+	            .fipsEnabled(useFipsMode)
+	            .region(region);
+
+	    if (endpointOverride != null && !endpointOverride.isBlank()) {
+	        builder.endpointOverride(URI.create(endpointOverride));
+	    }
+
+	    return builder.build();
   }
 
   private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region,
-      Boolean useFipsMode) {
-    return BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds)).fipsEnabled(useFipsMode)
-        .region(region)
-        .build();
+      Boolean useFipsMode, String endpointOverride) {
+			BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
+		        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+		        .fipsEnabled(useFipsMode)
+		        .region(region);
+
+		    if (endpointOverride != null && !endpointOverride.isBlank()) {
+		        builder.endpointOverride(URI.create(endpointOverride));
+		    }
+
+		    return builder.build();
   }
 
   private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
@@ -188,12 +206,12 @@ public class AwsbedrockChatMemoryHelper {
       AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
           configuration.getAwsSecretAccessKey());
       return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
-          configuration.getFipsModeEnabled());
+          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
     } else {
       AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(),
           configuration.getAwsSecretAccessKey(), configuration.getAwsSessionToken());
-      return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
-          configuration.getFipsModeEnabled());
+      return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()), 
+          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
     }
 
   }

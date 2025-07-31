@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal;
+import org.mule.extension.mulechain.internal.TimeUnitEnum;
 
 import org.mule.extension.mulechain.internal.proxy.ProxyConfig;
 import org.mule.runtime.extension.api.annotation.Operations;
@@ -26,6 +27,7 @@ import org.mule.runtime.extension.api.annotation.Configuration;
     AwsbedrockAgentsOperations.class
 })
 public class AwsbedrockConfiguration {
+	
 
   @Parameter
   private String awsAccessKeyId;
@@ -41,6 +43,10 @@ public class AwsbedrockConfiguration {
   @Optional
   private boolean fipsModeEnabled;
 
+  @Parameter
+  @Optional
+  private String endpointOverride;
+
   /**
    * Reusable configuration element for outbound connections through a proxy. A
    * proxy element must define a host name and a port
@@ -51,6 +57,20 @@ public class AwsbedrockConfiguration {
   @Summary("Reusable configuration element for outbound connections through a proxy")
   @Placement(tab = "Proxy")
   private ProxyConfig proxyConfig;
+  
+	@Parameter
+	@Optional(defaultValue = "10")
+	@Summary("Maximum time to wait for a response from Bedrock")
+	@Placement(tab = "Connection")
+	private Integer timeout;
+
+	@Parameter
+	@Optional(defaultValue = "SECONDS")
+	@Summary("Unit of time for the timeout")
+	@Placement(tab = "Connection")
+	private TimeUnitEnum timeoutUnit;	
+	
+
 
   public String getAwsAccessKeyId() {
     return awsAccessKeyId;
@@ -71,5 +91,18 @@ public class AwsbedrockConfiguration {
   public Boolean getFipsModeEnabled() {
     return fipsModeEnabled;
   }
+
+  public String getEndpointOverride() {
+	    return endpointOverride;
+	  }
+  
+  public Integer getTimeout() {
+	    return timeout;
+	}
+  
+  public TimeUnitEnum getTimeoutUnit() {
+	    return timeoutUnit;
+	}
+
 
 }

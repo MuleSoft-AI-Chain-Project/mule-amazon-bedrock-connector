@@ -7,11 +7,13 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Map;
+import java.net.URI;
 import java.util.function.Function;
 import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.CommonUtils;
 import org.mule.extension.mulechain.internal.ModelProvider;
 import org.mule.extension.mulechain.internal.image.AwsbedrockImageParameters;
 import org.slf4j.Logger;
@@ -25,6 +27,13 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
+import org.mule.extension.mulechain.internal.CommonUtils;
+import org.mule.extension.mulechain.internal.TimeUnitEnum;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+
 
 public class AwsbedrockImagePayloadHelper {
 
@@ -136,12 +145,27 @@ public class AwsbedrockImagePayloadHelper {
                     configuration.getAwsSecretAccessKey(),
                     configuration.getAwsSessionToken());
         }
+        
+        String endpointOverride = configuration.getEndpointOverride();
+        
+        SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
+        	    configuration.getTimeout(),
+        	    configuration.getTimeoutUnit()
+        	);
 
-        return BedrockRuntimeClient.builder()
+        
+		BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
+                .httpClient(httpClient)
                 .fipsEnabled(configuration.getFipsModeEnabled())
-                .region(region)
-                .build();
+                .region(region);
+
+        if (endpointOverride != null && !endpointOverride.isBlank()) {
+            builder.endpointOverride(URI.create(endpointOverride));
+        }
+
+        return builder.build();
+
     }
 
     private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
