@@ -1,12 +1,12 @@
 package org.mule.extension.mulechain.helpers;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import java.net.URI;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
-import java.net.URI;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.ModelProvider;
@@ -17,10 +17,9 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 
 
 
@@ -43,32 +42,33 @@ public class AwsbedrockChatMemoryHelper {
     payloadGeneratorMap.put(ModelProvider.STABILITY, (prompt, params) -> getStabilityTitanText(prompt));
   }
 
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode, String endpointOverride) {
-	  
-	  BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-	            .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-	            .fipsEnabled(useFipsMode)
-	            .region(region);
+  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode,
+                                                   String endpointOverride) {
 
-	    if (endpointOverride != null && !endpointOverride.isBlank()) {
-	        builder.endpointOverride(URI.create(endpointOverride));
-	    }
+    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
+        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+        .fipsEnabled(useFipsMode)
+        .region(region);
 
-	    return builder.build();
+    if (endpointOverride != null && !endpointOverride.isBlank()) {
+      builder.endpointOverride(URI.create(endpointOverride));
+    }
+
+    return builder.build();
   }
 
   private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region,
-      Boolean useFipsMode, String endpointOverride) {
-			BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-		        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-		        .fipsEnabled(useFipsMode)
-		        .region(region);
+                                                          Boolean useFipsMode, String endpointOverride) {
+    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
+        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
+        .fipsEnabled(useFipsMode)
+        .region(region);
 
-		    if (endpointOverride != null && !endpointOverride.isBlank()) {
-		        builder.endpointOverride(URI.create(endpointOverride));
-		    }
+    if (endpointOverride != null && !endpointOverride.isBlank()) {
+      builder.endpointOverride(URI.create(endpointOverride));
+    }
 
-		    return builder.build();
+    return builder.build();
   }
 
   private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
@@ -194,7 +194,7 @@ public class AwsbedrockChatMemoryHelper {
   }
 
   private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration,
-      AwsbedrockParameters awsBedrockParameters) {
+                                                     AwsbedrockParameters awsBedrockParameters) {
     // Initialize the AWS credentials
     // AwsBasicCredentials awsCreds =
     // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
@@ -204,14 +204,15 @@ public class AwsbedrockChatMemoryHelper {
     // AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
     if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
       AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-          configuration.getAwsSecretAccessKey());
+                                                                     configuration.getAwsSecretAccessKey());
       return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
-          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
+                          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
     } else {
       AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(),
-          configuration.getAwsSecretAccessKey(), configuration.getAwsSessionToken());
-      return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()), 
-          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
+                                                                           configuration.getAwsSecretAccessKey(),
+                                                                           configuration.getAwsSessionToken());
+      return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
+                                 configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
     }
 
   }
@@ -246,10 +247,10 @@ public class AwsbedrockChatMemoryHelper {
       return true;
     }
     // Check if the message starts with a question word (case insensitive)
-    String[] questionWords = { "who", "what", "when", "where", "why", "how", "tell", "tell me", "do you", "what is",
+    String[] questionWords = {"who", "what", "when", "where", "why", "how", "tell", "tell me", "do you", "what is",
         "can you", "could you", "would you", "is there", "are there", "will you", "won't you", "can't you",
         "couldn't you", "wouldn't you", "is it", "isn't it", "are they", "aren't they", "will they", "won't they",
-        "can they", "can't they", "could they", "couldn't they", "would they", "wouldn't they" };
+        "can they", "can't they", "could they", "couldn't they", "would they", "wouldn't they"};
     String lowerCaseMessage = message.trim().toLowerCase();
     for (String questionWord : questionWords) {
       if (lowerCaseMessage.startsWith(questionWord + " ")) {
@@ -268,7 +269,7 @@ public class AwsbedrockChatMemoryHelper {
   }
 
   public static String invokeModel(String prompt, String memoryPath, String memoryName, Integer keepLastMessages,
-      AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters) {
+                                   AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters) {
 
     // Create Bedrock Client
     BedrockRuntimeClient client = InitiateClient(configuration, awsBedrockParameters);

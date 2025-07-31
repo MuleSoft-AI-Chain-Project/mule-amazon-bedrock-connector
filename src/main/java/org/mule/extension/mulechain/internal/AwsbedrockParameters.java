@@ -7,78 +7,79 @@ import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.values.OfValues;
 
 public class AwsbedrockParameters {
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockModelNameProvider.class)
-	@Optional(defaultValue = "amazon.titan-text-express-v1")
-	private String modelName;
 
-	public String getModelName() {
-		return modelName;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockModelNameProvider.class)
+  @Optional(defaultValue = "amazon.titan-text-express-v1")
+  private String modelName;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockRegionNameProvider.class)
-	@Optional(defaultValue = "us-east-1")
-	private String region;
+  public String getModelName() {
+    return modelName;
+  }
 
-	public String getRegion() {
-		return region;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockRegionNameProvider.class)
+  @Optional(defaultValue = "us-east-1")
+  private String region;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "0.7")
-	private Float temperature;
+  public String getRegion() {
+    return region;
+  }
 
-	public Float getTemperature() {
-		return temperature;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "0.7")
+  private Float temperature;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "0.9")
-	private Float topP;
+  public Float getTemperature() {
+    return temperature;
+  }
 
-	public Float getTopP() {
-		return topP;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "0.9")
+  private Float topP;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "250")
-	private Integer topK;
+  public Float getTopP() {
+    return topP;
+  }
 
-	public Integer getTopK() {
-		return topK;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "250")
+  private Integer topK;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "512")
-	private Integer maxTokenCount;
+  public Integer getTopK() {
+    return topK;
+  }
 
-	public Integer getMaxTokenCount() {
-		return maxTokenCount;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "512")
+  private Integer maxTokenCount;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional()
-	private String guardrailIdentifier;
+  public Integer getMaxTokenCount() {
+    return maxTokenCount;
+  }
 
-	public String getGuardrailIdentifier() {
-		return guardrailIdentifier;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional()
+  private String guardrailIdentifier;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "1")
-	private String guardrailVersion;
+  public String getGuardrailIdentifier() {
+    return guardrailIdentifier;
+  }
 
-	public String getGuardrailVersion() {
-		return guardrailVersion;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "1")
+  private String guardrailVersion;
+
+  public String getGuardrailVersion() {
+    return guardrailVersion;
+  }
 
 }
