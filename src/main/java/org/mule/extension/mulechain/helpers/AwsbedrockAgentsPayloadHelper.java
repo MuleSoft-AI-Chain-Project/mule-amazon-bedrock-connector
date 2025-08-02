@@ -1,17 +1,12 @@
 package org.mule.extension.mulechain.helpers;
 
-import java.io.FileInputStream;
+import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.net.ssl.TrustManagerFactory;
 import org.json.JSONArray;
@@ -54,6 +49,7 @@ import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAs
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
+import software.amazon.awssdk.services.bedrockagentruntime.model.PayloadPart;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
 import software.amazon.awssdk.services.iam.model.CreateRoleResponse;
@@ -117,6 +113,8 @@ public class AwsbedrockAgentsPayloadHelper {
   private static final String AGENT_ROLE_POLICY_NAME = "agent_permissions";
   private static final String AGENT_POSTFIX = "muc";
   private static final long AGENT_STATUS_CHECK_INTERVAL_MS = 2000;
+
+  private static final AtomicInteger eventCounter = new AtomicInteger(0);
 
   private static BedrockAgentClient createBedrockAgentClient(
                                                              AwsbedrockConfiguration configuration,
@@ -857,5 +855,171 @@ public class AwsbedrockAgentsPayloadHelper {
     });
 
     return completionFuture;
+  }
+
+  public static InputStream chatWithAgentSSEStream(String agentAlias, String agentId, String sessionId, String prompt,
+                                                   AwsbedrockConfiguration configuration,
+                                                   AwsbedrockAgentsParameters awsBedrockParameters) {
+
+    BedrockAgentRuntimeAsyncClient bedrockAgent = createBedrockAgentRuntimeAsyncClient(configuration,
+                                                                                       awsBedrockParameters);
+
+    String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
+        : UUID.randomUUID().toString();
+    logger.info("Using sessionId: {}", effectiveSessionId);
+
+    return invokeAgentSSEStream(agentAlias, agentId, prompt, effectiveSessionId, bedrockAgent);
+  }
+
+  /**
+   * Invokes Bedrock Agent and returns streaming SSE response as InputStream.
+   *
+   * This method is designed to work with Mule's binary streaming.
+   **/
+  public static InputStream invokeAgentSSEStream(String agentAlias, String agentId, String prompt,
+                                                 String sessionId,
+                                                 BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
+
+    try {
+      // Create piped streams for real-time streaming
+      PipedOutputStream outputStream = new PipedOutputStream();
+      PipedInputStream inputStream = new PipedInputStream(outputStream);
+
+      // Start the streaming process asynchronously
+      CompletableFuture.runAsync(() -> {
+        try {
+          streamBedrockResponse(agentAlias, agentId, prompt, sessionId,
+                                bedrockAgentRuntimeAsyncClient, outputStream);
+        } catch (Exception e) {
+          try {
+            // Send error as SSE event
+            String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
+            outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+            outputStream.close();
+          } catch (IOException ioException) {
+            // Log error but can't do much more
+            logger.error("Error writing error event: {}", ioException.getMessage());
+          }
+        }
+      });
+
+      return inputStream;
+
+    } catch (IOException e) {
+      // Return error as immediate SSE event
+      String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
+      return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+
+  private static void streamBedrockResponse(String agentAlias, String agentId, String prompt,
+                                            String sessionId, BedrockAgentRuntimeAsyncClient client,
+                                            PipedOutputStream outputStream)
+      throws Exception {
+
+    try {
+      // Send initial event
+      JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, System.currentTimeMillis());
+      String sseStart = formatSSEEvent("session-start", startEvent.toString());
+      outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+
+      InvokeAgentRequest request = InvokeAgentRequest.builder()
+          .agentId(agentId)
+          .agentAliasId(agentAlias)
+          .sessionId(sessionId)
+          .inputText(prompt)
+          .streamingConfigurations(builder -> builder.streamFinalResponse(true))
+          .enableTrace(true)
+          .build();
+
+      InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
+          .onChunk(chunk -> {
+            try {
+              JSONObject chunkData = createChunkJson(chunk);
+              String sseEvent = formatSSEEvent("chunk", chunkData.toString());
+              outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
+              outputStream.flush();
+            } catch (Exception e) {
+              try {
+                String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
+                outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+              } catch (IOException ioException) {
+                // Can't write error, stream is likely closed
+              }
+            }
+          })
+          .build();
+
+      InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
+          .subscriber(visitor)
+          .build();
+
+      CompletableFuture<Void> invocationFuture = client.invokeAgent(request, handler);
+      invocationFuture.get(); // Wait for completion
+
+      // Send completion event
+      JSONObject completionData = createCompletionJson(sessionId, agentId, agentAlias, 0);
+      String completionEvent = formatSSEEvent("session-complete", completionData.toString());
+      outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
+
+    } finally {
+      outputStream.close();
+    }
+  }
+
+  private static JSONObject createChunkJson(PayloadPart chunk) {
+    JSONObject chunkData = new JSONObject();
+    chunkData.put(TYPE, CHUNK);
+    chunkData.put(TIMESTAMP, System.currentTimeMillis());
+
+    try {
+      if (chunk.bytes() != null) {
+        String text = new String(chunk.bytes().asByteArray(), StandardCharsets.UTF_8);
+        chunkData.put(TEXT, text);
+      }
+
+    } catch (Exception e) {
+      chunkData.put("error", "Error processing chunk: " + e.getMessage());
+    }
+
+    return chunkData;
+  }
+
+  private static JSONObject createSessionStartJson(String agentAlias, String agentId, String prompt,
+                                                   String sessionId, long timestamp) {
+    JSONObject startData = new JSONObject();
+    startData.put(SESSION_ID, sessionId);
+    startData.put(AGENT_ID, agentId);
+    startData.put(AGENT_ALIAS, agentAlias);
+    startData.put(PROMPT, prompt);
+    startData.put(PROCESSED_AT, timestamp);
+    startData.put("status", "started");
+    return startData;
+  }
+
+  private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration) {
+    JSONObject completionData = new JSONObject();
+    completionData.put(SESSION_ID, sessionId);
+    completionData.put(AGENT_ID, agentId);
+    completionData.put(AGENT_ALIAS, agentAlias);
+    completionData.put("status", "completed");
+    completionData.put("duration_ms", duration);
+    completionData.put(TIMESTAMP, System.currentTimeMillis());
+    return completionData;
+  }
+
+  private static JSONObject createErrorJson(Throwable error) {
+    JSONObject errorData = new JSONObject();
+    errorData.put("error", error.getMessage());
+    errorData.put("type", error.getClass().getSimpleName());
+    errorData.put(TIMESTAMP, System.currentTimeMillis());
+    return errorData;
+  }
+
+  private static String formatSSEEvent(String eventType, String data) {
+    int eventId = eventCounter.incrementAndGet();
+    return String.format("id: %d%nevent: %s%ndata: %s%n%n", eventId, eventType, data);
   }
 }

@@ -11,6 +11,7 @@ import org.mule.runtime.extension.api.annotation.Alias;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
+import org.mule.runtime.extension.api.annotation.param.display.DisplayName;
 import org.mule.sdk.api.annotation.param.Optional;
 
 /**
@@ -124,13 +125,25 @@ public class AwsbedrockAgentsOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("AGENT-chat")
   public InputStream chatWithAgent(String agentId, String agentAliasId,
-                                   @Optional String sessionId, // <-- NEW parameter for sessionId,
+                                   @Optional String sessionId,
                                    String prompt, @Config AwsbedrockConfiguration configuration,
                                    @ParameterGroup(
                                        name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
     String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, sessionId, prompt,
                                                                   configuration, awsBedrockParameters);
     return toInputStream(response, StandardCharsets.UTF_8);
+  }
+
+  @MediaType(value = "text/event-stream", strict = false)
+  @Alias("AGENT-chat-streaming-SSE")
+  @DisplayName("Agent chat streaming (SSE)")
+  public InputStream chatWithAgentSSEStream(String agentId, String agentAliasId,
+                                            @Optional String sessionId,
+                                            String prompt, @Config AwsbedrockConfiguration configuration,
+                                            @ParameterGroup(
+                                                name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
+    return AwsbedrockAgentsPayloadHelper.chatWithAgentSSEStream(agentAliasId, agentId, sessionId, prompt, configuration,
+                                                                awsBedrockParameters);
   }
 
 }
