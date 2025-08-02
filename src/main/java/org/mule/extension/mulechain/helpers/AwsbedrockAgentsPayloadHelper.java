@@ -947,6 +947,7 @@ public class AwsbedrockAgentsPayloadHelper {
                 outputStream.flush();
               } catch (IOException ioException) {
                 // Can't write error, stream is likely closed
+                logger.error("Error writing error event: {}", ioException.getMessage());
               }
             }
           })
