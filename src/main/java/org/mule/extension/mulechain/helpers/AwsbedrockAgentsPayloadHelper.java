@@ -930,7 +930,7 @@ public class AwsbedrockAgentsPayloadHelper {
           .sessionId(sessionId)
           .inputText(prompt)
           .streamingConfigurations(builder -> builder.streamFinalResponse(true))
-          .enableTrace(true)
+          //.enableTrace(true)
           .build();
 
       InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
