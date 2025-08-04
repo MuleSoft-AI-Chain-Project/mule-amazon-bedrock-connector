@@ -1,4 +1,5 @@
 package org.mule.extension.mulechain.internal.embeddings;
+
 import org.mule.extension.mulechain.internal.AwsbedrockRegionNameProvider;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
@@ -7,54 +8,53 @@ import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.values.OfValues;
 
 public class AwsbedrockParametersEmbeddingDocument {
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockModelNameProviderEmbedding.class)
-	@Optional(defaultValue = "amazon.titan-embed-text-v1")
-	private String modelName;
 
-	public String getModelName() {
-		return modelName;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockModelNameProviderEmbedding.class)
+  @Optional(defaultValue = "amazon.titan-embed-text-v1")
+  private String modelName;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockRegionNameProvider.class)
-	@Optional(defaultValue = "us-east-1")
-	private String region;
+  public String getModelName() {
+    return modelName;
+  }
 
-	public String getRegion() {
-		return region;
-	}
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockRegionNameProvider.class)
+  @Optional(defaultValue = "us-east-1")
+  private String region;
 
+  public String getRegion() {
+    return region;
+  }
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "1024")
-	private Integer dimension;
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "1024")
+  private Integer dimension;
 
-	public Integer getDimension() {
-		return dimension;
-	}
+  public Integer getDimension() {
+    return dimension;
+  }
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@Optional(defaultValue = "true")
-	private boolean normalize;
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional(defaultValue = "true")
+  private boolean normalize;
 
-	public boolean getNormalize() {
-		return normalize;
-	}
+  public boolean getNormalize() {
+    return normalize;
+  }
 
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsbedrockDocumentSplitOptions.class)
+  @Optional(defaultValue = "FULL")
+  private String optionType;
 
-	@Parameter
-	@Expression(ExpressionSupport.SUPPORTED)
-	@OfValues(AwsbedrockDocumentSplitOptions.class)
-	@Optional(defaultValue = "FULL")
-	private String optionType;
-
-	public String getOptionType() {
-		return optionType;
-	}
+  public String getOptionType() {
+    return optionType;
+  }
 
 }

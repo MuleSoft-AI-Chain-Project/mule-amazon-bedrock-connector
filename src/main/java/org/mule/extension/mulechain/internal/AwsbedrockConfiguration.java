@@ -1,41 +1,49 @@
 package org.mule.extension.mulechain.internal;
 
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsOperations;
+import org.mule.extension.mulechain.internal.embeddings.AwsbedrockEmbeddingOperations;
+import org.mule.extension.mulechain.internal.image.AwsbedrockImageModelOperations;
+import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
 import org.mule.extension.mulechain.internal.proxy.ProxyConfig;
+import org.mule.runtime.extension.api.annotation.Configuration;
 import org.mule.runtime.extension.api.annotation.Operations;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.Placement;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
-import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsOperations;
-import org.mule.extension.mulechain.internal.embeddings.AwsbedrockEmbeddingOperations;
-import org.mule.extension.mulechain.internal.image.AwsbedrockImageModelOperations;
-import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
-import org.mule.runtime.extension.api.annotation.Configuration;
 
 /**
- * This class represents an extension configuration, values set in this class are commonly used across multiple
- * operations since they represent something core from the extension.
+ * This class represents an extension configuration, values set in this class are commonly used across multiple operations since
+ * they represent something core from the extension.
  */
-@Configuration(name="Config") 
+@Configuration(name = "Config")
 @Operations({
-          AwsbedrockOperations.class, 
-          AwsbedrockImageModelOperations.class,
-          AwsbedrockEmbeddingOperations.class,
-          AwsbedrockMemoryOperations.class,
-          AwsbedrockAgentsOperations.class
-        })
+    AwsbedrockOperations.class,
+    AwsbedrockImageModelOperations.class,
+    AwsbedrockEmbeddingOperations.class,
+    AwsbedrockMemoryOperations.class,
+    AwsbedrockAgentsOperations.class
+})
 public class AwsbedrockConfiguration {
+
 
   @Parameter
   private String awsAccessKeyId;
-  
+
   @Parameter
   private String awsSecretAccessKey;
-
 
   @Parameter
   @Optional
   private String awsSessionToken;
+
+  @Parameter
+  @Optional
+  private boolean fipsModeEnabled;
+
+  @Parameter
+  @Optional
+  private String endpointOverride;
 
   /**
    * Reusable configuration element for outbound connections through a proxy. A proxy element must define a host name and a port
@@ -47,20 +55,51 @@ public class AwsbedrockConfiguration {
   @Placement(tab = "Proxy")
   private ProxyConfig proxyConfig;
 
-  public String getAwsAccessKeyId(){
+  @Parameter
+  @Optional(defaultValue = "10")
+  @Summary("Maximum time to wait for a response from Bedrock")
+  @Placement(tab = "Connection")
+  private Integer timeout;
+
+  @Parameter
+  @Optional(defaultValue = "SECONDS")
+  @Summary("Unit of time for the timeout")
+  @Placement(tab = "Connection")
+  private TimeUnitEnum timeoutUnit;
+
+
+
+  public String getAwsAccessKeyId() {
     return awsAccessKeyId;
   }
 
-  public String getAwsSecretAccessKey(){
+  public String getAwsSecretAccessKey() {
     return awsSecretAccessKey;
   }
 
-  public String getAwsSessionToken(){
+  public String getAwsSessionToken() {
     return awsSessionToken;
   }
 
   public ProxyConfig getProxyConfig() {
     return proxyConfig;
   }
+
+  public Boolean getFipsModeEnabled() {
+    return fipsModeEnabled;
+  }
+
+  public String getEndpointOverride() {
+    return endpointOverride;
+  }
+
+  public Integer getTimeout() {
+    return timeout;
+  }
+
+  public TimeUnitEnum getTimeoutUnit() {
+    return timeoutUnit;
+  }
+
 
 }
