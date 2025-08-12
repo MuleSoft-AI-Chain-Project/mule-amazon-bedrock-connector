@@ -82,4 +82,13 @@ public class AwsbedrockParameters {
     return guardrailVersion;
   }
 
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @Optional()
+  private String awsAccountId;
+
+  public String getAwsAccountId() {
+    return awsAccountId;
+  }
+
 }
