@@ -91,7 +91,12 @@ public class AwsbedrockPayloadHelper {
                                                         String nativeRequest) {
 
     String modelId = awsBedrockParameters.getModelName();
-    logger.info("modelId: {}", modelId);
+    logger.debug("modelId: {}", modelId);
+
+    String accountId = (awsBedrockParameters.getAwsAccountId() != null && !awsBedrockParameters.getAwsAccountId().isBlank())
+        ? awsBedrockParameters.getAwsAccountId()
+        : "076261412953";
+    logger.debug("accountId: {}", accountId);
 
     String region = awsBedrockParameters.getRegion();
 
@@ -109,7 +114,7 @@ public class AwsbedrockPayloadHelper {
         modelId.contains("meta.llama3-2") ||
         modelId.contains("meta.llama3-1")) {
 
-      modelId = "arn:aws:bedrock:" + region + ":076261412953:inference-profile/us." + modelId;
+      modelId = "arn:aws:bedrock:" + region + ":" + accountId + ":inference-profile/us." + modelId;
     }
 
     String guardrailIdentifier = awsBedrockParameters.getGuardrailIdentifier();

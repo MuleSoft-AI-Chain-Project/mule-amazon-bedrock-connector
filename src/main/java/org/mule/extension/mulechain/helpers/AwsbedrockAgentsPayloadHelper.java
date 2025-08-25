@@ -12,6 +12,7 @@ import javax.net.ssl.TrustManagerFactory;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.CommonUtils;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,8 +126,11 @@ public class AwsbedrockAgentsPayloadHelper {
         .fipsEnabled(configuration.getFipsModeEnabled())
         .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
+    ApacheHttpClient.Builder httpClientBuilder = CommonUtils
+        .buildApacheHttpClientWithReadTimeout(configuration.getTimeout(), configuration.getTimeoutUnit());
+
+
     if (configuration.getProxyConfig() != null) {
-      ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder();
 
       software.amazon.awssdk.http.apache.ProxyConfiguration proxyConfig = software.amazon.awssdk.http.apache.ProxyConfiguration
           .builder()
@@ -154,8 +158,10 @@ public class AwsbedrockAgentsPayloadHelper {
         httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
       }
 
-      bedrockAgentClientBuilder.httpClient(httpClientBuilder.build());
+
     }
+
+    bedrockAgentClientBuilder.httpClient(httpClientBuilder.build());
 
     return bedrockAgentClientBuilder.build();
   }
@@ -169,9 +175,11 @@ public class AwsbedrockAgentsPayloadHelper {
         .fipsEnabled(configuration.getFipsModeEnabled())
         .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
+    NettyNioAsyncHttpClient.Builder httpClientBuilder =
+        CommonUtils.buildNettyAsyncHttpClientWithReadTimeout(configuration.getTimeout(), configuration.getTimeoutUnit());
+
     // Configure HTTP client if proxy or truststore is needed
     if (configuration.getProxyConfig() != null) {
-      NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
 
       software.amazon.awssdk.http.nio.netty.ProxyConfiguration proxyConfig =
           software.amazon.awssdk.http.nio.netty.ProxyConfiguration
@@ -198,9 +206,10 @@ public class AwsbedrockAgentsPayloadHelper {
         httpClientBuilder.tlsTrustManagersProvider(tlsTrustManagersProvider);
       }
 
-      clientBuilder.httpClient(httpClientBuilder.build());
+
     }
 
+    clientBuilder.httpClient(httpClientBuilder.build());
     return clientBuilder.build();
   }
 
