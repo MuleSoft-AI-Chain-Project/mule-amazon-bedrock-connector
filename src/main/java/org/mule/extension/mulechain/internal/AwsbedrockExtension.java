@@ -4,11 +4,9 @@ import static org.mule.sdk.api.meta.JavaVersion.JAVA_17;
 
 import org.mule.extension.mulechain.internal.proxy.DefaultProxyConfig;
 import org.mule.extension.mulechain.internal.proxy.ProxyConfig;
-import org.mule.runtime.extension.api.annotation.Configurations;
-import org.mule.runtime.extension.api.annotation.Export;
-import org.mule.runtime.extension.api.annotation.Extension;
-import org.mule.runtime.extension.api.annotation.SubTypeMapping;
+import org.mule.runtime.extension.api.annotation.*;
 import org.mule.runtime.extension.api.annotation.dsl.xml.Xml;
+import org.mule.runtime.extension.api.annotation.error.ErrorTypes;
 import org.mule.sdk.api.annotation.JavaVersionSupport;
 
 /**
@@ -19,6 +17,8 @@ import org.mule.sdk.api.annotation.JavaVersionSupport;
 @Extension(name = "Amazon Bedrock")
 @Configurations(AwsbedrockConfiguration.class)
 @SubTypeMapping(baseType = ProxyConfig.class, subTypes = {DefaultProxyConfig.class})
+@ErrorTypes(BedrockError.class)
+@Operations(AwsbedrockOperations.class)
 @Export(classes = {ProxyConfig.class})
 @JavaVersionSupport({JAVA_17})
 public class AwsbedrockExtension {
