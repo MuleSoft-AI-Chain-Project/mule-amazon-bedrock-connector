@@ -1,6 +1,5 @@
 package org.mule.extension.mulechain.helpers;
 
-import java.net.URI;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -8,18 +7,11 @@ import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.AwsbedrockParams;
 import org.mule.extension.mulechain.internal.AwsbedrockParamsModelDetails;
-import org.mule.extension.mulechain.internal.CommonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrock.model.CustomModelSummary;
 import software.amazon.awssdk.services.bedrock.model.FoundationModelDetails;
@@ -32,7 +24,6 @@ import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ValidationException;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -41,51 +32,6 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 public class AwsbedrockPayloadHelper {
 
   private static final Logger logger = LoggerFactory.getLogger(AwsbedrockPayloadHelper.class);
-
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region,
-                                                   AwsbedrockConfiguration configuration) {
-
-    String endpointOverride = configuration.getEndpointOverride();
-
-    SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
-                                                                      configuration.getTimeout(),
-                                                                      configuration.getTimeoutUnit());
-
-
-    // Build the Bedrock client
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-        .region(region)
-        .httpClient(httpClient);
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-
-  }
-
-  private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region,
-                                                          AwsbedrockConfiguration configuration) {
-    String endpointOverride = configuration.getEndpointOverride();
-
-    SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
-                                                                      configuration.getTimeout(),
-                                                                      configuration.getTimeoutUnit());
-
-
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-        .region(region)
-        .httpClient(httpClient);
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-  }
 
   private static InvokeModelRequest createInvokeRequest(AwsbedrockParameters awsBedrockParameters,
                                                         String nativeRequest) {
@@ -141,71 +87,6 @@ public class AwsbedrockPayloadHelper {
     }
 
     return request;
-  }
-
-  public static Region getRegion(String region) {
-    switch (region) {
-      case "us-east-1":
-        return Region.US_EAST_1;
-      case "us-east-2":
-        return Region.US_EAST_2;
-      case "us-west-1":
-        return Region.US_WEST_1;
-      case "us-west-2":
-        return Region.US_WEST_2;
-      case "af-south-1":
-        return Region.AF_SOUTH_1;
-      case "ap-east-1":
-        return Region.AP_EAST_1;
-      case "ap-south-1":
-        return Region.AP_SOUTH_1;
-      case "ap-south-2":
-        return Region.AP_SOUTH_2;
-      case "ap-southeast-1":
-        return Region.AP_SOUTHEAST_1;
-      case "ap-southeast-2":
-        return Region.AP_SOUTHEAST_2;
-      case "ap-southeast-3":
-        return Region.AP_SOUTHEAST_3;
-      case "ap-southeast-4":
-        return Region.AP_SOUTHEAST_4;
-      case "ap-northeast-1":
-        return Region.AP_NORTHEAST_1;
-      case "ap-northeast-2":
-        return Region.AP_NORTHEAST_2;
-      case "ap-northeast-3":
-        return Region.AP_NORTHEAST_3;
-      case "ca-central-1":
-        return Region.CA_CENTRAL_1;
-      case "eu-central-1":
-        return Region.EU_CENTRAL_1;
-      case "eu-central-2":
-        return Region.EU_CENTRAL_2;
-      case "eu-west-1":
-        return Region.EU_WEST_1;
-      case "eu-west-2":
-        return Region.EU_WEST_2;
-      case "eu-west-3":
-        return Region.EU_WEST_3;
-      case "eu-north-1":
-        return Region.EU_NORTH_1;
-      case "eu-south-1":
-        return Region.EU_SOUTH_1;
-      case "eu-south-2":
-        return Region.EU_SOUTH_2;
-      case "me-south-1":
-        return Region.ME_SOUTH_1;
-      case "me-central-1":
-        return Region.ME_CENTRAL_1;
-      case "sa-east-1":
-        return Region.SA_EAST_1;
-      case "us-gov-east-1":
-        return Region.US_GOV_EAST_1;
-      case "us-gov-west-1":
-        return Region.US_GOV_WEST_1;
-      default:
-        throw new IllegalArgumentException("Unknown region: " + region);
-    }
   }
 
   private static String getAmazonTitanText(String prompt, AwsbedrockParameters awsBedrockParameters) {
@@ -378,32 +259,11 @@ public class AwsbedrockPayloadHelper {
 
   }
 
-  private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration,
-                                                     AwsbedrockParameters awsBedrockParameters) {
-    // Initialize the AWS credentials
-    // AwsCredentials awsCredentials;
-
-    // AwsBasicCredentials awsCreds =
-    // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-    // configuration.getAwsSecretAccessKey());
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-                                                                     configuration.getAwsSecretAccessKey());
-      return createClient(awsCredsBasic, getRegion(awsBedrockParameters.getRegion()), configuration);
-    } else {
-      AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(),
-                                                                           configuration.getAwsSecretAccessKey(),
-                                                                           configuration.getAwsSessionToken());
-      return createClientSession(awsCredsSession, getRegion(awsBedrockParameters.getRegion()), configuration);
-    }
-
-  }
-
   public static String invokeModel(String prompt, AwsbedrockConfiguration configuration,
                                    AwsbedrockParameters awsBedrockParameters) {
 
     // Create Bedrock Client
-    BedrockRuntimeClient client = InitiateClient(configuration, awsBedrockParameters);
+    BedrockRuntimeClient client = BedrockClients.getRuntimeClient(configuration, awsBedrockParameters);
 
     String nativeRequest = identifyPayload(prompt, awsBedrockParameters);
 
@@ -808,58 +668,10 @@ public class AwsbedrockPayloadHelper {
 
   }
 
-  private static BedrockClient createBedrockClient(AwsbedrockConfiguration configuration,
-                                                   AwsbedrockParams awsBedrockParameters) {
-    AwsCredentials awsCredentials;
-
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      awsCredentials = AwsBasicCredentials.create(
-                                                  configuration.getAwsAccessKeyId(),
-                                                  configuration.getAwsSecretAccessKey());
-    } else {
-      awsCredentials = AwsSessionCredentials.create(
-                                                    configuration.getAwsAccessKeyId(),
-                                                    configuration.getAwsSecretAccessKey(),
-                                                    configuration.getAwsSessionToken());
-    }
-
-    BedrockClient bedrockClient = BedrockClient.builder()
-        .region(getRegion(awsBedrockParameters.getRegion()))
-        .fipsEnabled(configuration.getFipsModeEnabled())
-        .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
-        .build();
-
-    return bedrockClient;
-  }
-
-  private static BedrockClient createBedrockClientDetails(AwsbedrockConfiguration configuration,
-                                                          AwsbedrockParamsModelDetails awsBedrockParameters) {
-    AwsCredentials awsCredentials;
-
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      awsCredentials = AwsBasicCredentials.create(
-                                                  configuration.getAwsAccessKeyId(),
-                                                  configuration.getAwsSecretAccessKey());
-    } else {
-      awsCredentials = AwsSessionCredentials.create(
-                                                    configuration.getAwsAccessKeyId(),
-                                                    configuration.getAwsSecretAccessKey(),
-                                                    configuration.getAwsSessionToken());
-    }
-
-    BedrockClient bedrockClient = BedrockClient.builder()
-        .region(getRegion(awsBedrockParameters.getRegion()))
-        .fipsEnabled(configuration.getFipsModeEnabled())
-        .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
-        .build();
-
-    return bedrockClient;
-  }
-
   public static String getFoundationModel(AwsbedrockConfiguration configuration,
                                           AwsbedrockParamsModelDetails awsBedrockParameters) {
 
-    BedrockClient bedrockClient = createBedrockClientDetails(configuration, awsBedrockParameters);
+    BedrockClient bedrockClient = BedrockClients.getBedrockClient(configuration, awsBedrockParameters);
 
     try {
 
@@ -897,7 +709,7 @@ public class AwsbedrockPayloadHelper {
   public static String listFoundationModels(AwsbedrockConfiguration configuration,
                                             AwsbedrockParams awsBedrockParameters) {
 
-    BedrockClient bedrockClient = createBedrockClient(configuration, awsBedrockParameters);
+    BedrockClient bedrockClient = BedrockClients.getBedrockClient(configuration, awsBedrockParameters);
 
     try {
       ListFoundationModelsResponse response = bedrockClient.listFoundationModels(r -> {
@@ -943,7 +755,7 @@ public class AwsbedrockPayloadHelper {
   public static String listCustomModels(AwsbedrockConfiguration configuration,
                                         AwsbedrockParams awsBedrockParameters) {
 
-    BedrockClient bedrockClient = createBedrockClient(configuration, awsBedrockParameters);
+    BedrockClient bedrockClient = BedrockClients.getBedrockClient(configuration, awsBedrockParameters);
 
     try {
 
@@ -986,7 +798,7 @@ public class AwsbedrockPayloadHelper {
   public static String getCustomModel(AwsbedrockConfiguration configuration,
                                       AwsbedrockParamsModelDetails awsBedrockParameters) {
 
-    BedrockClient bedrockClient = createBedrockClientDetails(configuration, awsBedrockParameters);
+    BedrockClient bedrockClient = BedrockClients.getBedrockClient(configuration, awsBedrockParameters);
 
     try {
 

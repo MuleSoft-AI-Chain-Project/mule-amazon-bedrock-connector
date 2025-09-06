@@ -3,8 +3,6 @@ package org.mule.extension.mulechain.helpers;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
-import java.net.URI;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Map;
@@ -13,20 +11,13 @@ import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
-import org.mule.extension.mulechain.internal.CommonUtils;
 import org.mule.extension.mulechain.internal.ModelProvider;
 import org.mule.extension.mulechain.internal.image.AwsbedrockImageParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -122,91 +113,44 @@ public class AwsbedrockImagePayloadHelper {
         .orElse("Unsupported model");
   }
 
-  private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
-
-    // Initialize the AWS credentials
-
-    // AwsBasicCredentials awsCredentials =
-    // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-    // configuration.getAwsSecretAccessKey());
-
-    AwsCredentials awsCredentials;
-
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      awsCredentials = AwsBasicCredentials.create(
-                                                  configuration.getAwsAccessKeyId(),
-                                                  configuration.getAwsSecretAccessKey());
-    } else {
-      awsCredentials = AwsSessionCredentials.create(
-                                                    configuration.getAwsAccessKeyId(),
-                                                    configuration.getAwsSecretAccessKey(),
-                                                    configuration.getAwsSessionToken());
-    }
-
-    String endpointOverride = configuration.getEndpointOverride();
-
-    SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
-                                                                      configuration.getTimeout(),
-                                                                      configuration.getTimeoutUnit());
-
-
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
-        .httpClient(httpClient)
-        .fipsEnabled(configuration.getFipsModeEnabled())
-        .region(region);
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-
-  }
-
-  private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
-    return InvokeModelRequest.builder()
-        .body(SdkBytes.fromUtf8String(nativeRequest))
-        .modelId(modelId)
-        .build();
-  }
-
   public static byte[] generateImage(String modelId, String body, AwsbedrockConfiguration configuration,
-                                     Region region)
-      throws IOException {
-    BedrockRuntimeClient bedrock = createClient(configuration, region);
+                                     Region region) {
+    return BedrockClientInvoker.executeWithErrorHandling(() -> {
 
-    InvokeModelRequest request = createInvokeRequest(modelId, body);
+      BedrockRuntimeClient bedrock = BedrockClients.getRuntimeClient(configuration, region.toString());
 
-    InvokeModelResponse response = bedrock.invokeModel(request);
+      InvokeModelRequest request = InvokeModelRequest.builder()
+          .body(SdkBytes.fromUtf8String(body))
+          .modelId(modelId)
+          .build();
 
-    JSONObject responseBody = new JSONObject(response.body().asUtf8String());
+      InvokeModelResponse response = bedrock.invokeModel(request);
 
-    byte[] imageBytes = ModelProvider.fromModelId(modelId)
-        .map(provider -> imageBytesExtractorMap.get(provider).apply(responseBody))
-        .orElseThrow(() -> new RuntimeException("Unsupported model: " + modelId));
+      JSONObject responseBody = new JSONObject(response.body().asUtf8String());
 
-    // String base64Image = responseBody.getJSONArray("images").getString(0);
-    // byte[] imageBytes = Base64.getDecoder().decode(base64Image);
+      byte[] imageBytes = ModelProvider.fromModelId(modelId)
+          .map(provider -> imageBytesExtractorMap.get(provider).apply(responseBody))
+          .orElseThrow(() -> new RuntimeException("Unsupported model: " + modelId));
 
-    String finishReason = responseBody.optString("error", null);
-    if (finishReason != null) {
-      throw new RuntimeException("Image generation error. Error is " + finishReason);
-    }
+      String finishReason = responseBody.optString("error", null);
+      if (finishReason != null) {
+        throw new RuntimeException("Image generation error. Error is " + finishReason);
+      }
 
-    return imageBytes;
+      return imageBytes;
+    });
   }
 
   public static String invokeModel(String prompt, String avoidInImage, String fullPath,
                                    AwsbedrockConfiguration configuration, AwsbedrockImageParameters awsBedrockParameters) {
 
-    Region region = AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion());
+    Region region = Region.of(awsBedrockParameters.getRegion());
 
     String modelId = awsBedrockParameters.getModelName();
 
     String body = identifyPayload(prompt, avoidInImage, awsBedrockParameters);
 
-    logger.info(body);
+    logger.debug(body);
 
     try {
       byte[] imageBytes = generateImage(modelId, body, configuration, region);
