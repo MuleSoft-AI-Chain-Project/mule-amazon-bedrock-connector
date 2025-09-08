@@ -1,6 +1,5 @@
 package org.mule.extension.mulechain.helpers;
 
-import java.net.URI;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -10,14 +9,8 @@ import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
 import org.mule.extension.mulechain.internal.ModelProvider;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -40,43 +33,6 @@ public class AwsbedrockChatMemoryHelper {
     payloadGeneratorMap.put(ModelProvider.COHERE, AwsbedrockChatMemoryHelper::getCohereText);
     payloadGeneratorMap.put(ModelProvider.META, AwsbedrockChatMemoryHelper::getLlamaText);
     payloadGeneratorMap.put(ModelProvider.STABILITY, (prompt, params) -> getStabilityTitanText(prompt));
-  }
-
-  private static BedrockRuntimeClient createClient(AwsBasicCredentials awsCreds, Region region, Boolean useFipsMode,
-                                                   String endpointOverride) {
-
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-        .fipsEnabled(useFipsMode)
-        .region(region);
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-  }
-
-  private static BedrockRuntimeClient createClientSession(AwsSessionCredentials awsCreds, Region region,
-                                                          Boolean useFipsMode, String endpointOverride) {
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
-        .fipsEnabled(useFipsMode)
-        .region(region);
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-  }
-
-  private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
-    return InvokeModelRequest.builder()
-        .body(SdkBytes.fromUtf8String(nativeRequest))
-        .modelId(modelId)
-        .build();
-
   }
 
   private static String getAmazonTitanText(String prompt, AwsbedrockParameters awsBedrockParameters) {
@@ -193,30 +149,6 @@ public class AwsbedrockChatMemoryHelper {
         .orElse("Unsupported model");
   }
 
-  private static BedrockRuntimeClient InitiateClient(AwsbedrockConfiguration configuration,
-                                                     AwsbedrockParameters awsBedrockParameters) {
-    // Initialize the AWS credentials
-    // AwsBasicCredentials awsCreds =
-    // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-    // configuration.getAwsSecretAccessKey());
-    // Create Bedrock Client
-    // return createClient(awsCreds,
-    // AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()));
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      AwsBasicCredentials awsCredsBasic = AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-                                                                     configuration.getAwsSecretAccessKey());
-      return createClient(awsCredsBasic, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
-                          configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
-    } else {
-      AwsSessionCredentials awsCredsSession = AwsSessionCredentials.create(configuration.getAwsAccessKeyId(),
-                                                                           configuration.getAwsSecretAccessKey(),
-                                                                           configuration.getAwsSessionToken());
-      return createClientSession(awsCredsSession, AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion()),
-                                 configuration.getFipsModeEnabled(), configuration.getEndpointOverride());
-    }
-
-  }
-
   private static AwsbedrockChatMemory intializeChatMemory(String memoryPath, String memoryName) {
     return new AwsbedrockChatMemory(memoryPath, memoryName);
   }
@@ -271,25 +203,29 @@ public class AwsbedrockChatMemoryHelper {
   public static String invokeModel(String prompt, String memoryPath, String memoryName, Integer keepLastMessages,
                                    AwsbedrockConfiguration configuration, AwsbedrockParameters awsBedrockParameters) {
 
-    // Create Bedrock Client
-    BedrockRuntimeClient client = InitiateClient(configuration, awsBedrockParameters);
+    return BedrockClientInvoker.executeWithErrorHandling(() -> {
 
-    // Chatmemory initialization
-    AwsbedrockChatMemory chatMemory = intializeChatMemory(memoryPath, memoryName);
+      // Create Bedrock Client
+      BedrockRuntimeClient client = BedrockClients.getRuntimeClient(configuration, awsBedrockParameters);
 
-    // Get keepLastMessages
-    List<String> keepLastMessagesList = getKeepLastMessage(chatMemory, keepLastMessages);
-    keepLastMessagesList.add(prompt);
-    // String memoryPrompt = keepLastMessagesList.toString();
-    String memoryPrompt = formatMemoryPrompt(keepLastMessagesList);
+      // Chatmemory initialization
+      AwsbedrockChatMemory chatMemory = intializeChatMemory(memoryPath, memoryName);
 
-    String nativeRequest = identifyPayload(memoryPrompt, awsBedrockParameters);
+      // Get keepLastMessages
+      List<String> keepLastMessagesList = getKeepLastMessage(chatMemory, keepLastMessages);
+      keepLastMessagesList.add(prompt);
+      // String memoryPrompt = keepLastMessagesList.toString();
+      String memoryPrompt = formatMemoryPrompt(keepLastMessagesList);
 
-    addMessageToMemory(chatMemory, prompt);
+      String nativeRequest = identifyPayload(memoryPrompt, awsBedrockParameters);
 
-    try {
-      // Encode and send the request to the Bedrock Runtime.
-      InvokeModelRequest request = createInvokeRequest(awsBedrockParameters.getModelName(), nativeRequest);
+      addMessageToMemory(chatMemory, prompt);
+
+      // Encode and send the request to the Bedrock Runtime
+      InvokeModelRequest request = InvokeModelRequest.builder()
+          .body(SdkBytes.fromUtf8String(nativeRequest))
+          .modelId(awsBedrockParameters.getModelName())
+          .build();
 
       // logger.info("Native request: " + nativeRequest);
 
@@ -299,11 +235,7 @@ public class AwsbedrockChatMemoryHelper {
       JSONObject responseBody = new JSONObject(response.body().asUtf8String());
 
       return responseBody.toString();
-
-    } catch (SdkClientException e) {
-      System.err.printf("ERROR: Can't invoke '%s'. Reason: %s", awsBedrockParameters.getModelName(), e.getMessage());
-      throw new RuntimeException(e);
-    }
+    });
   }
 
 }
