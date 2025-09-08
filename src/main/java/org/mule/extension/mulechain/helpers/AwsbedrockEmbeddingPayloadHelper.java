@@ -3,7 +3,6 @@ package org.mule.extension.mulechain.helpers;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,21 +15,14 @@ import org.apache.tika.sax.BodyContentHandler;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
-import org.mule.extension.mulechain.internal.CommonUtils;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbedding;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockParametersEmbeddingDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -172,46 +164,6 @@ public class AwsbedrockEmbeddingPayloadHelper {
     return jsonObject.toString();
   }
 
-  private static BedrockRuntimeClient createClient(AwsbedrockConfiguration configuration, Region region) {
-
-    // Initialize the AWS credentials
-    // AwsBasicCredentials awsCredentials =
-    // AwsBasicCredentials.create(configuration.getAwsAccessKeyId(),
-    // configuration.getAwsSecretAccessKey());
-
-    AwsCredentials awsCredentials;
-
-    if (configuration.getAwsSessionToken() == null || configuration.getAwsSessionToken().isEmpty()) {
-      awsCredentials = AwsBasicCredentials.create(
-                                                  configuration.getAwsAccessKeyId(),
-                                                  configuration.getAwsSecretAccessKey());
-    } else {
-      awsCredentials = AwsSessionCredentials.create(
-                                                    configuration.getAwsAccessKeyId(),
-                                                    configuration.getAwsSecretAccessKey(),
-                                                    configuration.getAwsSessionToken());
-    }
-
-    String endpointOverride = configuration.getEndpointOverride();
-
-    SdkHttpClient httpClient = CommonUtils.buildHttpClientWithTimeout(
-                                                                      configuration.getTimeout(),
-                                                                      configuration.getTimeoutUnit());
-
-
-    BedrockRuntimeClientBuilder builder = BedrockRuntimeClient.builder()
-        .credentialsProvider(StaticCredentialsProvider.create(awsCredentials))
-        .region(region)
-        .httpClient(httpClient)
-        .fipsEnabled(configuration.getFipsModeEnabled());
-
-    if (endpointOverride != null && !endpointOverride.isBlank()) {
-      builder.endpointOverride(URI.create(endpointOverride));
-    }
-
-    return builder.build();
-  }
-
   private static InvokeModelRequest createInvokeRequest(String modelId, String nativeRequest) {
 
     return InvokeModelRequest.builder()
@@ -223,47 +175,46 @@ public class AwsbedrockEmbeddingPayloadHelper {
   }
 
   public static JSONObject generateEmbedding(String modelId, String body, AwsbedrockConfiguration configuration,
-                                             Region region)
-      throws IOException {
-    BedrockRuntimeClient bedrock = createClient(configuration, region);
+                                             Region region) {
+    return BedrockClientInvoker.executeWithErrorHandling(() -> {
 
-    InvokeModelRequest request = createInvokeRequest(modelId, body);
+      BedrockRuntimeClient bedrock = BedrockClients.getRuntimeClient(configuration, region.toString());
 
-    InvokeModelResponse response = bedrock.invokeModel(request);
+      InvokeModelRequest request = createInvokeRequest(modelId, body);
 
-    String responseBody = new String(response.body().asByteArray(), StandardCharsets.UTF_8);
+      InvokeModelResponse response = bedrock.invokeModel(request);
 
-    return new JSONObject(responseBody);
+      String responseBody = new String(response.body().asByteArray(), StandardCharsets.UTF_8);
+
+      return new JSONObject(responseBody);
+    });
 
   }
 
   public static String invokeModel(String prompt, AwsbedrockConfiguration configuration,
                                    AwsbedrockParametersEmbedding awsBedrockParameters) {
+    return BedrockClientInvoker.executeWithErrorHandling(() -> {
 
-    Region region = AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion());
+      Region region = Region.of(awsBedrockParameters.getRegion());
 
-    String modelId = awsBedrockParameters.getModelName();
+      String modelId = awsBedrockParameters.getModelName();
 
-    String body = identifyPayload(prompt, awsBedrockParameters);
+      String body = identifyPayload(prompt, awsBedrockParameters);
 
-    logger.info(body);
+      logger.debug(body);
 
-    try {
       JSONObject response = generateEmbedding(modelId, body, configuration, region);
 
       return response.toString();
+    });
 
-    } catch (Exception e) {
-      logger.error("Error: {}", e.getMessage(), e);
-      return null;
-    }
   }
 
   public static String InvokeAdhocRAG(String prompt, String filePath, AwsbedrockConfiguration configuration,
                                       AwsbedrockParametersEmbeddingDocument awsBedrockParameters)
       throws IOException, SAXException, TikaException {
 
-    Region region = AwsbedrockPayloadHelper.getRegion(awsBedrockParameters.getRegion());
+    Region region = Region.of(awsBedrockParameters.getRegion());
 
     String modelId = awsBedrockParameters.getModelName();
     List<String> corpus;

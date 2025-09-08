@@ -7,7 +7,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.mule.extension.mulechain.helpers.AwsbedrockAgentsPayloadHelper;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.BedrockErrorsProvider;
 import org.mule.runtime.extension.api.annotation.Alias;
+import org.mule.runtime.extension.api.annotation.error.Throws;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
@@ -23,6 +25,7 @@ public class AwsbedrockAgentsOperations {
    * Lists all agents for the configuration
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-list")
   public InputStream listAgents(@Config AwsbedrockConfiguration configuration,
                                 @ParameterGroup(name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
@@ -34,6 +37,7 @@ public class AwsbedrockAgentsOperations {
    * Get agent by its Id
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-get-by-id")
   public InputStream getAgentById(String agentId, @Config AwsbedrockConfiguration configuration,
                                   @ParameterGroup(
@@ -46,6 +50,7 @@ public class AwsbedrockAgentsOperations {
    * Get agent by its Name
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-get-by-name")
   public InputStream getAgentByName(String agentName, @Config AwsbedrockConfiguration configuration,
                                     @ParameterGroup(
@@ -58,6 +63,7 @@ public class AwsbedrockAgentsOperations {
    * Delete agent by its Id
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-delete-by-id")
   public InputStream deleteAgentById(String agentId, @Config AwsbedrockConfiguration configuration,
                                      @ParameterGroup(
@@ -70,6 +76,7 @@ public class AwsbedrockAgentsOperations {
    * Creates an agent with alias
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-create")
   public InputStream createAgentWithAlias(String agentName, String instructions,
                                           @Config AwsbedrockConfiguration configuration,
@@ -84,6 +91,7 @@ public class AwsbedrockAgentsOperations {
    * Creates an agent alias
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-create-alias")
   public InputStream createAgentAlias(String agentAlias, String agentId, @Config AwsbedrockConfiguration configuration,
                                       @ParameterGroup(
@@ -97,6 +105,7 @@ public class AwsbedrockAgentsOperations {
    * Get agent alias by its Id
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-get-alias-by-agent-id")
   public InputStream getAgentAliasById(String agentId, @Config AwsbedrockConfiguration configuration,
                                        @ParameterGroup(
@@ -109,6 +118,7 @@ public class AwsbedrockAgentsOperations {
    * Get agent alias by its Id
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-delete-agent-aliases")
   public InputStream deleteAgentAlias(String agentId, String agentAliasName,
                                       @Config AwsbedrockConfiguration configuration,
@@ -123,13 +133,16 @@ public class AwsbedrockAgentsOperations {
    * Chat with an agent
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
+  @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-chat")
   public InputStream chatWithAgent(String agentId, String agentAliasId,
                                    @Optional String sessionId,
-                                   String prompt, @Config AwsbedrockConfiguration configuration,
+                                   String prompt,
+                                   boolean enableTrace,
+                                   @Config AwsbedrockConfiguration configuration,
                                    @ParameterGroup(
                                        name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
-    String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, sessionId, prompt,
+    String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, sessionId, prompt, enableTrace,
                                                                   configuration, awsBedrockParameters);
     return toInputStream(response, StandardCharsets.UTF_8);
   }
@@ -139,11 +152,13 @@ public class AwsbedrockAgentsOperations {
   @DisplayName("Agent chat streaming (SSE)")
   public InputStream chatWithAgentSSEStream(String agentId, String agentAliasId,
                                             @Optional String sessionId,
-                                            String prompt, @Config AwsbedrockConfiguration configuration,
+                                            String prompt,
+                                            boolean enableTrace,
+                                            @Config AwsbedrockConfiguration configuration,
                                             @ParameterGroup(
                                                 name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
-    return AwsbedrockAgentsPayloadHelper.chatWithAgentSSEStream(agentAliasId, agentId, sessionId, prompt, configuration,
-                                                                awsBedrockParameters);
+    return AwsbedrockAgentsPayloadHelper.chatWithAgentSSEStream(agentAliasId, agentId, sessionId, prompt, enableTrace,
+                                                                configuration, awsBedrockParameters);
   }
 
 }

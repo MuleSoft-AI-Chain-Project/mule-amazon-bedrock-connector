@@ -5,7 +5,11 @@ import java.time.temporal.ChronoUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+
+
 
 public class CommonUtils {
 
@@ -41,5 +45,31 @@ public class CommonUtils {
     return UrlConnectionHttpClient.builder()
         .socketTimeout(timeoutDuration)
         .build();
+  }
+
+  // Build ApacheHttpClient.Builder with read timeout only
+  public static ApacheHttpClient.Builder buildApacheHttpClientWithReadTimeout(Integer timeout, TimeUnitEnum unit) {
+    int effectiveTimeout = (timeout != null) ? timeout : 10;
+    TimeUnitEnum effectiveUnit = (unit != null) ? unit : TimeUnitEnum.SECONDS;
+    Duration timeoutDuration = toDuration(effectiveTimeout, effectiveUnit);
+
+    logger.debug("Apache HTTP client read timeout set to: {} {}", effectiveTimeout, effectiveUnit);
+
+    return ApacheHttpClient.builder()
+        .socketTimeout(timeoutDuration); // read timeout only
+  }
+
+  /** Build Netty async HTTP client builder with read timeout only */
+  public static NettyNioAsyncHttpClient.Builder buildNettyAsyncHttpClientWithReadTimeout(
+                                                                                         Integer timeout,
+                                                                                         TimeUnitEnum unit) {
+
+    int effectiveTimeout = (timeout != null) ? timeout : 10;
+    TimeUnitEnum effectiveUnit = (unit != null) ? unit : TimeUnitEnum.SECONDS;
+    Duration timeoutDuration = toDuration(effectiveTimeout, effectiveUnit);
+
+    return NettyNioAsyncHttpClient.builder()
+        // Sets read timeout for async client
+        .readTimeout(timeoutDuration);
   }
 }

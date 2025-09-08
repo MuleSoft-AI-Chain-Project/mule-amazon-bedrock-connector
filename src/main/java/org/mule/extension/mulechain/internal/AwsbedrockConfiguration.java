@@ -1,10 +1,12 @@
 package org.mule.extension.mulechain.internal;
 
+import org.mule.extension.mulechain.helpers.BedrockClients;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsOperations;
 import org.mule.extension.mulechain.internal.embeddings.AwsbedrockEmbeddingOperations;
 import org.mule.extension.mulechain.internal.image.AwsbedrockImageModelOperations;
 import org.mule.extension.mulechain.internal.memory.AwsbedrockMemoryOperations;
 import org.mule.extension.mulechain.internal.proxy.ProxyConfig;
+import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.extension.api.annotation.Configuration;
 import org.mule.runtime.extension.api.annotation.Operations;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -24,7 +26,7 @@ import org.mule.runtime.extension.api.annotation.param.display.Summary;
     AwsbedrockMemoryOperations.class,
     AwsbedrockAgentsOperations.class
 })
-public class AwsbedrockConfiguration {
+public class AwsbedrockConfiguration implements Disposable {
 
 
   @Parameter
@@ -102,4 +104,8 @@ public class AwsbedrockConfiguration {
   }
 
 
+  @Override
+  public void dispose() {
+    BedrockClients.closeAll();
+  }
 }
