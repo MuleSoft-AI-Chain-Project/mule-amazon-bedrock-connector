@@ -27,6 +27,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-list")
   public InputStream listAgents(@Config AwsbedrockConfiguration configuration,
                                 @ParameterGroup(name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
@@ -40,6 +41,7 @@ public class AwsbedrockAgentsOperations {
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
   @Alias("AGENT-get-by-id")
+  @Execution(ExecutionType.BLOCKING)
   public InputStream getAgentById(String agentId, @Config AwsbedrockConfiguration configuration,
                                   @ParameterGroup(
                                       name = "Additional properties") AwsbedrockAgentsParameters awsBedrockParameters) {
@@ -52,6 +54,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-get-by-name")
   public InputStream getAgentByName(String agentName, @Config AwsbedrockConfiguration configuration,
                                     @ParameterGroup(
@@ -65,6 +68,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-delete-by-id")
   public InputStream deleteAgentById(String agentId, @Config AwsbedrockConfiguration configuration,
                                      @ParameterGroup(
@@ -78,6 +82,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-create")
   public InputStream createAgentWithAlias(String agentName, String instructions,
                                           @Config AwsbedrockConfiguration configuration,
@@ -93,6 +98,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-create-alias")
   public InputStream createAgentAlias(String agentAlias, String agentId, @Config AwsbedrockConfiguration configuration,
                                       @ParameterGroup(
@@ -107,6 +113,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-get-alias-by-agent-id")
   public InputStream getAgentAliasById(String agentId, @Config AwsbedrockConfiguration configuration,
                                        @ParameterGroup(
@@ -120,6 +127,7 @@ public class AwsbedrockAgentsOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-delete-agent-aliases")
   public InputStream deleteAgentAlias(String agentId, String agentAliasName,
                                       @Config AwsbedrockConfiguration configuration,
