@@ -11,6 +11,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsSessionParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
@@ -36,9 +37,7 @@ import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
 import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentResponse;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
-import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
-import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
-import software.amazon.awssdk.services.bedrockagentruntime.model.PayloadPart;
+import software.amazon.awssdk.services.bedrockagentruntime.model.*;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
 import software.amazon.awssdk.services.iam.model.CreateRoleResponse;
@@ -581,18 +580,25 @@ public class AwsbedrockAgentsPayloadHelper {
     return deleteAgentResponse;
   }
 
-  public static String chatWithAgent(String agentAlias, String agentId, String sessionId, String prompt, Boolean enableTrace,
-                                     AwsbedrockConfiguration configuration, AwsbedrockAgentsParameters awsBedrockParameters) {
+  public static String chatWithAgent(String agentAlias, String agentId, String prompt, Boolean enableTrace,
+                                     Boolean latencyOptimized,
+                                     AwsbedrockConfiguration configuration,
+                                     AwsbedrockAgentsSessionParameters awsbedrockAgentsSessionParameters,
+                                     AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
       BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(configuration,
-                                                                                                                awsBedrockParameters);
+                                                                                                                awsbedrockAgentsParameters);
 
+      String sessionId = awsbedrockAgentsSessionParameters.getSessionId();
       String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
           : UUID.randomUUID().toString();
       logger.info("Using sessionId: {}", effectiveSessionId);
 
-      return invokeAgent(agentAlias, agentId, prompt, enableTrace, effectiveSessionId, bedrockAgentRuntimeAsyncClient)
+      return invokeAgent(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
+                         awsbedrockAgentsSessionParameters.getExcludePreviousThinkingSteps(),
+                         awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
+                         bedrockAgentRuntimeAsyncClient)
           .thenApply(response -> {
             logger.debug(response);
             return response;
@@ -601,7 +607,9 @@ public class AwsbedrockAgentsPayloadHelper {
   }
 
   private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt,
-                                                       Boolean enableTrace, String sessionId,
+                                                       Boolean enableTrace, Boolean latencyOptimized, String sessionId,
+                                                       Boolean excludePreviousThinkingSteps,
+                                                       Integer previousConversationTurnsToInclude,
                                                        BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
 
     long startTime = System.currentTimeMillis();
@@ -612,6 +620,10 @@ public class AwsbedrockAgentsPayloadHelper {
         .sessionId(sessionId)
         .inputText(prompt)
         .enableTrace(enableTrace)
+        .bedrockModelConfigurations(builder -> builder
+            .performanceConfig(performanceConfig -> performanceConfig.latency(latencyOptimized ? "optimized" : "standard")))
+        .promptCreationConfigurations(builder -> builder.excludePreviousThinkingSteps(excludePreviousThinkingSteps)
+            .previousConversationTurnsToInclude(previousConversationTurnsToInclude))
         .build();
 
     CompletableFuture<String> completionFuture = new CompletableFuture<>();
@@ -713,19 +725,26 @@ public class AwsbedrockAgentsPayloadHelper {
     return completionFuture;
   }
 
-  public static InputStream chatWithAgentSSEStream(String agentAlias, String agentId, String sessionId, String prompt,
-                                                   Boolean enableTrace, AwsbedrockConfiguration configuration,
+  public static InputStream chatWithAgentSSEStream(String agentAlias, String agentId, String prompt,
+                                                   Boolean enableTrace,
+                                                   Boolean latencyOptimized,
+                                                   AwsbedrockConfiguration configuration,
+                                                   AwsbedrockAgentsSessionParameters awsBedrockSessionParameters,
                                                    AwsbedrockAgentsParameters awsBedrockParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
       BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(configuration,
                                                                                                                 awsBedrockParameters);
 
+      String sessionId = awsBedrockSessionParameters.getSessionId();
       String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
           : UUID.randomUUID().toString();
       logger.info("Using sessionId: {}", effectiveSessionId);
 
-      return invokeAgentSSEStream(agentAlias, agentId, prompt, enableTrace, effectiveSessionId, bedrockAgentRuntimeAsyncClient);
+      return invokeAgentSSEStream(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
+                                  awsBedrockSessionParameters.getExcludePreviousThinkingSteps(),
+                                  awsBedrockSessionParameters.getPreviousConversationTurnsToInclude(),
+                                  bedrockAgentRuntimeAsyncClient);
     });
   }
 
@@ -735,7 +754,8 @@ public class AwsbedrockAgentsPayloadHelper {
    * This method is designed to work with Mule's binary streaming.
    **/
   public static InputStream invokeAgentSSEStream(String agentAlias, String agentId, String prompt,
-                                                 Boolean enableTrace, String sessionId,
+                                                 Boolean enableTrace, Boolean latencyOptimized, String sessionId,
+                                                 Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                                  BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
     try {
       // Create piped streams for real-time streaming
@@ -745,7 +765,8 @@ public class AwsbedrockAgentsPayloadHelper {
       // Start the streaming process asynchronously
       CompletableFuture.runAsync(() -> {
         try {
-          streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, sessionId,
+          streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
+                                excludePreviousThinkingSteps, previousConversationTurnsToInclude,
                                 bedrockAgentRuntimeAsyncClient, outputStream);
         } catch (Exception e) {
           try {
@@ -773,7 +794,9 @@ public class AwsbedrockAgentsPayloadHelper {
   }
 
   private static void streamBedrockResponse(String agentAlias, String agentId, String prompt, Boolean enableTrace,
-                                            String sessionId, BedrockAgentRuntimeAsyncClient client,
+                                            Boolean latencyOptimized, String sessionId,
+                                            Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
+                                            BedrockAgentRuntimeAsyncClient client,
                                             PipedOutputStream outputStream)
       throws ExecutionException, InterruptedException, IOException {
     long startTime = System.currentTimeMillis();
@@ -792,6 +815,10 @@ public class AwsbedrockAgentsPayloadHelper {
         .inputText(prompt)
         .streamingConfigurations(builder -> builder.streamFinalResponse(true))
         .enableTrace(enableTrace)
+        .bedrockModelConfigurations(builder -> builder
+            .performanceConfig(performanceConfig -> performanceConfig.latency(latencyOptimized ? "optimized" : "standard")))
+        .promptCreationConfigurations(builder -> builder.excludePreviousThinkingSteps(excludePreviousThinkingSteps)
+            .previousConversationTurnsToInclude(previousConversationTurnsToInclude))
         .build();
 
     InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()

@@ -7,8 +7,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.mule.extension.mulechain.helpers.AwsbedrockPayloadHelper;
 import org.mule.extension.mulechain.helpers.AwsbedrockPromptTemplateHelper;
+import org.mule.runtime.api.meta.model.operation.ExecutionType;
 import org.mule.runtime.extension.api.annotation.Alias;
 import org.mule.runtime.extension.api.annotation.error.Throws;
+import org.mule.runtime.extension.api.annotation.execution.Execution;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
@@ -27,6 +29,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("CHAT-answer-prompt")
   public InputStream answerPrompt(String prompt, @Config AwsbedrockConfiguration configuration,
                                   @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {
@@ -39,6 +42,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-define-prompt-template")
   public InputStream definePromptTemplate(String template, String instructions, String dataset,
                                           @Config AwsbedrockConfiguration configuration,
@@ -58,6 +62,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("SENTIMENT-analyze")
   public InputStream extractSentiments(String TextToAnalyze, @Config AwsbedrockConfiguration configuration,
                                        @ParameterGroup(
@@ -76,6 +81,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("FOUNDATIONAL-model-details")
   public InputStream getFoundationalModelByModelId(@Config AwsbedrockConfiguration configuration,
                                                    @ParameterGroup(
@@ -91,6 +97,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("FOUNDATIONAL-models-list")
   public InputStream getFoundationalModelList(@Config AwsbedrockConfiguration configuration,
                                               @ParameterGroup(
@@ -106,6 +113,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   @Alias("CUSTOM-model-details")
   public InputStream getCustomModelByModelId(@Config AwsbedrockConfiguration configuration,
                                              @ParameterGroup(
@@ -121,6 +129,7 @@ public class AwsbedrockOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("CUSTOM-models-list")
+  @Execution(ExecutionType.BLOCKING)
   @Throws(BedrockErrorsProvider.class)
   public InputStream getCustomModelList(@Config AwsbedrockConfiguration configuration,
                                         @ParameterGroup(name = "Additional properties") AwsbedrockParams awsBedrockParameters) {
