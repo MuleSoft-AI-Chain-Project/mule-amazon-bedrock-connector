@@ -8,7 +8,11 @@ import java.nio.charset.StandardCharsets;
 import org.mule.extension.mulechain.helpers.AwsbedrockChatMemoryHelper;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
 import org.mule.extension.mulechain.internal.AwsbedrockParameters;
+import org.mule.extension.mulechain.internal.BedrockErrorsProvider;
+import org.mule.runtime.api.meta.model.operation.ExecutionType;
 import org.mule.runtime.extension.api.annotation.Alias;
+import org.mule.runtime.extension.api.annotation.error.Throws;
+import org.mule.runtime.extension.api.annotation.execution.Execution;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
@@ -23,6 +27,8 @@ public class AwsbedrockMemoryOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("CHAT-answer-prompt-memory")
+  @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   public InputStream answerPrompt(String prompt, String memoryPath, String memoryName, Integer keepLastMessages,
                                   @Config AwsbedrockConfiguration configuration,
                                   @ParameterGroup(name = "Additional properties") AwsbedrockParameters awsBedrockParameters) {

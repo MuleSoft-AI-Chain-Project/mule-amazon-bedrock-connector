@@ -9,7 +9,11 @@ import java.nio.charset.StandardCharsets;
 import org.apache.tika.exception.TikaException;
 import org.mule.extension.mulechain.helpers.AwsbedrockEmbeddingPayloadHelper;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.BedrockErrorsProvider;
+import org.mule.runtime.api.meta.model.operation.ExecutionType;
 import org.mule.runtime.extension.api.annotation.Alias;
+import org.mule.runtime.extension.api.annotation.error.Throws;
+import org.mule.runtime.extension.api.annotation.execution.Execution;
 import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
@@ -25,6 +29,8 @@ public class AwsbedrockEmbeddingOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("EMBEDDING-generate-from-text")
+  @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   public InputStream generateEmbeddings(String prompt, @Config AwsbedrockConfiguration configuration,
                                         @ParameterGroup(
                                             name = "Additional properties") AwsbedrockParametersEmbedding awsBedrockParameters) {
@@ -41,6 +47,8 @@ public class AwsbedrockEmbeddingOperations {
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Alias("EMBEDDING-adhoc-query")
+  @Throws(BedrockErrorsProvider.class)
+  @Execution(ExecutionType.BLOCKING)
   public InputStream ragEmbeddingTextScore(String prompt, String filePath,
                                            @Config AwsbedrockConfiguration configuration,
                                            @ParameterGroup(
