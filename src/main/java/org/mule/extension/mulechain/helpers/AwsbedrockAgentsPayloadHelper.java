@@ -6,14 +6,17 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsSessionParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
 import software.amazon.awssdk.services.bedrockagent.model.AgentAlias;
@@ -584,6 +587,7 @@ public class AwsbedrockAgentsPayloadHelper {
                                      Boolean latencyOptimized,
                                      AwsbedrockConfiguration configuration,
                                      AwsbedrockAgentsSessionParameters awsbedrockAgentsSessionParameters,
+                                     AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                      AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
@@ -598,6 +602,9 @@ public class AwsbedrockAgentsPayloadHelper {
       return invokeAgent(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                          awsbedrockAgentsSessionParameters.getExcludePreviousThinkingSteps(),
                          awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
+                         awsBedrockAgentsFilteringParameters.getKnowledgeBaseId(),
+                         awsBedrockAgentsFilteringParameters.getRetrievalMetadataFilterType(),
+                         awsBedrockAgentsFilteringParameters.getMetadataFilters(),
                          bedrockAgentRuntimeAsyncClient)
           .thenApply(response -> {
             logger.debug(response);
@@ -609,7 +616,9 @@ public class AwsbedrockAgentsPayloadHelper {
   private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt,
                                                        Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                        Boolean excludePreviousThinkingSteps,
-                                                       Integer previousConversationTurnsToInclude,
+                                                       Integer previousConversationTurnsToInclude, String knowledgeBaseId,
+                                                       AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
+                                                       Map<String, String> metadataFilters,
                                                        BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
 
     long startTime = System.currentTimeMillis();
@@ -620,10 +629,9 @@ public class AwsbedrockAgentsPayloadHelper {
         .sessionId(sessionId)
         .inputText(prompt)
         .enableTrace(enableTrace)
-        .bedrockModelConfigurations(builder -> builder
-            .performanceConfig(performanceConfig -> performanceConfig.latency(latencyOptimized ? "optimized" : "standard")))
-        .promptCreationConfigurations(builder -> builder.excludePreviousThinkingSteps(excludePreviousThinkingSteps)
-            .previousConversationTurnsToInclude(previousConversationTurnsToInclude))
+        .sessionState(buildSessionState(knowledgeBaseId, filterType, metadataFilters))
+        .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
+        .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps, previousConversationTurnsToInclude))
         .build();
 
     CompletableFuture<String> completionFuture = new CompletableFuture<>();
@@ -730,6 +738,7 @@ public class AwsbedrockAgentsPayloadHelper {
                                                    Boolean latencyOptimized,
                                                    AwsbedrockConfiguration configuration,
                                                    AwsbedrockAgentsSessionParameters awsBedrockSessionParameters,
+                                                   AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                                    AwsbedrockAgentsParameters awsBedrockParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
@@ -744,6 +753,9 @@ public class AwsbedrockAgentsPayloadHelper {
       return invokeAgentSSEStream(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                                   awsBedrockSessionParameters.getExcludePreviousThinkingSteps(),
                                   awsBedrockSessionParameters.getPreviousConversationTurnsToInclude(),
+                                  awsBedrockAgentsFilteringParameters.getKnowledgeBaseId(),
+                                  awsBedrockAgentsFilteringParameters.getRetrievalMetadataFilterType(),
+                                  awsBedrockAgentsFilteringParameters.getMetadataFilters(),
                                   bedrockAgentRuntimeAsyncClient);
     });
   }
@@ -756,6 +768,9 @@ public class AwsbedrockAgentsPayloadHelper {
   public static InputStream invokeAgentSSEStream(String agentAlias, String agentId, String prompt,
                                                  Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                  Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
+                                                 String knowledgeBaseId,
+                                                 AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
+                                                 Map<String, String> metadataFilters,
                                                  BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
     try {
       // Create piped streams for real-time streaming
@@ -767,6 +782,7 @@ public class AwsbedrockAgentsPayloadHelper {
         try {
           streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
                                 excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                                knowledgeBaseId, filterType, metadataFilters,
                                 bedrockAgentRuntimeAsyncClient, outputStream);
         } catch (Exception e) {
           try {
@@ -796,6 +812,9 @@ public class AwsbedrockAgentsPayloadHelper {
   private static void streamBedrockResponse(String agentAlias, String agentId, String prompt, Boolean enableTrace,
                                             Boolean latencyOptimized, String sessionId,
                                             Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
+                                            String knowledgeBaseId,
+                                            AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
+                                            Map<String, String> metadataFilters,
                                             BedrockAgentRuntimeAsyncClient client,
                                             PipedOutputStream outputStream)
       throws ExecutionException, InterruptedException, IOException {
@@ -815,10 +834,9 @@ public class AwsbedrockAgentsPayloadHelper {
         .inputText(prompt)
         .streamingConfigurations(builder -> builder.streamFinalResponse(true))
         .enableTrace(enableTrace)
-        .bedrockModelConfigurations(builder -> builder
-            .performanceConfig(performanceConfig -> performanceConfig.latency(latencyOptimized ? "optimized" : "standard")))
-        .promptCreationConfigurations(builder -> builder.excludePreviousThinkingSteps(excludePreviousThinkingSteps)
-            .previousConversationTurnsToInclude(previousConversationTurnsToInclude))
+        .sessionState(buildSessionState(knowledgeBaseId, filterType, metadataFilters))
+        .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
+        .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps, previousConversationTurnsToInclude))
         .build();
 
     InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
@@ -930,5 +948,92 @@ public class AwsbedrockAgentsPayloadHelper {
   private static String formatSSEEvent(String eventType, String data) {
     int eventId = eventCounter.incrementAndGet();
     return String.format("id: %d%nevent: %s%ndata: %s%n%n", eventId, eventType, data);
+  }
+
+
+
+  private static Consumer<SessionState.Builder> buildSessionState(String knowledgeBaseId,
+                                                                  AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
+                                                                  Map<String, String> metadataFilters) {
+    return sessionStateBuilder -> {
+      KnowledgeBaseVectorSearchConfiguration vectorSearchConfig =
+          buildVectorSearchConfiguration(filterType, metadataFilters);
+
+      if (vectorSearchConfig != null && knowledgeBaseId != null) {
+        sessionStateBuilder.knowledgeBaseConfigurations(
+                                                        kbConfigBuilder -> kbConfigBuilder.knowledgeBaseId(knowledgeBaseId)
+                                                            .retrievalConfiguration(
+                                                                                    retrievalConfigBuilder -> retrievalConfigBuilder
+                                                                                        .vectorSearchConfiguration(vectorSearchConfig)));
+      }
+    };
+  }
+
+  private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(
+                                                                                       AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
+                                                                                       Map<String, String> metadataFilters) {
+
+    if (metadataFilters == null || metadataFilters.isEmpty()) {
+      return null;
+    }
+
+    // Filter out null and empty values
+    Map<String, String> nonEmptyFilters = metadataFilters.entrySet().stream()
+        .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    if (nonEmptyFilters.isEmpty()) {
+      return null;
+    }
+
+    if (nonEmptyFilters.size() > 1) {
+      List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
+          .map(entry -> RetrievalFilter.builder()
+              .equalsValue(FilterAttribute.builder()
+                  .key(entry.getKey())
+                  .value(Document.fromString(entry.getValue()))
+                  .build())
+              .build())
+          .collect(Collectors.toList());
+
+      RetrievalFilter compositeFilter = RetrievalFilter.builder()
+          .applyMutation(builder -> {
+            if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL) {
+              builder.andAll(retrievalFilters);
+            } else if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL) {
+              builder.orAll(retrievalFilters);
+            }
+          })
+          .build();
+
+      return KnowledgeBaseVectorSearchConfiguration.builder()
+          .filter(compositeFilter)
+          .build();
+    } else {
+      String key = nonEmptyFilters.entrySet().iterator().next().getKey();
+      return KnowledgeBaseVectorSearchConfiguration.builder()
+          .filter(retrievalFilter -> retrievalFilter.equalsValue(FilterAttribute.builder()
+              .key(key)
+              .value(Document.fromString(nonEmptyFilters.get(key)))
+              .build()).build())
+          .build();
+    }
+
+  }
+
+  private static Consumer<BedrockModelConfigurations.Builder> buildModelConfigurations(
+                                                                                       Boolean isLatencyOptimized) {
+    return builder -> builder.performanceConfig(
+                                                performanceConfig -> performanceConfig.latency(
+                                                                                               isLatencyOptimized ? "optimized"
+                                                                                                   : "standard"));
+  }
+
+  private static Consumer<PromptCreationConfigurations.Builder> buildPromptConfigurations(
+                                                                                          Boolean excludePreviousThinkingSteps,
+                                                                                          Integer previousConversationTurnsToInclude) {
+    return builder -> builder
+        .excludePreviousThinkingSteps(excludePreviousThinkingSteps)
+        .previousConversationTurnsToInclude(previousConversationTurnsToInclude);
   }
 }
