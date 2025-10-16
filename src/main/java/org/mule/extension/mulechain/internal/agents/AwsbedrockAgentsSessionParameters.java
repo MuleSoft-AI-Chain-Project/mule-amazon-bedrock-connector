@@ -28,4 +28,5 @@ public class AwsbedrockAgentsSessionParameters {
   public Integer getPreviousConversationTurnsToInclude() {
     return previousConversationTurnsToInclude;
   }
+
 }
