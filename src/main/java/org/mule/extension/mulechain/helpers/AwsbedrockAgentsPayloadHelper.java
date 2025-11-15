@@ -603,6 +603,7 @@ public class AwsbedrockAgentsPayloadHelper {
                          awsbedrockAgentsSessionParameters.getExcludePreviousThinkingSteps(),
                          awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
                          awsBedrockAgentsFilteringParameters.getKnowledgeBaseId(),
+                         awsBedrockAgentsFilteringParameters.getNumberOfResults(),
                          awsBedrockAgentsFilteringParameters.getRetrievalMetadataFilterType(),
                          awsBedrockAgentsFilteringParameters.getMetadataFilters(),
                          bedrockAgentRuntimeAsyncClient)
@@ -617,6 +618,7 @@ public class AwsbedrockAgentsPayloadHelper {
                                                        Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                        Boolean excludePreviousThinkingSteps,
                                                        Integer previousConversationTurnsToInclude, String knowledgeBaseId,
+                                                       Integer numberOfResults,
                                                        AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                        Map<String, String> metadataFilters,
                                                        BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
@@ -629,7 +631,7 @@ public class AwsbedrockAgentsPayloadHelper {
         .sessionId(sessionId)
         .inputText(prompt)
         .enableTrace(enableTrace)
-        .sessionState(buildSessionState(knowledgeBaseId, filterType, metadataFilters))
+        .sessionState(buildSessionState(knowledgeBaseId, numberOfResults, filterType, metadataFilters))
         .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
         .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps, previousConversationTurnsToInclude))
         .build();
@@ -754,6 +756,7 @@ public class AwsbedrockAgentsPayloadHelper {
                                   awsBedrockSessionParameters.getExcludePreviousThinkingSteps(),
                                   awsBedrockSessionParameters.getPreviousConversationTurnsToInclude(),
                                   awsBedrockAgentsFilteringParameters.getKnowledgeBaseId(),
+                                  awsBedrockAgentsFilteringParameters.getNumberOfResults(),
                                   awsBedrockAgentsFilteringParameters.getRetrievalMetadataFilterType(),
                                   awsBedrockAgentsFilteringParameters.getMetadataFilters(),
                                   bedrockAgentRuntimeAsyncClient);
@@ -768,7 +771,7 @@ public class AwsbedrockAgentsPayloadHelper {
   public static InputStream invokeAgentSSEStream(String agentAlias, String agentId, String prompt,
                                                  Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                  Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
-                                                 String knowledgeBaseId,
+                                                 String knowledgeBaseId, Integer numberOfResults,
                                                  AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                  Map<String, String> metadataFilters,
                                                  BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
@@ -782,7 +785,7 @@ public class AwsbedrockAgentsPayloadHelper {
         try {
           streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
                                 excludePreviousThinkingSteps, previousConversationTurnsToInclude,
-                                knowledgeBaseId, filterType, metadataFilters,
+                                knowledgeBaseId, numberOfResults, filterType, metadataFilters,
                                 bedrockAgentRuntimeAsyncClient, outputStream);
         } catch (Exception e) {
           try {
@@ -812,7 +815,7 @@ public class AwsbedrockAgentsPayloadHelper {
   private static void streamBedrockResponse(String agentAlias, String agentId, String prompt, Boolean enableTrace,
                                             Boolean latencyOptimized, String sessionId,
                                             Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
-                                            String knowledgeBaseId,
+                                            String knowledgeBaseId, Integer numberOfResults,
                                             AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                             Map<String, String> metadataFilters,
                                             BedrockAgentRuntimeAsyncClient client,
@@ -834,7 +837,7 @@ public class AwsbedrockAgentsPayloadHelper {
         .inputText(prompt)
         .streamingConfigurations(builder -> builder.streamFinalResponse(true))
         .enableTrace(enableTrace)
-        .sessionState(buildSessionState(knowledgeBaseId, filterType, metadataFilters))
+        .sessionState(buildSessionState(knowledgeBaseId, numberOfResults, filterType, metadataFilters))
         .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
         .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps, previousConversationTurnsToInclude))
         .build();
@@ -952,12 +955,12 @@ public class AwsbedrockAgentsPayloadHelper {
 
 
 
-  private static Consumer<SessionState.Builder> buildSessionState(String knowledgeBaseId,
+  private static Consumer<SessionState.Builder> buildSessionState(String knowledgeBaseId, Integer numberOfResults,
                                                                   AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                                   Map<String, String> metadataFilters) {
     return sessionStateBuilder -> {
       KnowledgeBaseVectorSearchConfiguration vectorSearchConfig =
-          buildVectorSearchConfiguration(filterType, metadataFilters);
+          buildVectorSearchConfiguration(numberOfResults, filterType, metadataFilters);
 
       if (vectorSearchConfig != null && knowledgeBaseId != null) {
         sessionStateBuilder.knowledgeBaseConfigurations(
@@ -969,7 +972,7 @@ public class AwsbedrockAgentsPayloadHelper {
     };
   }
 
-  private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(
+  private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(Integer numberOfResults,
                                                                                        AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                                                        Map<String, String> metadataFilters) {
 
@@ -985,6 +988,13 @@ public class AwsbedrockAgentsPayloadHelper {
     if (nonEmptyFilters.isEmpty()) {
       return null;
     }
+
+    // apply numberOfResults only if not null and greater than 0
+    Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalNumberOfResults =
+        b -> {
+          if (numberOfResults != null && numberOfResults.intValue() > 0)
+            b.numberOfResults(numberOfResults);
+        };
 
     if (nonEmptyFilters.size() > 1) {
       List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
@@ -1008,6 +1018,7 @@ public class AwsbedrockAgentsPayloadHelper {
 
       return KnowledgeBaseVectorSearchConfiguration.builder()
           .filter(compositeFilter)
+          .applyMutation(applyOptionalNumberOfResults)
           .build();
     } else {
       String key = nonEmptyFilters.entrySet().iterator().next().getKey();
@@ -1016,6 +1027,7 @@ public class AwsbedrockAgentsPayloadHelper {
               .key(key)
               .value(Document.fromString(nonEmptyFilters.get(key)))
               .build()).build())
+          .applyMutation(applyOptionalNumberOfResults)
           .build();
     }
 

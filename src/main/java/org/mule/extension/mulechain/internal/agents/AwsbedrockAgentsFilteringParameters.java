@@ -16,6 +16,10 @@ public class AwsbedrockAgentsFilteringParameters {
 
   @Parameter
   @Optional
+  private Integer numberOfResults;
+
+  @Parameter
+  @Optional
   private RetrievalMetadataFilterType retrievalMetadataFilterType;
 
   @Parameter
@@ -24,6 +28,10 @@ public class AwsbedrockAgentsFilteringParameters {
 
   public String getKnowledgeBaseId() {
     return knowledgeBaseId;
+  }
+
+  public Integer getNumberOfResults() {
+    return numberOfResults;
   }
 
   public RetrievalMetadataFilterType getRetrievalMetadataFilterType() {
