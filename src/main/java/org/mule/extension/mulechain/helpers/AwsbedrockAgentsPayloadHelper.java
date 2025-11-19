@@ -971,8 +971,7 @@ public class AwsbedrockAgentsPayloadHelper {
     };
   }
 
-  private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(Integer numberOfResults,
-                                                                                       AwsbedrockAgentsFilteringParameters.SearchType overrideSearchType,
+  private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(Integer numberOfResults, String overrideSearchType,
                                                                                        AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                                                        Map<String, String> metadataFilters) {
 
@@ -996,12 +995,11 @@ public class AwsbedrockAgentsPayloadHelper {
             b.numberOfResults(numberOfResults);
         };
 
-    // apply overrideSearchType only if not null
+     // apply overrideSearchType only if not null
     Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalOverrideSearchType =
         b -> {
-          if (overrideSearchType != null)
-            // Use the conversion function to pass the SDK's SearchType
-            b.overrideSearchType(convertToSdkSearchType(overrideSearchType));
+          if (overrideSearchType != null )
+            b.overrideSearchType(overrideSearchType);
         };
 
     if (nonEmptyFilters.size() > 1) {
