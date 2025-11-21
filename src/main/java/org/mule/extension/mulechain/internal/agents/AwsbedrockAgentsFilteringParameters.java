@@ -24,7 +24,7 @@ public class AwsbedrockAgentsFilteringParameters {
 
   @Parameter
   @Optional
-  private String overrideSearchType;
+  private SearchType overrideSearchType;
 
   @Parameter
   @Optional
@@ -42,7 +42,7 @@ public class AwsbedrockAgentsFilteringParameters {
     return numberOfResults;
   }
 
-  public String getOverrideSearchType() {
+  public SearchType getOverrideSearchType() {
     return overrideSearchType;
   }
 
