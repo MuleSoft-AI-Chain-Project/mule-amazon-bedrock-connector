@@ -10,6 +10,10 @@ public class AwsbedrockAgentsFilteringParameters {
     AND_ALL, OR_ALL
   }
 
+  public enum SearchType {
+    HYBRID, SEMANTIC
+  }
+
   @Parameter
   @Optional
   private String knowledgeBaseId;
@@ -17,6 +21,10 @@ public class AwsbedrockAgentsFilteringParameters {
   @Parameter
   @Optional
   private Integer numberOfResults;
+
+  @Parameter
+  @Optional
+  private SearchType overrideSearchType;
 
   @Parameter
   @Optional
@@ -32,6 +40,10 @@ public class AwsbedrockAgentsFilteringParameters {
 
   public Integer getNumberOfResults() {
     return numberOfResults;
+  }
+
+  public SearchType getOverrideSearchType() {
+    return overrideSearchType;
   }
 
   public RetrievalMetadataFilterType getRetrievalMetadataFilterType() {
