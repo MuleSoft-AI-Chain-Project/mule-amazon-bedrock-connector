@@ -932,11 +932,9 @@ public class AwsbedrockAgentsPayloadHelper {
     return completionData;
   }
 
-  private static String formatSSEEvent(String eventType, String payload) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("event: ").append(eventType).append("\n");
-    sb.append("data: ").append(payload).append("\n\n");
-    return sb.toString();
+  private static String formatSSEEvent(String eventType, String data) {
+    int eventId = eventCounter.incrementAndGet();
+    return String.format("id: %d%nevent: %s%ndata: %s%n%n", eventId, eventType, data);
   }
 
   private static JSONObject createErrorJson(Throwable error) {
