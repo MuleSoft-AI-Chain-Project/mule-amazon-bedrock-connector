@@ -606,11 +606,6 @@ public class AwsbedrockAgentsPayloadHelper {
                          awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
                          buildKnowledgeBaseConfigs(awsBedrockAgentsFilteringParameters,
                                                    awsBedrockAgentsMultipleFilteringParameters),
-                         awsBedrockAgentsFilteringParameters.getKnowledgeBaseId(),
-                         awsBedrockAgentsFilteringParameters.getNumberOfResults(),
-                         awsBedrockAgentsFilteringParameters.getOverrideSearchType(),
-                         awsBedrockAgentsFilteringParameters.getRetrievalMetadataFilterType(),
-                         awsBedrockAgentsFilteringParameters.getMetadataFilters(),
                          bedrockAgentRuntimeAsyncClient)
           .thenApply(response -> {
             logger.debug(response);
@@ -622,11 +617,7 @@ public class AwsbedrockAgentsPayloadHelper {
   private static CompletableFuture<String> invokeAgent(String agentAlias, String agentId, String prompt,
                                                        Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                        Boolean excludePreviousThinkingSteps,
-                                                       Integer previousConversationTurnsToInclude, String knowledgeBaseId,
-                                                       Integer numberOfResults,
-                                                       AwsbedrockAgentsFilteringParameters.SearchType overrideSearchType,
-                                                       AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
-                                                       Map<String, String> metadataFilters,
+                                                       Integer previousConversationTurnsToInclude,
                                                        java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
                                                        BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
 
@@ -778,10 +769,6 @@ public class AwsbedrockAgentsPayloadHelper {
                                                  Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                  Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                                  java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
-                                                 String knowledgeBaseId, Integer numberOfResults,
-                                                 AwsbedrockAgentsFilteringParameters.SearchType overrideSearchType,
-                                                 AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
-                                                 Map<String, String> metadataFilters,
                                                  BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
     try {
       // Create piped streams for real-time streaming
@@ -823,10 +810,6 @@ public class AwsbedrockAgentsPayloadHelper {
                                             Boolean latencyOptimized, String sessionId,
                                             Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                             java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
-                                            String knowledgeBaseId, Integer numberOfResults,
-                                            AwsbedrockAgentsFilteringParameters.SearchType overrideSearchType,
-                                            AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
-                                            Map<String, String> metadataFilters,
                                             BedrockAgentRuntimeAsyncClient client,
                                             PipedOutputStream outputStream)
       throws ExecutionException, InterruptedException, IOException {

@@ -68,10 +68,6 @@ public class AwsbedrockAgentsFilteringParameters {
     }
   }
 
-  public enum SearchType {
-    HYBRID, SEMANTIC
-  }
-
   @Parameter
   @Optional
   private String knowledgeBaseId;
