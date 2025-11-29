@@ -23,7 +23,7 @@
         <dependency>
             <groupId>com.mulesoft.connectors</groupId>
             <artifactId>mule4-amazon-bedrock-connector</artifactId>
-            <version>0.5.3</version>
+            <version>0.5.4</version>
             <classifier>mule-plugin</classifier>
         </dependency>
         <dependency>
