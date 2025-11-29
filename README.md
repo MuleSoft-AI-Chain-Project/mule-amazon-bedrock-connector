@@ -48,3 +48,26 @@ Then, follow the MuleSoft [documentation](https://docs.mulesoft.com/exchange/to-
 
 ## Learn more at [mac-project.ai](https://mac-project.ai/docs/aws-bedrock/connector-overview)
 
+##  Features
+
+### Multiple Knowledge Base Support
+
+The AWS Bedrock InvokeAgent API supports querying multiple knowledge bases in a single agent invocation. The MAC AWS Bedrock Connector provides flexible configuration options to leverage this capability:
+
+- **Single Knowledge Base (Legacy)**: Configure a single knowledge base with its settings through individual parameters
+- **Multiple Knowledge Bases**: Pass a list of knowledge base configurations, each with independent settings for:
+  - Knowledge Base ID
+  - Number of results to retrieve
+  - Search type (Hybrid or Semantic)
+  - Metadata filters and filter types (AND_ALL/OR_ALL)
+
+**Why Two Options?**
+
+To maintain **full backwards compatibility** with existing Mule flows while enabling the new multi-KB capability. Existing integrations continue to work without modification, while new implementations can leverage multiple knowledge bases when needed.
+
+**Precedence**: When both single and multiple KB configurations are provided, the multiple KB list takes precedence, and a warning is logged about the ignored legacy parameters.
+
+This design allows you to:
+- Query across multiple knowledge bases simultaneously
+- Apply different retrieval configurations per knowledge base
+- Maintain existing flows without breaking changes
