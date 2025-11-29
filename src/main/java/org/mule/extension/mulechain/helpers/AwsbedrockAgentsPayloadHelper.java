@@ -939,10 +939,12 @@ public class AwsbedrockAgentsPayloadHelper {
     return sb.toString();
   }
 
-  private static JSONObject createErrorJson(Exception e) {
-    JSONObject obj = new JSONObject();
-    obj.put("error", e == null ? "unknown" : e.getMessage());
-    return obj;
+  private static JSONObject createErrorJson(Throwable error) {
+    JSONObject errorData = new JSONObject();
+    errorData.put("error", error.getMessage());
+    errorData.put("type", error.getClass().getSimpleName());
+    errorData.put(TIMESTAMP, Instant.now().toString());
+    return errorData;
   }
 
   private static java.util.function.Consumer<SessionState.Builder> buildSessionState(
