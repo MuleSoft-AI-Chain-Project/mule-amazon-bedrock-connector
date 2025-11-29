@@ -48,7 +48,7 @@ Then, follow the MuleSoft [documentation](https://docs.mulesoft.com/exchange/to-
 
 ## Learn more at [mac-project.ai](https://mac-project.ai/docs/aws-bedrock/connector-overview)
 
-##  Features
+## Features
 
 ### Multiple Knowledge Base Support
 
