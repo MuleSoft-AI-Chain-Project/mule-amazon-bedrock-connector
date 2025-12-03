@@ -1,7 +1,7 @@
 package org.mule.extension.mulechain.internal.agents;
 
-import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
+import org.mule.sdk.api.annotation.param.Optional;
 
 public class AwsbedrockAgentsSessionParameters {
 

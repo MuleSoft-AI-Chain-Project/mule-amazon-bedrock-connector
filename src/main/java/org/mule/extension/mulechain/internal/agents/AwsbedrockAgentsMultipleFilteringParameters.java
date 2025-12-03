@@ -1,8 +1,8 @@
 package org.mule.extension.mulechain.internal.agents;
 
 import java.util.List;
-import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
+import org.mule.sdk.api.annotation.param.Optional;
 
 /**
  * Parameter group for passing multiple knowledge-base configurations (per-KB settings).
