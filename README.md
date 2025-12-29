@@ -71,3 +71,36 @@ This design allows you to:
 - Query across multiple knowledge bases simultaneously
 - Apply different retrieval configurations per knowledge base
 - Maintain existing flows without breaking changes
+
+## Version History
+
+### Version 0.5.6
+
+**New Feature: Reranking Configuration for Knowledge Base Queries**
+
+Added support for reranking configuration in Agent Chat and Agent Chat Streamed operations. This feature allows you to improve the relevance of query responses by reranking retrieved results using Amazon Bedrock reranker models.
+
+**Reranking Configuration Parameters:**
+
+- **Reranking Type**: Type of reranking configuration (defaults to "BEDROCK")
+- **Model ARN**: The Amazon Resource Name (ARN) of the foundation model to use for reranking
+- **Number of Reranked Results**: The number of results to return after reranking
+- **Selection Mode**: How to consider metadata when reranking:
+  - `ALL`: Consider all metadata fields
+  - `SELECTIVE`: Consider only selected metadata fields
+- **Fields to Exclude**: (When SELECTIVE mode) List of metadata field names to exclude from consideration
+- **Fields to Include**: (When SELECTIVE mode) List of metadata field names to include in consideration (mutually exclusive with fieldsToExclude)
+- **Additional Model Request Fields**: Optional map of additional fields to include in the model request during reranking
+
+**Usage:**
+
+The reranking configuration is part of the knowledge base configuration and can be specified for each knowledge base when using multiple knowledge bases. This allows you to apply different reranking strategies per knowledge base.
+
+**Benefits:**
+
+- Improve search result relevance by reranking retrieved documents
+- Fine-tune reranking behavior using selective metadata filtering
+- Configure reranking independently for each knowledge base in multi-KB scenarios
+- Leverage Amazon Bedrock's reranker models for better search quality
+
+For more information, see the [AWS Bedrock documentation on reranking](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_InvokeAgent.html).
