@@ -82,15 +82,17 @@ Added support for reranking configuration in Agent Chat and Agent Chat Streamed 
 
 **Reranking Configuration Parameters:**
 
-- **Reranking Type**: Type of reranking configuration (defaults to "BEDROCK")
-- **Model ARN**: The Amazon Resource Name (ARN) of the foundation model to use for reranking
-- **Number of Reranked Results**: The number of results to return after reranking
-- **Selection Mode**: How to consider metadata when reranking:
+- **Reranking Type**: Type of reranking configuration (defaults to "BEDROCK") - *Optional*
+- **Model ARN**: The Amazon Resource Name (ARN) of the foundation model to use for reranking - **Required**
+- **Number of Reranked Results**: The number of results to return after reranking - *Optional*
+- **Selection Mode**: How to consider metadata when reranking - *Optional*:
   - `ALL`: Consider all metadata fields
   - `SELECTIVE`: Consider only selected metadata fields
-- **Fields to Exclude**: (When SELECTIVE mode) List of metadata field names to exclude from consideration
-- **Fields to Include**: (When SELECTIVE mode) List of metadata field names to include in consideration (mutually exclusive with fieldsToExclude)
-- **Additional Model Request Fields**: Optional map of additional fields to include in the model request during reranking
+- **Fields to Exclude**: (When SELECTIVE mode) List of metadata field names to exclude from consideration - *Optional*
+- **Fields to Include**: (When SELECTIVE mode) List of metadata field names to include in consideration (mutually exclusive with fieldsToExclude) - *Optional*
+- **Additional Model Request Fields**: Optional map of additional fields to include in the model request during reranking - *Optional*
+
+**Important:** The `modelArn` field is **required** for reranking configuration. If `modelArn` is not provided, the reranking configuration will be skipped entirely and the request will proceed without reranking. All other parameters are optional and will only be applied if provided.
 
 **Usage:**
 

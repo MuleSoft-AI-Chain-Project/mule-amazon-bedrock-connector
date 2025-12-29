@@ -1006,10 +1006,12 @@ public class AwsbedrockAgentsPayloadHelper {
             b.overrideSearchType(convertToSdkSearchType(overrideSearchType));
         };
 
-    // Build reranking configuration if provided
+    // Build reranking configuration if provided and valid
+    // Only build if rerankingConfig is provided AND modelArn is specified (required for bedrockRerankingConfiguration)
     Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalRerankingConfig =
         b -> {
-          if (rerankingConfig != null) {
+          if (rerankingConfig != null && rerankingConfig.getModelArn() != null
+              && !rerankingConfig.getModelArn().isEmpty()) {
             b.rerankingConfiguration(rerankingBuilder -> {
               // Set the type if provided, otherwise default to "BEDROCK"
               if (rerankingConfig.getRerankingType() != null && !rerankingConfig.getRerankingType().isEmpty()) {
@@ -1020,23 +1022,21 @@ public class AwsbedrockAgentsPayloadHelper {
 
               // Build bedrockRerankingConfiguration
               rerankingBuilder.bedrockRerankingConfiguration(bedrockRerankingBuilder -> {
-                // Build modelConfiguration
-                if (rerankingConfig.getModelArn() != null) {
-                  bedrockRerankingBuilder.modelConfiguration(modelConfigBuilder -> {
-                    modelConfigBuilder.modelArn(rerankingConfig.getModelArn());
+                // Build modelConfiguration (modelArn is guaranteed to be non-null here)
+                bedrockRerankingBuilder.modelConfiguration(modelConfigBuilder -> {
+                  modelConfigBuilder.modelArn(rerankingConfig.getModelArn());
 
-                    // Add additionalModelRequestFields if provided
-                    if (rerankingConfig.getAdditionalModelRequestFields() != null
-                        && !rerankingConfig.getAdditionalModelRequestFields().isEmpty()) {
-                      Map<String, Document> additionalFields = rerankingConfig.getAdditionalModelRequestFields()
-                          .entrySet().stream()
-                          .collect(Collectors.toMap(
-                                                    Map.Entry::getKey,
-                                                    entry -> Document.fromString(entry.getValue())));
-                      modelConfigBuilder.additionalModelRequestFields(additionalFields);
-                    }
-                  });
-                }
+                  // Add additionalModelRequestFields if provided
+                  if (rerankingConfig.getAdditionalModelRequestFields() != null
+                      && !rerankingConfig.getAdditionalModelRequestFields().isEmpty()) {
+                    Map<String, Document> additionalFields = rerankingConfig.getAdditionalModelRequestFields()
+                        .entrySet().stream()
+                        .collect(Collectors.toMap(
+                                                  Map.Entry::getKey,
+                                                  entry -> Document.fromString(entry.getValue())));
+                    modelConfigBuilder.additionalModelRequestFields(additionalFields);
+                  }
+                });
 
                 // Build metadataConfiguration
                 if (rerankingConfig.getSelectionMode() != null) {
