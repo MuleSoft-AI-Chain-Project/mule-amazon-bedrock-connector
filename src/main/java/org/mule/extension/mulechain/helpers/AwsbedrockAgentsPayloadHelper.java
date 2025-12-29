@@ -958,12 +958,18 @@ public class AwsbedrockAgentsPayloadHelper {
                                                                                           kb.getRetrievalMetadataFilterType(),
                                                                                           kb.getMetadataFilters(),
                                                                                           kb.getRerankingConfiguration());
-        KnowledgeBaseRetrievalConfiguration retrievalCfg = KnowledgeBaseRetrievalConfiguration.builder()
-            .vectorSearchConfiguration(vectorCfg)
-            .build();
-        return KnowledgeBaseConfiguration.builder().knowledgeBaseId(kb.getKnowledgeBaseId())
-            .retrievalConfiguration(retrievalCfg)
-            .build();
+        KnowledgeBaseConfiguration.Builder kbConfigBuilder = KnowledgeBaseConfiguration.builder()
+            .knowledgeBaseId(kb.getKnowledgeBaseId());
+        
+        // Only add retrieval configuration if we have a vector search configuration
+        if (vectorCfg != null) {
+          KnowledgeBaseRetrievalConfiguration retrievalCfg = KnowledgeBaseRetrievalConfiguration.builder()
+              .vectorSearchConfiguration(vectorCfg)
+              .build();
+          kbConfigBuilder.retrievalConfiguration(retrievalCfg);
+        }
+        
+        return kbConfigBuilder.build();
       }).collect(Collectors.toList());
 
       if (!sdkKbConfigs.isEmpty()) {
@@ -986,8 +992,15 @@ public class AwsbedrockAgentsPayloadHelper {
           .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    // If no metadata filters and no reranking config, return null
-    if ((nonEmptyFilters == null || nonEmptyFilters.isEmpty()) && rerankingConfig == null) {
+    // Check if we have any valid configuration to build
+    // Build configuration if we have: numberOfResults, overrideSearchType, filters, or reranking config
+    boolean hasNumberOfResults = numberOfResults != null && numberOfResults.intValue() > 0;
+    boolean hasOverrideSearchType = overrideSearchType != null;
+    boolean hasFilters = nonEmptyFilters != null && !nonEmptyFilters.isEmpty();
+    boolean hasRerankingConfig = rerankingConfig != null;
+
+    // If none of the configurations are provided, return null
+    if (!hasNumberOfResults && !hasOverrideSearchType && !hasFilters && !hasRerankingConfig) {
       return null;
     }
 
