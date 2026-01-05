@@ -956,13 +956,20 @@ public class AwsbedrockAgentsPayloadHelper {
         KnowledgeBaseVectorSearchConfiguration vectorCfg = buildVectorSearchConfiguration(kb.getNumberOfResults(),
                                                                                           kb.getOverrideSearchType(),
                                                                                           kb.getRetrievalMetadataFilterType(),
-                                                                                          kb.getMetadataFilters());
-        KnowledgeBaseRetrievalConfiguration retrievalCfg = KnowledgeBaseRetrievalConfiguration.builder()
-            .vectorSearchConfiguration(vectorCfg)
-            .build();
-        return KnowledgeBaseConfiguration.builder().knowledgeBaseId(kb.getKnowledgeBaseId())
-            .retrievalConfiguration(retrievalCfg)
-            .build();
+                                                                                          kb.getMetadataFilters(),
+                                                                                          kb.getRerankingConfiguration());
+        KnowledgeBaseConfiguration.Builder kbConfigBuilder = KnowledgeBaseConfiguration.builder()
+            .knowledgeBaseId(kb.getKnowledgeBaseId());
+        
+        // Only add retrieval configuration if we have a vector search configuration
+        if (vectorCfg != null) {
+          KnowledgeBaseRetrievalConfiguration retrievalCfg = KnowledgeBaseRetrievalConfiguration.builder()
+              .vectorSearchConfiguration(vectorCfg)
+              .build();
+          kbConfigBuilder.retrievalConfiguration(retrievalCfg);
+        }
+        
+        return kbConfigBuilder.build();
       }).collect(Collectors.toList());
 
       if (!sdkKbConfigs.isEmpty()) {
@@ -974,18 +981,26 @@ public class AwsbedrockAgentsPayloadHelper {
   private static KnowledgeBaseVectorSearchConfiguration buildVectorSearchConfiguration(Integer numberOfResults,
                                                                                        AwsbedrockAgentsFilteringParameters.SearchType overrideSearchType,
                                                                                        AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
-                                                                                       Map<String, String> metadataFilters) {
+                                                                                       Map<String, String> metadataFilters,
+                                                                                       AwsbedrockAgentsFilteringParameters.RerankingConfiguration rerankingConfig) {
 
-    if (metadataFilters == null || metadataFilters.isEmpty()) {
-      return null;
+    // Filter out null and empty values from metadata filters
+    Map<String, String> nonEmptyFilters = null;
+    if (metadataFilters != null && !metadataFilters.isEmpty()) {
+      nonEmptyFilters = metadataFilters.entrySet().stream()
+          .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    // Filter out null and empty values
-    Map<String, String> nonEmptyFilters = metadataFilters.entrySet().stream()
-        .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    // Check if we have any valid configuration to build
+    // Build configuration if we have: numberOfResults, overrideSearchType, filters, or reranking config
+    boolean hasNumberOfResults = numberOfResults != null && numberOfResults.intValue() > 0;
+    boolean hasOverrideSearchType = overrideSearchType != null;
+    boolean hasFilters = nonEmptyFilters != null && !nonEmptyFilters.isEmpty();
+    boolean hasRerankingConfig = rerankingConfig != null;
 
-    if (nonEmptyFilters.isEmpty()) {
+    // If none of the configurations are provided, return null
+    if (!hasNumberOfResults && !hasOverrideSearchType && !hasFilters && !hasRerankingConfig) {
       return null;
     }
 
@@ -1004,43 +1019,119 @@ public class AwsbedrockAgentsPayloadHelper {
             b.overrideSearchType(convertToSdkSearchType(overrideSearchType));
         };
 
-    if (nonEmptyFilters.size() > 1) {
-      List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
-          .map(entry -> RetrievalFilter.builder()
-              .equalsValue(FilterAttribute.builder()
-                  .key(entry.getKey())
-                  .value(Document.fromString(entry.getValue()))
-                  .build())
-              .build())
-          .collect(Collectors.toList());
+    // Build reranking configuration if provided and valid
+    // Only build if rerankingConfig is provided AND modelArn is specified (required for bedrockRerankingConfiguration)
+    Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalRerankingConfig =
+        b -> {
+          if (rerankingConfig != null && rerankingConfig.getModelArn() != null
+              && !rerankingConfig.getModelArn().isEmpty()) {
+            b.rerankingConfiguration(rerankingBuilder -> {
+              // Set the type if provided, otherwise default to "BEDROCK"
+              if (rerankingConfig.getRerankingType() != null && !rerankingConfig.getRerankingType().isEmpty()) {
+                rerankingBuilder.type(rerankingConfig.getRerankingType());
+              } else {
+                rerankingBuilder.type("BEDROCK");
+              }
 
-      RetrievalFilter compositeFilter = RetrievalFilter.builder()
-          .applyMutation(builder -> {
-            if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL) {
-              builder.andAll(retrievalFilters);
-            } else if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL) {
-              builder.orAll(retrievalFilters);
-            }
-          })
-          .build();
+              // Build bedrockRerankingConfiguration
+              rerankingBuilder.bedrockRerankingConfiguration(bedrockRerankingBuilder -> {
+                // Build modelConfiguration (modelArn is guaranteed to be non-null here)
+                bedrockRerankingBuilder.modelConfiguration(modelConfigBuilder -> {
+                  modelConfigBuilder.modelArn(rerankingConfig.getModelArn());
 
-      return KnowledgeBaseVectorSearchConfiguration.builder()
-          .filter(compositeFilter)
-          .applyMutation(applyOptionalNumberOfResults)
-          .applyMutation(applyOptionalOverrideSearchType)
-          .build();
-    } else {
-      String key = nonEmptyFilters.entrySet().iterator().next().getKey();
-      return KnowledgeBaseVectorSearchConfiguration.builder()
-          .filter(retrievalFilter -> retrievalFilter.equalsValue(FilterAttribute.builder()
-              .key(key)
-              .value(Document.fromString(nonEmptyFilters.get(key)))
-              .build()).build())
-          .applyMutation(applyOptionalNumberOfResults)
-          .applyMutation(applyOptionalOverrideSearchType)
-          .build();
+                  // Add additionalModelRequestFields if provided
+                  if (rerankingConfig.getAdditionalModelRequestFields() != null
+                      && !rerankingConfig.getAdditionalModelRequestFields().isEmpty()) {
+                    Map<String, Document> additionalFields = rerankingConfig.getAdditionalModelRequestFields()
+                        .entrySet().stream()
+                        .collect(Collectors.toMap(
+                                                  Map.Entry::getKey,
+                                                  entry -> Document.fromString(entry.getValue())));
+                    modelConfigBuilder.additionalModelRequestFields(additionalFields);
+                  }
+                });
+
+                // Build metadataConfiguration
+                if (rerankingConfig.getSelectionMode() != null) {
+                  bedrockRerankingBuilder.metadataConfiguration(metadataConfigBuilder -> {
+                    // Convert selectionMode
+                    String selectionModeStr = rerankingConfig.getSelectionMode().name();
+                    metadataConfigBuilder.selectionMode(selectionModeStr);
+
+                    // Build selectiveModeConfiguration if SELECTIVE
+                    if (rerankingConfig
+                        .getSelectionMode() == AwsbedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE) {
+                      metadataConfigBuilder.selectiveModeConfiguration(selectiveModeBuilder -> {
+                        // Handle fieldsToExclude or fieldsToInclude (union type - only one can be set)
+                        if (rerankingConfig.getFieldsToExclude() != null
+                            && !rerankingConfig.getFieldsToExclude().isEmpty()) {
+                          List<FieldForReranking> fieldsToExclude = rerankingConfig.getFieldsToExclude().stream()
+                              .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                              .collect(Collectors.toList());
+                          selectiveModeBuilder.fieldsToExclude(fieldsToExclude);
+                        } else if (rerankingConfig.getFieldsToInclude() != null
+                            && !rerankingConfig.getFieldsToInclude().isEmpty()) {
+                          List<FieldForReranking> fieldsToInclude = rerankingConfig.getFieldsToInclude().stream()
+                              .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                              .collect(Collectors.toList());
+                          selectiveModeBuilder.fieldsToInclude(fieldsToInclude);
+                        }
+                      });
+                    }
+                  });
+                }
+
+                // Add numberOfRerankedResults if provided
+                if (rerankingConfig.getNumberOfRerankedResults() != null) {
+                  bedrockRerankingBuilder.numberOfRerankedResults(rerankingConfig.getNumberOfRerankedResults());
+                }
+              });
+            });
+          }
+        };
+
+    KnowledgeBaseVectorSearchConfiguration.Builder builder = KnowledgeBaseVectorSearchConfiguration.builder();
+
+    // Build filter if metadata filters are provided
+    if (nonEmptyFilters != null && !nonEmptyFilters.isEmpty()) {
+      if (nonEmptyFilters.size() > 1) {
+        List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
+            .map(entry -> RetrievalFilter.builder()
+                .equalsValue(FilterAttribute.builder()
+                    .key(entry.getKey())
+                    .value(Document.fromString(entry.getValue()))
+                    .build())
+                .build())
+            .collect(Collectors.toList());
+
+        RetrievalFilter compositeFilter = RetrievalFilter.builder()
+            .applyMutation(filterBuilder -> {
+              if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL) {
+                filterBuilder.andAll(retrievalFilters);
+              } else if (filterType == AwsbedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL) {
+                filterBuilder.orAll(retrievalFilters);
+              }
+            })
+            .build();
+
+        builder.filter(compositeFilter);
+      } else {
+        String key = nonEmptyFilters.entrySet().iterator().next().getKey();
+        builder.filter(RetrievalFilter.builder()
+            .equalsValue(FilterAttribute.builder()
+                .key(key)
+                .value(Document.fromString(nonEmptyFilters.get(key)))
+                .build())
+            .build());
+      }
     }
 
+    // Apply optional configurations
+    builder.applyMutation(applyOptionalNumberOfResults);
+    builder.applyMutation(applyOptionalOverrideSearchType);
+    builder.applyMutation(applyOptionalRerankingConfig);
+
+    return builder.build();
   }
 
   private static java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> buildKnowledgeBaseConfigs(

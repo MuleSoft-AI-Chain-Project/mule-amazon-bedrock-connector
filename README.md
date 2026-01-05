@@ -71,3 +71,42 @@ This design allows you to:
 - Query across multiple knowledge bases simultaneously
 - Apply different retrieval configurations per knowledge base
 - Maintain existing flows without breaking changes
+
+## Version History
+
+### Version 0.5.6
+
+**New Feature: Reranking Configuration for Knowledge Base Queries**
+
+Added support for reranking configuration in Agent Chat and Agent Chat Streamed operations. This feature allows you to improve the relevance of query responses by reranking retrieved results using Amazon Bedrock reranker models.
+
+**Reranking Configuration Parameters:**
+
+- **Reranking Type**: Type of reranking configuration (defaults to "BEDROCK") - *Optional*
+- **Model ARN**: The Amazon Resource Name (ARN) of the foundation model to use for reranking - **Required**
+- **Number of Reranked Results**: The number of results to return after reranking - *Optional*
+- **Selection Mode**: How to consider metadata when reranking - *Optional*:
+  - `ALL`: Consider all metadata fields
+  - `SELECTIVE`: Consider only selected metadata fields
+- **Fields to Exclude**: (When SELECTIVE mode) List of metadata field names to exclude from consideration - *Optional*
+- **Fields to Include**: (When SELECTIVE mode) List of metadata field names to include in consideration (mutually exclusive with fieldsToExclude) - *Optional*
+- **Additional Model Request Fields**: Optional map of additional fields to include in the model request during reranking - *Optional*
+
+**Important:** The `modelArn` field is **required** for reranking configuration. If `modelArn` is not provided, the reranking configuration will be skipped entirely and the request will proceed without reranking. All other parameters are optional and will only be applied if provided.
+
+**Usage:**
+
+The reranking configuration is part of the knowledge base configuration and can be specified for each knowledge base when using multiple knowledge bases. This allows you to apply different reranking strategies per knowledge base.
+
+**Benefits:**
+
+- Improve search result relevance by reranking retrieved documents
+- Fine-tune reranking behavior using selective metadata filtering
+- Configure reranking independently for each knowledge base in multi-KB scenarios
+- Leverage Amazon Bedrock's reranker models for better search quality
+
+For more information, see the [AWS Bedrock documentation on reranking](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_InvokeAgent.html).
+
+**Bug Fix: Dynamic Region Parameter Support**
+
+Fixed an issue where AWS Bedrock client instances were cached using static keys without including the region parameter. This caused all operations to reuse the first client created, regardless of the region specified in subsequent calls. The region parameter now works correctly at runtime, with each region getting its own cached client instance.
