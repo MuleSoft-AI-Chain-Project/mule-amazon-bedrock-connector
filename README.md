@@ -106,3 +106,7 @@ The reranking configuration is part of the knowledge base configuration and can 
 - Leverage Amazon Bedrock's reranker models for better search quality
 
 For more information, see the [AWS Bedrock documentation on reranking](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_InvokeAgent.html).
+
+**Bug Fix: Dynamic Region Parameter Support**
+
+Fixed an issue where AWS Bedrock client instances were cached using static keys without including the region parameter. This caused all operations to reuse the first client created, regardless of the region specified in subsequent calls. The region parameter now works correctly at runtime, with each region getting its own cached client instance.

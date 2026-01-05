@@ -47,9 +47,10 @@ public class BedrockClients {
 
   public static BedrockAgentClient getAgentClient(AwsbedrockConfiguration configuration,
                                                   AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("agent", () -> {
+    String region = awsbedrockAgentsParameters.getRegion();
+    return getOrCreateClient("agent-" + region, () -> {
       BedrockAgentClientBuilder bedrockAgentClientBuilder = BedrockAgentClient.builder()
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .fipsEnabled(configuration.getFipsModeEnabled())
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
@@ -63,9 +64,10 @@ public class BedrockClients {
 
   public static BedrockAgentRuntimeAsyncClient getAgentRuntimeAsyncClient(AwsbedrockConfiguration configuration,
                                                                           AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("agentRuntimeAsync", () -> {
+    String region = awsbedrockAgentsParameters.getRegion();
+    return getOrCreateClient("agentRuntimeAsync-" + region, () -> {
       BedrockAgentRuntimeAsyncClientBuilder bedrockAgentRuntimeAsyncClientBuilder = BedrockAgentRuntimeAsyncClient.builder()
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .fipsEnabled(configuration.getFipsModeEnabled())
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
@@ -79,7 +81,7 @@ public class BedrockClients {
 
   public static BedrockRuntimeClient getRuntimeClient(AwsbedrockConfiguration configuration,
                                                       String region) {
-    return getOrCreateClient("runtime", () -> {
+    return getOrCreateClient("runtime-" + region, () -> {
 
       AwsCredentials awsCredentials = createAwsBasicCredentials(configuration);
 
@@ -110,7 +112,7 @@ public class BedrockClients {
 
   public static BedrockClient getBedrockClient(AwsbedrockConfiguration configuration,
                                                String region) {
-    return getOrCreateClient("bedrock", () -> {
+    return getOrCreateClient("bedrock-" + region, () -> {
       AwsCredentials awsCredentials = createAwsBasicCredentials(configuration);
       BedrockClientBuilder bedrockClient = BedrockClient.builder()
           .region(Region.of(region))
@@ -137,18 +139,20 @@ public class BedrockClients {
 
   public static IamClient getIamClient(AwsbedrockConfiguration configuration,
                                        AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("iam", () -> {
+    String region = awsbedrockAgentsParameters.getRegion();
+    return getOrCreateClient("iam-" + region, () -> {
       return IamClient.builder()
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .build();
     });
   }
 
   public static BedrockAgentRuntimeClient getAgentRuntimeClient(AwsbedrockConfiguration configuration,
                                                                 AwsbedrockParameters awsBedrockParameters) {
-    return getOrCreateClient("agentRuntime", () -> BedrockAgentRuntimeClient.builder()
-        .region(Region.of(awsBedrockParameters.getRegion())).build());
+    String region = awsBedrockParameters.getRegion();
+    return getOrCreateClient("agentRuntime-" + region, () -> BedrockAgentRuntimeClient.builder()
+        .region(Region.of(region)).build());
   }
 
 
