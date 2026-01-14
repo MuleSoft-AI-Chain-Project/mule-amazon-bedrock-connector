@@ -19,7 +19,6 @@ import org.mule.sdk.api.annotation.JavaVersionSupport;
 @Xml(prefix = "Bedrock")
 @ErrorTypes(BedrockErrorType.class)
 @JavaVersionSupport({JAVA_17})
-/* @JavaVersionSupport({JAVA_8, JAVA_11, JAVA_17}) */
 
 public class BedrockConnector {
 
