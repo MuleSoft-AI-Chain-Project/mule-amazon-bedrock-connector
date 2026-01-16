@@ -47,9 +47,10 @@ public class BedrockClients {
 
   public static BedrockAgentClient getAgentClient(AwsbedrockConfiguration configuration,
                                                   AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("agent", () -> {
+    String region = awsbedrockAgentsParameters.getRegion();
+    return getOrCreateClient("agent-" + region, () -> {
       BedrockAgentClientBuilder bedrockAgentClientBuilder = BedrockAgentClient.builder()
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .fipsEnabled(configuration.getFipsModeEnabled())
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
@@ -63,23 +64,46 @@ public class BedrockClients {
 
   public static BedrockAgentRuntimeAsyncClient getAgentRuntimeAsyncClient(AwsbedrockConfiguration configuration,
                                                                           AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("agentRuntimeAsync", () -> {
+    return getAgentRuntimeAsyncClient(configuration, awsbedrockAgentsParameters, null, null);
+  }
+
+  public static BedrockAgentRuntimeAsyncClient getAgentRuntimeAsyncClient(AwsbedrockConfiguration configuration,
+                                                                          AwsbedrockAgentsParameters awsbedrockAgentsParameters,
+                                                                          Integer operationTimeout,
+                                                                          TimeUnitEnum operationTimeoutUnit) {
+    String region = awsbedrockAgentsParameters.getRegion();
+
+    // Determine effective timeout (operation-level overrides config-level)
+    Integer effectiveTimeout = operationTimeout != null ? operationTimeout : configuration.getTimeout();
+    TimeUnitEnum effectiveTimeoutUnit = operationTimeoutUnit != null ? operationTimeoutUnit : configuration.getTimeoutUnit();
+
+    // Build cache key including timeout to ensure clients with different timeouts are cached separately
+    // Always include effective timeout in cache key (whether from operation-level or configuration-level)
+    // to prevent clients with different configuration timeouts from sharing the same cached client
+    String cacheKey = "agentRuntimeAsync-" + region + "-timeout-" + effectiveTimeout + "-"
+        + (effectiveTimeoutUnit != null ? effectiveTimeoutUnit.name() : "SECONDS");
+
+    final Integer finalTimeout = effectiveTimeout;
+    final TimeUnitEnum finalTimeoutUnit = effectiveTimeoutUnit;
+
+    return getOrCreateClient(cacheKey, () -> {
       BedrockAgentRuntimeAsyncClientBuilder bedrockAgentRuntimeAsyncClientBuilder = BedrockAgentRuntimeAsyncClient.builder()
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .fipsEnabled(configuration.getFipsModeEnabled())
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)));
 
       if (configuration.getEndpointOverride() != null && !configuration.getEndpointOverride().isBlank()) {
         bedrockAgentRuntimeAsyncClientBuilder.endpointOverride(URI.create(configuration.getEndpointOverride()));
       }
-      bedrockAgentRuntimeAsyncClientBuilder.httpClient(getConfiguredAsyncHttpClient(configuration));
+      bedrockAgentRuntimeAsyncClientBuilder
+          .httpClient(getConfiguredAsyncHttpClient(configuration, finalTimeout, finalTimeoutUnit));
       return bedrockAgentRuntimeAsyncClientBuilder.build();
     });
   }
 
   public static BedrockRuntimeClient getRuntimeClient(AwsbedrockConfiguration configuration,
                                                       String region) {
-    return getOrCreateClient("runtime", () -> {
+    return getOrCreateClient("runtime-" + region, () -> {
 
       AwsCredentials awsCredentials = createAwsBasicCredentials(configuration);
 
@@ -110,7 +134,7 @@ public class BedrockClients {
 
   public static BedrockClient getBedrockClient(AwsbedrockConfiguration configuration,
                                                String region) {
-    return getOrCreateClient("bedrock", () -> {
+    return getOrCreateClient("bedrock-" + region, () -> {
       AwsCredentials awsCredentials = createAwsBasicCredentials(configuration);
       BedrockClientBuilder bedrockClient = BedrockClient.builder()
           .region(Region.of(region))
@@ -137,18 +161,20 @@ public class BedrockClients {
 
   public static IamClient getIamClient(AwsbedrockConfiguration configuration,
                                        AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
-    return getOrCreateClient("iam", () -> {
+    String region = awsbedrockAgentsParameters.getRegion();
+    return getOrCreateClient("iam-" + region, () -> {
       return IamClient.builder()
           .credentialsProvider(StaticCredentialsProvider.create(createAwsBasicCredentials(configuration)))
-          .region(Region.of(awsbedrockAgentsParameters.getRegion()))
+          .region(Region.of(region))
           .build();
     });
   }
 
   public static BedrockAgentRuntimeClient getAgentRuntimeClient(AwsbedrockConfiguration configuration,
                                                                 AwsbedrockParameters awsBedrockParameters) {
-    return getOrCreateClient("agentRuntime", () -> BedrockAgentRuntimeClient.builder()
-        .region(Region.of(awsBedrockParameters.getRegion())).build());
+    String region = awsBedrockParameters.getRegion();
+    return getOrCreateClient("agentRuntime-" + region, () -> BedrockAgentRuntimeClient.builder()
+        .region(Region.of(region)).build());
   }
 
 
@@ -188,6 +214,12 @@ public class BedrockClients {
   }
 
   private static SdkAsyncHttpClient getConfiguredAsyncHttpClient(AwsbedrockConfiguration configuration) {
+    return getConfiguredAsyncHttpClient(configuration, configuration.getTimeout(), configuration.getTimeoutUnit());
+  }
+
+  private static SdkAsyncHttpClient getConfiguredAsyncHttpClient(AwsbedrockConfiguration configuration,
+                                                                 Integer timeout,
+                                                                 TimeUnitEnum timeoutUnit) {
     NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
 
     // Configure HTTP client if proxy or truststore is needed
@@ -219,7 +251,7 @@ public class BedrockClients {
       }
     }
 
-    httpClientBuilder.readTimeout(CommonUtils.toDuration(configuration.getTimeout(), configuration.getTimeoutUnit()));
+    httpClientBuilder.readTimeout(CommonUtils.toDuration(timeout, timeoutUnit));
     return httpClientBuilder.build();
   }
 
