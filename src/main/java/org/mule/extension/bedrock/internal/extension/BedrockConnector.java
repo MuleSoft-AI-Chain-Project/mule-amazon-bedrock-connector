@@ -22,5 +22,4 @@ import org.mule.sdk.api.annotation.JavaVersionSupport;
 
 public class BedrockConnector {
 
-
 }

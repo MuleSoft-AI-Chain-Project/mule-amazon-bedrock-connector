@@ -1,7 +1,7 @@
 package org.mule.extension.bedrock.internal.util;
 
 import java.net.URI;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;

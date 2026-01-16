@@ -2,10 +2,8 @@ package org.mule.extension.bedrock.internal.service;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -17,22 +15,21 @@ import org.json.JSONObject;
 import org.mule.extension.bedrock.api.params.BedrockParameters;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
+import org.mule.extension.bedrock.internal.error.ErrorHandler;
 import org.mule.extension.bedrock.internal.helper.BedrockChatMemory;
 import org.mule.extension.bedrock.internal.helper.PromptPayloadHelper;
+import org.mule.extension.bedrock.internal.helper.request.ConverseStreamRequestBuilder;
+import org.mule.extension.bedrock.internal.helper.streaming.StreamResponseHandlerFactory;
 import org.mule.extension.bedrock.internal.metadata.provider.ModelProvider;
+import org.mule.extension.bedrock.internal.util.BedrockConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
-import software.amazon.awssdk.services.bedrockruntime.model.ConversationRole;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailStreamConfiguration;
-import software.amazon.awssdk.services.bedrockruntime.model.InferenceConfiguration;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
-import software.amazon.awssdk.services.bedrockruntime.model.Message;
 
 
 public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
@@ -177,9 +174,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
-      System.err.printf("ERROR: Can't invoke '%s'. Reason: %s", bedrockParameters.getModelName(),
-                        e.getMessage());
-      throw new RuntimeException(e);
+      throw ErrorHandler.handleSdkClientException(e, bedrockParameters.getModelName());
     }
   }
 
@@ -188,11 +183,10 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
                                    Integer keepLastMessages, BedrockParameters bedrockParameters) {
 
 
-    BedrockChatMemory chatMemory = intializeChatMemory(memoryPath, memoryName);
+    BedrockChatMemory chatMemory = initializeChatMemory(memoryPath, memoryName);
     // Get keepLastMessages
     List<String> keepLastMessagesList = getKeepLastMessage(chatMemory, keepLastMessages);
     keepLastMessagesList.add(prompt);
-    // String memoryPrompt = keepLastMessagesList.toString();
     String memoryPrompt = formatMemoryPrompt(keepLastMessagesList);
 
     String nativeRequest = identifyPayload(memoryPrompt, bedrockParameters);
@@ -205,7 +199,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
         .modelId(bedrockParameters.getModelName())
         .build();
 
-    // logger.info("Native request: " + nativeRequest);
+    logger.debug("Native request: {}", nativeRequest);
 
     InvokeModelResponse response = getConnection().invokeModel(request);
 
@@ -246,7 +240,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
         .orElse("Unsupported model");
   }
 
-  private static BedrockChatMemory intializeChatMemory(String memoryPath, String memoryName) {
+  private static BedrockChatMemory initializeChatMemory(String memoryPath, String memoryName) {
     return new BedrockChatMemory(memoryPath, memoryName);
   }
 
@@ -257,18 +251,21 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
   }
 
   private static boolean isQuestion(String message) {
+    if (message == null || message.isBlank()) {
+      return false;
+    }
+
+    String trimmedMessage = message.trim();
+
     // Check if the message ends with a question mark
-    if (message.trim().endsWith("?")) {
+    if (trimmedMessage.endsWith(BedrockConstants.QUESTION_MARK)) {
       return true;
     }
+
     // Check if the message starts with a question word (case insensitive)
-    String[] questionWords = {"who", "what", "when", "where", "why", "how", "tell", "tell me", "do you", "what is",
-        "can you", "could you", "would you", "is there", "are there", "will you", "won't you", "can't you",
-        "couldn't you", "wouldn't you", "is it", "isn't it", "are they", "aren't they", "will they", "won't they",
-        "can they", "can't they", "could they", "couldn't they", "would they", "wouldn't they"};
-    String lowerCaseMessage = message.trim().toLowerCase();
-    for (String questionWord : questionWords) {
-      if (lowerCaseMessage.startsWith(questionWord + " ")) {
+    String lowerCaseMessage = trimmedMessage.toLowerCase();
+    for (String questionWord : BedrockConstants.QUESTION_WORDS) {
+      if (lowerCaseMessage.startsWith(questionWord + BedrockConstants.SPACE)) {
         return true;
       }
     }
@@ -279,7 +276,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
   public InputStream answerPromptStreaming(String prompt, BedrockParameters bedrockParameters) {
     try {
       PipedOutputStream outputStream = new PipedOutputStream();
-      PipedInputStream inputStream = new PipedInputStream(outputStream, 64 * 1024);
+      PipedInputStream inputStream = new PipedInputStream(outputStream, BedrockConstants.STREAM_BUFFER_SIZE);
 
       // Start the streaming process asynchronously to avoid blocking
       CompletableFuture.runAsync(() -> {
@@ -295,7 +292,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
     } catch (IOException ex) {
       logger.error("Failed to create streaming pipes", ex);
-      throw new RuntimeException("Failed to create streaming pipes", ex);
+      throw new RuntimeException(BedrockConstants.ErrorMessages.STREAMING_PIPE_CREATION_FAILED, ex);
     }
   }
 
@@ -303,136 +300,9 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     // Track if stream is already closed to prevent double-closing
     AtomicBoolean streamClosed = new AtomicBoolean(false);
 
-    Message userMessage = Message.builder()
-        .role(ConversationRole.USER)
-        .content(ContentBlock.fromText(prompt))
-        .build();
-    String modelId = bedrockParameters.getModelName();
-    String accountId = (bedrockParameters.getAwsAccountId() != null && !bedrockParameters.getAwsAccountId().isBlank())
-        ? bedrockParameters.getAwsAccountId()
-        : "076261412953";
-    logger.debug("accountId: {}", accountId);
-    String region = bedrockParameters.getRegion();
-    if (modelId.contains("amazon.nova-premier") ||
-        modelId.contains("anthropic.claude-3") ||
-        modelId.contains("mistral.pixtral") ||
-        modelId.contains("meta.llama4") ||
-        modelId.contains("meta.llama3-3") ||
-        modelId.contains("meta.llama3-2") ||
-        modelId.contains("meta.llama3-1")) {
-
-      modelId = "arn:aws:bedrock:" + region + ":" + accountId + ":inference-profile/us." + modelId;
-    }
-    ConverseStreamRequest.Builder requestBuilder = ConverseStreamRequest.builder()
-        .modelId(modelId)
-        .messages(List.of(userMessage))
-        .inferenceConfig(InferenceConfiguration.builder()
-            .temperature(bedrockParameters.getTemperature())
-            .topP(bedrockParameters.getTopP())
-            .maxTokens(bedrockParameters.getMaxTokenCount())
-            .build());
-
-    // Configure guardrailConfig only if both guardrailIdentifier and guardrailVersion are available
-    String guardrailIdentifier = bedrockParameters.getGuardrailIdentifier();
-    String guardrailVersion = bedrockParameters.getGuardrailVersion();
-    if (guardrailIdentifier != null && !guardrailIdentifier.isBlank()
-        && guardrailVersion != null && !guardrailVersion.isBlank()) {
-      requestBuilder.guardrailConfig(GuardrailStreamConfiguration.builder()
-          .guardrailIdentifier(guardrailIdentifier)
-          .guardrailVersion(guardrailVersion)
-          .build());
-    }
-
-    ConverseStreamRequest request = requestBuilder.build();
-    ConverseStreamResponseHandler handler =
-        ConverseStreamResponseHandler.builder()
-            .onResponse(response -> {
-              // Connection opened successfully
-              logger.debug("Streaming connection opened");
-            })
-            .onEventStream(publisher -> {
-              // Subscribe to event publisher
-              publisher.subscribe(event -> {
-                event.accept( // use Visitor to handle union event
-                             ConverseStreamResponseHandler.Visitor.builder()
-                                 .onContentBlockDelta(deltaEvent -> {
-
-                                   // deltaEvent.delta().text() may be null or text
-                                   String text = deltaEvent.delta().text();
-
-                                   if (text != null && !streamClosed.get()) {
-                                     try {
-                                       System.out.println("[STREAMING] " + text);
-                                       outputStream.write(text.getBytes(StandardCharsets.UTF_8));
-                                       outputStream.flush();
-                                     } catch (IOException e) {
-                                       logger.error("Error writing to stream", e);
-                                       // Stream may be closed by consumer, handle gracefully
-                                       // If stream is not already closed, mark it as closed
-                                       if (streamClosed.compareAndSet(false, true)) {
-                                         closeQuietly(outputStream);
-                                       }
-                                       // Don't throw - let the error handler deal with it
-                                     }
-                                   }
-                                 })
-
-                                 .onMessageStop(stopEvent -> {
-                                   // End of this message - normal completion
-                                   logger.debug("Message stream completed");
-
-                                   if (streamClosed.compareAndSet(false, true)) {
-                                     closeQuietly(outputStream);
-                                   }
-                                 })
-
-                                 .onDefault(unknown -> {
-                                   // Optional: handle other event types
-                                   logger.debug("Received unknown event type: {}", unknown.getClass().getSimpleName());
-
-                                   // Don't close stream for informational events like MessageStart, ContentBlockStop, Metadata
-                                   // Only close on actual completion/error events
-                                   String eventType = unknown.getClass().getSimpleName();
-                                   if (eventType.contains("Stop") || eventType.contains("Complete")
-                                       || eventType.contains("Error")) {
-                                     if (streamClosed.compareAndSet(false, true)) {
-                                       closeQuietly(outputStream);
-                                     }
-                                   }
-                                 })
-                                 .build());
-              });
-            })
-
-            .onError(error -> {
-              // Handle error & cleanup
-              logger.error("Error in streaming response: {}", error.getMessage(), error);
-              if (streamClosed.compareAndSet(false, true)) {
-                // Write error information to stream before closing
-                try {
-                  JSONObject errorJson = new JSONObject();
-                  errorJson.put("error", true);
-                  errorJson.put("message", error.getMessage());
-                  errorJson.put("errorType", error.getClass().getSimpleName());
-                  String errorText = "\n[ERROR: " + errorJson.toString() + "]";
-                  outputStream.write(errorText.getBytes(StandardCharsets.UTF_8));
-                  outputStream.flush();
-                } catch (IOException e) {
-                  logger.warn("Could not write error to stream", e);
-                } finally {
-                  closeQuietly(outputStream);
-                }
-              }
-            })
-
-            .onComplete(() -> {
-              // Stream closed normally
-              logger.debug("Streaming completed");
-              if (streamClosed.compareAndSet(false, true)) {
-                closeQuietly(outputStream);
-              }
-            })
-            .build();
+    // Use Builder pattern to construct request
+    ConverseStreamRequest request = ConverseStreamRequestBuilder.create(bedrockParameters, prompt).build();
+    ConverseStreamResponseHandler handler = StreamResponseHandlerFactory.createHandler(outputStream, streamClosed);
 
     // Start the async streaming - don't block here
     CompletableFuture<Void> future = getConnection().answerPromptStreaming(request, handler);
@@ -454,28 +324,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
    * Handles errors during streaming by writing error information to the stream and then closing it gracefully.
    */
   private void handleStreamingError(PipedOutputStream outputStream, Throwable error) {
-    try {
-      JSONObject errorJson = new JSONObject();
-      errorJson.put("error", true);
-      errorJson.put("message", error.getMessage());
-      errorJson.put("errorType", error.getClass().getSimpleName());
-      if (error.getCause() != null) {
-        errorJson.put("cause", error.getCause().getMessage());
-      }
-      String errorText = "\n[ERROR: " + errorJson.toString() + "]";
-      outputStream.write(errorText.getBytes(StandardCharsets.UTF_8));
-      outputStream.flush();
-    } catch (IOException e) {
-      logger.error("Error writing error information to stream", e);
-    } finally {
-      closeQuietly(outputStream);
-    }
-  }
-
-  private static void closeQuietly(OutputStream os) {
-    try {
-      os.close();
-    } catch (IOException ignored) {
-    }
+    AtomicBoolean streamClosed = new AtomicBoolean(false);
+    StreamResponseHandlerFactory.handleStreamError(error, outputStream, streamClosed);
   }
 }

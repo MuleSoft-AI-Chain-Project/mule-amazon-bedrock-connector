@@ -1,4 +1,4 @@
-package org.mule.extension.aws.commons.internal.connection.provider.parameters;
+package org.mule.extension.aws.connection.provider.parameters;
 
 import java.util.concurrent.TimeUnit;
 import org.mule.runtime.api.meta.ExpressionSupport;

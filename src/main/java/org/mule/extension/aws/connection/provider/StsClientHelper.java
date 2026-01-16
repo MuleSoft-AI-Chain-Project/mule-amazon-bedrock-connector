@@ -1,9 +1,9 @@
-package org.mule.extension.aws.commons.internal.connection.provider;
+package org.mule.extension.aws.connection.provider;
 
 import java.net.URI;
 import org.apache.commons.lang3.StringUtils;
-import org.mule.extension.aws.commons.internal.connection.provider.client.SdkHttpClientFactory;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.client.SdkHttpClientFactory;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
 import org.mule.extension.bedrock.internal.util.RegionUtils;
 import org.mule.runtime.api.connection.ConnectionException;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
