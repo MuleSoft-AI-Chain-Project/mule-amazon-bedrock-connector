@@ -1,9 +1,9 @@
-package org.mule.extension.aws.commons.internal.connection.provider;
+package org.mule.extension.aws.connection.provider;
 
 import java.util.concurrent.atomic.AtomicReference;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
-import org.mule.extension.aws.commons.internal.connection.provider.credentials.AssumeRoleCredentialsProvider;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.credentials.AssumeRoleCredentialsProvider;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;

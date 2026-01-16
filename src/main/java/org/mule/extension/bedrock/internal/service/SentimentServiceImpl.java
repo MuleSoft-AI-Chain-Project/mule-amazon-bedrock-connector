@@ -3,6 +3,7 @@ package org.mule.extension.bedrock.internal.service;
 import org.mule.extension.bedrock.api.params.BedrockParameters;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
+import org.mule.extension.bedrock.internal.error.ErrorHandler;
 import org.mule.extension.bedrock.internal.helper.PromptPayloadHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +30,7 @@ public class SentimentServiceImpl extends BedrockServiceImpl implements Sentimen
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
-      System.err.printf("ERROR: Can't invoke '%s'. Reason: %s", bedrockParameters.getModelName(),
-                        e.getMessage());
-      throw new RuntimeException(e);
+      throw ErrorHandler.handleSdkClientException(e, bedrockParameters.getModelName());
     }
 
   }

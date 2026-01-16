@@ -1,4 +1,4 @@
-package org.mule.extension.aws.commons.internal.connection.provider.credentials;
+package org.mule.extension.aws.connection.provider.credentials;
 
 import java.time.Duration;
 import java.time.Instant;

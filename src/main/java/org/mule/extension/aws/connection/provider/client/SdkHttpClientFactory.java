@@ -1,4 +1,4 @@
-package org.mule.extension.aws.commons.internal.connection.provider.client;
+package org.mule.extension.aws.connection.provider.client;
 
 import java.io.FileInputStream;
 import java.net.URI;
@@ -8,8 +8,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import javax.net.ssl.TrustManagerFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.ProxyParameterGroup;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.parameters.ProxyParameterGroup;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

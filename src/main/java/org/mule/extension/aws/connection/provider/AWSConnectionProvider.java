@@ -1,12 +1,12 @@
-package org.mule.extension.aws.commons.internal.connection.provider;
+package org.mule.extension.aws.connection.provider;
 
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
 
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import org.mule.connectors.commons.template.connection.ConnectorConnectionProvider;
-import org.mule.extension.aws.commons.internal.connection.provider.client.SdkHttpClientFactory;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.ProxyParameterGroup;
+import org.mule.extension.aws.connection.provider.client.SdkHttpClientFactory;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.parameters.ProxyParameterGroup;
 import org.mule.runtime.api.connection.CachedConnectionProvider;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.exception.MuleException;

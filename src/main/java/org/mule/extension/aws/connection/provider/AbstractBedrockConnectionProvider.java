@@ -1,9 +1,9 @@
-package org.mule.extension.aws.commons.internal.connection.provider;
+package org.mule.extension.aws.connection.provider;
 
 import static org.mule.extension.bedrock.internal.util.StringUtils.isPresent;
 
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
-import org.mule.extension.aws.commons.internal.connection.provider.parameters.CommonParameters;
+import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
 import org.mule.extension.bedrock.internal.error.exception.AWSConnectionException;
 import org.mule.runtime.api.connection.ConnectionException;
 

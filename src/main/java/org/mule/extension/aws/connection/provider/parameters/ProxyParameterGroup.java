@@ -1,4 +1,4 @@
-package org.mule.extension.aws.commons.internal.connection.provider.parameters;
+package org.mule.extension.aws.connection.provider.parameters;
 
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
