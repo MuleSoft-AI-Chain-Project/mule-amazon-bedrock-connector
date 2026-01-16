@@ -12,14 +12,50 @@
     <groupId>com.mulesoft.connectors</groupId>
     <artifactId>mule4-amazon-bedrock-connector</artifactId>
     <version>1.0.0-SNAPSHOT</version>
-
     <packaging>mule-extension</packaging>
-    <name>Amazon Bedrock Connector - Mule 4</name>
+    <name>MuleSoft Amazon Bedrock Connector - Mule 4</name>
+    <description>The MuleSoft Amazon Bedrock connector is designed to provide access to Amazon Bedrock foundational models from mule applications</description>
+    <url>https://mac-project.ai/docs/aws-bedrock/connector-overview</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://www.opensource.org/licenses/mit-license.php</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Amir Khan</name>
+            <email>amir.khan@mulesoft.com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.mulesoft.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Nico Balestra</name>
+            <email>nbalestra@salesforce.com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.salesforce.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Tommaso Bolis</name>
+            <email>tbolis-at-salesforce-dot-com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.salesforce.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Ryan Hoegg</name>
+            <email>ryan@hoegg.software</email>
+            <organization>Hoegg Software, Co.</organization>
+            <organizationUrl>https://hoegg.software</organizationUrl>
+        </developer>
+    </developers>
+
     <scm>
-        <connection>scm:git:git@github.com:mulesoft/bedrock-connector.git</connection>
-        <developerConnection>scm:git:git@github.com:mulesoft/bedrock-connector.git</developerConnection>
+        <connection>scm:git:git://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</connection>
+        <developerConnection>scm:git:ssh://github.com:MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</developerConnection>
         <tag>mule-amazon-bedrock-connector-1.6.0</tag>
-        <url>https://github.com/mulesoft/bedrock-connector</url>
+        <url>https://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector/tree/master</url>
     </scm>
 
     <properties>
