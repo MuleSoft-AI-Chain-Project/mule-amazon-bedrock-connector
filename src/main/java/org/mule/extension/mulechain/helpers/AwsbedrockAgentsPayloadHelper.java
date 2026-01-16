@@ -5,15 +5,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.mulechain.internal.AwsbedrockConfiguration;
+import org.mule.extension.mulechain.internal.TimeUnitEnum;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsMultipleFilteringParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsResponseParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsSessionParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -590,27 +593,57 @@ public class AwsbedrockAgentsPayloadHelper {
                                      AwsbedrockAgentsSessionParameters awsbedrockAgentsSessionParameters,
                                      AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                      AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
-                                     AwsbedrockAgentsParameters awsbedrockAgentsParameters) {
+                                     AwsbedrockAgentsParameters awsbedrockAgentsParameters,
+                                     AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
-      BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(configuration,
-                                                                                                                awsbedrockAgentsParameters);
+      // Get effective timeout (operation-level overrides config-level)
+      Integer operationTimeout = awsBedrockAgentsResponseParameters != null
+          ? awsBedrockAgentsResponseParameters.getRequestTimeout()
+          : null;
+      TimeUnitEnum operationTimeoutUnit = awsBedrockAgentsResponseParameters != null
+          ? awsBedrockAgentsResponseParameters.getRequestTimeoutUnit()
+          : null;
+
+      BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(
+                                                                                                                configuration,
+                                                                                                                awsbedrockAgentsParameters,
+                                                                                                                operationTimeout,
+                                                                                                                operationTimeoutUnit);
 
       String sessionId = awsbedrockAgentsSessionParameters.getSessionId();
       String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
           : UUID.randomUUID().toString();
       logger.info("Using sessionId: {}", effectiveSessionId);
 
-      return invokeAgent(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
-                         awsbedrockAgentsSessionParameters.getExcludePreviousThinkingSteps(),
-                         awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
-                         buildKnowledgeBaseConfigs(awsBedrockAgentsFilteringParameters,
-                                                   awsBedrockAgentsMultipleFilteringParameters),
-                         bedrockAgentRuntimeAsyncClient)
-          .thenApply(response -> {
-            logger.debug(response);
-            return response;
-          }).join();
+      // Create retry configuration from response parameters
+      StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getMaxRetries()
+                                                                                                : 3,
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getRetryBackoffMs()
+                                                                                                : 1000L,
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getEnableRetry()
+                                                                                                : false);
+
+      // Execute with retry logic for non-streaming operation
+      return StreamingRetryUtility.executeWithRetry(() -> {
+        return invokeAgent(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
+                           awsbedrockAgentsSessionParameters.getExcludePreviousThinkingSteps(),
+                           awsbedrockAgentsSessionParameters.getPreviousConversationTurnsToInclude(),
+                           buildKnowledgeBaseConfigs(awsBedrockAgentsFilteringParameters,
+                                                     awsBedrockAgentsMultipleFilteringParameters),
+                           bedrockAgentRuntimeAsyncClient)
+            .thenApply(response -> {
+              logger.debug(response);
+              return response;
+            }).join();
+      }, retryConfig);
     });
   }
 
@@ -740,23 +773,51 @@ public class AwsbedrockAgentsPayloadHelper {
                                                    AwsbedrockAgentsSessionParameters awsBedrockSessionParameters,
                                                    AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                                    AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
-                                                   AwsbedrockAgentsParameters awsBedrockParameters) {
+                                                   AwsbedrockAgentsParameters awsBedrockParameters,
+                                                   AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
-      BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(configuration,
-                                                                                                                awsBedrockParameters);
+      // Get effective timeout (operation-level overrides config-level)
+      Integer operationTimeout = awsBedrockAgentsResponseParameters != null
+          ? awsBedrockAgentsResponseParameters.getRequestTimeout()
+          : null;
+      TimeUnitEnum operationTimeoutUnit = awsBedrockAgentsResponseParameters != null
+          ? awsBedrockAgentsResponseParameters.getRequestTimeoutUnit()
+          : null;
+
+      BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient = BedrockClients.getAgentRuntimeAsyncClient(
+                                                                                                                configuration,
+                                                                                                                awsBedrockParameters,
+                                                                                                                operationTimeout,
+                                                                                                                operationTimeoutUnit);
 
       String sessionId = awsBedrockSessionParameters.getSessionId();
       String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
           : UUID.randomUUID().toString();
       logger.info("Using sessionId: {}", effectiveSessionId);
 
+      // Create retry configuration from response parameters
+      StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getMaxRetries()
+                                                                                                : 3,
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getRetryBackoffMs()
+                                                                                                : 1000L,
+                                                                                            awsBedrockAgentsResponseParameters != null
+                                                                                                ? awsBedrockAgentsResponseParameters
+                                                                                                    .getEnableRetry()
+                                                                                                : false);
+
       return invokeAgentSSEStream(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                                   awsBedrockSessionParameters.getExcludePreviousThinkingSteps(),
                                   awsBedrockSessionParameters.getPreviousConversationTurnsToInclude(),
                                   buildKnowledgeBaseConfigs(awsBedrockAgentsFilteringParameters,
                                                             awsBedrockAgentsMultipleFilteringParameters),
-                                  bedrockAgentRuntimeAsyncClient);
+                                  bedrockAgentRuntimeAsyncClient,
+                                  retryConfig);
     });
   }
 
@@ -769,22 +830,41 @@ public class AwsbedrockAgentsPayloadHelper {
                                                  Boolean enableTrace, Boolean latencyOptimized, String sessionId,
                                                  Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                                  java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
-                                                 BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient) {
+                                                 BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient,
+                                                 StreamingRetryUtility.RetryConfig retryConfig) {
     try {
       // Create piped streams for real-time streaming
       PipedOutputStream outputStream = new PipedOutputStream();
       PipedInputStream inputStream = new PipedInputStream(outputStream);
 
+      // Track if chunks have been received (for retry logic)
+      AtomicBoolean chunksReceived = new AtomicBoolean(false);
+      // Track if session-start has been sent (for consistency - always send before error if not already sent)
+      AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+
       // Start the streaming process asynchronously
       CompletableFuture.runAsync(() -> {
         try {
-          streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
-                                excludePreviousThinkingSteps, previousConversationTurnsToInclude,
-                                knowledgeBaseConfigs, bedrockAgentRuntimeAsyncClient, outputStream);
+          streamBedrockResponseWithRetry(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
+                                         excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                                         knowledgeBaseConfigs, bedrockAgentRuntimeAsyncClient, outputStream,
+                                         retryConfig, chunksReceived, sessionStartSent);
         } catch (Exception e) {
           try {
-            // Send error as SSE event
-            String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
+            // Send session-start event before error if not already sent (for consistency)
+            if (sessionStartSent.compareAndSet(false, true)) {
+              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString());
+              String sseStart = formatSSEEvent("session-start", startEvent.toString());
+              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
+              outputStream.flush();
+              logger.info(sseStart);
+            }
+
+            // streamBedrockResponseWithRetry already enhances the error message with retry information
+            // The exception message already contains retry details if retries were attempted
+            // Send error as SSE event (createErrorJson will use the exception's message which is already enhanced)
+            JSONObject errorJson = createErrorJson(e);
+            String errorEvent = formatSSEEvent("error", errorJson.toString());
             outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
             outputStream.close();
@@ -806,21 +886,69 @@ public class AwsbedrockAgentsPayloadHelper {
     }
   }
 
+  /**
+   * Wrapper method that adds retry logic around streamBedrockResponse. Only retries if no chunks have been received yet.
+   */
+  private static void streamBedrockResponseWithRetry(String agentAlias, String agentId, String prompt, Boolean enableTrace,
+                                                     Boolean latencyOptimized, String sessionId,
+                                                     Boolean excludePreviousThinkingSteps,
+                                                     Integer previousConversationTurnsToInclude,
+                                                     java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
+                                                     BedrockAgentRuntimeAsyncClient client,
+                                                     PipedOutputStream outputStream,
+                                                     StreamingRetryUtility.RetryConfig retryConfig,
+                                                     AtomicBoolean chunksReceived,
+                                                     AtomicBoolean sessionStartSent)
+      throws ExecutionException, InterruptedException, IOException {
+
+    StreamingRetryUtility.StreamingOperation operation = () -> {
+      streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
+                            excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                            knowledgeBaseConfigs, client, outputStream, chunksReceived, sessionStartSent);
+    };
+
+    StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
+                                                                                      operation, retryConfig, chunksReceived);
+
+    if (!result.isSuccess()) {
+      // Create enhanced error message with retry information
+      String errorMessage = StreamingRetryUtility.createRetryErrorMessage(
+                                                                          result.getLastException().getMessage() != null
+                                                                              ? result.getLastException().getMessage()
+                                                                              : result.getLastException().getClass()
+                                                                                  .getSimpleName(),
+                                                                          result.getAttemptsMade(),
+                                                                          retryConfig.getMaxRetries(),
+                                                                          result.isChunksReceived());
+
+      // Re-throw the original exception with enhanced message
+      // If it's an ExecutionException, InterruptedException, or IOException, preserve the type
+      Exception lastException = result.getLastException();
+      if (lastException instanceof ExecutionException) {
+        throw new ExecutionException(errorMessage, lastException.getCause());
+      } else if (lastException instanceof InterruptedException) {
+        InterruptedException ie = new InterruptedException(errorMessage);
+        ie.initCause(lastException);
+        throw ie;
+      } else if (lastException instanceof IOException) {
+        throw new IOException(errorMessage, lastException);
+      } else {
+        // For other exceptions, wrap in RuntimeException
+        throw new RuntimeException(errorMessage, lastException);
+      }
+    }
+  }
+
   private static void streamBedrockResponse(String agentAlias, String agentId, String prompt, Boolean enableTrace,
                                             Boolean latencyOptimized, String sessionId,
                                             Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                             java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
                                             BedrockAgentRuntimeAsyncClient client,
-                                            PipedOutputStream outputStream)
+                                            PipedOutputStream outputStream,
+                                            AtomicBoolean chunksReceived,
+                                            AtomicBoolean sessionStartSent)
       throws ExecutionException, InterruptedException, IOException {
     long startTime = System.currentTimeMillis();
-
-    // Send initial event
-    JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString());
-    String sseStart = formatSSEEvent("session-start", startEvent.toString());
-    outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-    outputStream.flush();
-    logger.info(sseStart);
 
     InvokeAgentRequest request = InvokeAgentRequest.builder()
         .agentId(agentId)
@@ -837,6 +965,18 @@ public class AwsbedrockAgentsPayloadHelper {
     InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
         .onChunk(chunk -> {
           try {
+            // Mark that chunks have been received (for retry logic)
+            chunksReceived.set(true);
+
+            // Send session-start event before the first chunk
+            if (sessionStartSent.compareAndSet(false, true)) {
+              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString());
+              String sseStart = formatSSEEvent("session-start", startEvent.toString());
+              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
+              outputStream.flush();
+              logger.info(sseStart);
+            }
+
             JSONObject chunkData = createChunkJson(chunk);
             String sseEvent = formatSSEEvent("chunk", chunkData.toString());
             outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
@@ -960,7 +1100,7 @@ public class AwsbedrockAgentsPayloadHelper {
                                                                                           kb.getRerankingConfiguration());
         KnowledgeBaseConfiguration.Builder kbConfigBuilder = KnowledgeBaseConfiguration.builder()
             .knowledgeBaseId(kb.getKnowledgeBaseId());
-        
+
         // Only add retrieval configuration if we have a vector search configuration
         if (vectorCfg != null) {
           KnowledgeBaseRetrievalConfiguration retrievalCfg = KnowledgeBaseRetrievalConfiguration.builder()
@@ -968,7 +1108,7 @@ public class AwsbedrockAgentsPayloadHelper {
               .build();
           kbConfigBuilder.retrievalConfiguration(retrievalCfg);
         }
-        
+
         return kbConfigBuilder.build();
       }).collect(Collectors.toList());
 
