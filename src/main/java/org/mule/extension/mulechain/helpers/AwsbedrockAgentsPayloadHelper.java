@@ -16,6 +16,7 @@ import org.mule.extension.mulechain.internal.TimeUnitEnum;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsMultipleFilteringParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsParameters;
+import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsResponseLoggingParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsResponseParameters;
 import org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsSessionParameters;
 import org.slf4j.Logger;
@@ -594,7 +595,8 @@ public class AwsbedrockAgentsPayloadHelper {
                                      AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                      AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
                                      AwsbedrockAgentsParameters awsbedrockAgentsParameters,
-                                     AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters) {
+                                     AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters,
+                                     AwsbedrockAgentsResponseLoggingParameters awsBedrockAgentsResponseLoggingParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
       // Get effective timeout (operation-level overrides config-level)
@@ -774,7 +776,8 @@ public class AwsbedrockAgentsPayloadHelper {
                                                    AwsbedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
                                                    AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
                                                    AwsbedrockAgentsParameters awsBedrockParameters,
-                                                   AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters) {
+                                                   AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters,
+                                                   AwsbedrockAgentsResponseLoggingParameters awsBedrockAgentsResponseLoggingParameters) {
 
     return BedrockClientInvoker.executeWithErrorHandling(() -> {
       // Get effective timeout (operation-level overrides config-level)
@@ -811,13 +814,24 @@ public class AwsbedrockAgentsPayloadHelper {
                                                                                                     .getEnableRetry()
                                                                                                 : false);
 
+      String requestId = awsBedrockAgentsResponseLoggingParameters != null
+          ? awsBedrockAgentsResponseLoggingParameters.getRequestId()
+          : null;
+      String correlationId = awsBedrockAgentsResponseLoggingParameters != null
+          ? awsBedrockAgentsResponseLoggingParameters.getCorrelationId()
+          : null;
+      String userId = awsBedrockAgentsResponseLoggingParameters != null
+          ? awsBedrockAgentsResponseLoggingParameters.getUserId()
+          : null;
+
       return invokeAgentSSEStream(agentAlias, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                                   awsBedrockSessionParameters.getExcludePreviousThinkingSteps(),
                                   awsBedrockSessionParameters.getPreviousConversationTurnsToInclude(),
                                   buildKnowledgeBaseConfigs(awsBedrockAgentsFilteringParameters,
                                                             awsBedrockAgentsMultipleFilteringParameters),
                                   bedrockAgentRuntimeAsyncClient,
-                                  retryConfig);
+                                  retryConfig,
+                                  requestId, correlationId, userId);
     });
   }
 
@@ -831,7 +845,8 @@ public class AwsbedrockAgentsPayloadHelper {
                                                  Boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                                  java.util.List<org.mule.extension.mulechain.internal.agents.AwsbedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
                                                  BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient,
-                                                 StreamingRetryUtility.RetryConfig retryConfig) {
+                                                 StreamingRetryUtility.RetryConfig retryConfig,
+                                                 String requestId, String correlationId, String userId) {
     try {
       // Create piped streams for real-time streaming
       PipedOutputStream outputStream = new PipedOutputStream();
@@ -848,12 +863,13 @@ public class AwsbedrockAgentsPayloadHelper {
           streamBedrockResponseWithRetry(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
                                          excludePreviousThinkingSteps, previousConversationTurnsToInclude,
                                          knowledgeBaseConfigs, bedrockAgentRuntimeAsyncClient, outputStream,
-                                         retryConfig, chunksReceived, sessionStartSent);
+                                         retryConfig, chunksReceived, sessionStartSent, requestId, correlationId, userId);
         } catch (Exception e) {
           try {
             // Send session-start event before error if not already sent (for consistency)
             if (sessionStartSent.compareAndSet(false, true)) {
-              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString());
+              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString(),
+                                                             requestId, correlationId, userId);
               String sseStart = formatSSEEvent("session-start", startEvent.toString());
               outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
               outputStream.flush();
@@ -898,13 +914,15 @@ public class AwsbedrockAgentsPayloadHelper {
                                                      PipedOutputStream outputStream,
                                                      StreamingRetryUtility.RetryConfig retryConfig,
                                                      AtomicBoolean chunksReceived,
-                                                     AtomicBoolean sessionStartSent)
+                                                     AtomicBoolean sessionStartSent,
+                                                     String requestId, String correlationId, String userId)
       throws ExecutionException, InterruptedException, IOException {
 
     StreamingRetryUtility.StreamingOperation operation = () -> {
       streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
                             excludePreviousThinkingSteps, previousConversationTurnsToInclude,
-                            knowledgeBaseConfigs, client, outputStream, chunksReceived, sessionStartSent);
+                            knowledgeBaseConfigs, client, outputStream, chunksReceived, sessionStartSent, requestId,
+                            correlationId, userId);
     };
 
     StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
@@ -946,7 +964,8 @@ public class AwsbedrockAgentsPayloadHelper {
                                             BedrockAgentRuntimeAsyncClient client,
                                             PipedOutputStream outputStream,
                                             AtomicBoolean chunksReceived,
-                                            AtomicBoolean sessionStartSent)
+                                            AtomicBoolean sessionStartSent,
+                                            String requestId, String correlationId, String userId)
       throws ExecutionException, InterruptedException, IOException {
     long startTime = System.currentTimeMillis();
 
@@ -970,7 +989,8 @@ public class AwsbedrockAgentsPayloadHelper {
 
             // Send session-start event before the first chunk
             if (sessionStartSent.compareAndSet(false, true)) {
-              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString());
+              JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString(),
+                                                             requestId, correlationId, userId);
               String sseStart = formatSSEEvent("session-start", startEvent.toString());
               outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
               outputStream.flush();
@@ -1001,7 +1021,8 @@ public class AwsbedrockAgentsPayloadHelper {
           try {
             // Send completion event
             long endTime = System.currentTimeMillis();
-            JSONObject completionData = createCompletionJson(sessionId, agentId, agentAlias, endTime - startTime);
+            JSONObject completionData =
+                createCompletionJson(sessionId, agentId, agentAlias, endTime - startTime, requestId, correlationId, userId);
             String completionEvent = formatSSEEvent("session-complete", completionData.toString());
             outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
@@ -1050,7 +1071,8 @@ public class AwsbedrockAgentsPayloadHelper {
   }
 
   private static JSONObject createSessionStartJson(String agentAlias, String agentId, String prompt,
-                                                   String sessionId, String timestamp) {
+                                                   String sessionId, String timestamp, String requestId, String correlationId,
+                                                   String userId) {
     JSONObject startData = new JSONObject();
     startData.put(SESSION_ID, sessionId);
     startData.put(AGENT_ID, agentId);
@@ -1058,10 +1080,20 @@ public class AwsbedrockAgentsPayloadHelper {
     startData.put(PROMPT, prompt);
     startData.put(PROCESSED_AT, timestamp);
     startData.put("status", "started");
+    if (requestId != null && !requestId.isEmpty()) {
+      startData.put("requestId", requestId);
+    }
+    if (correlationId != null && !correlationId.isEmpty()) {
+      startData.put("correlationId", correlationId);
+    }
+    if (userId != null && !userId.isEmpty()) {
+      startData.put("userId", userId);
+    }
     return startData;
   }
 
-  private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration) {
+  private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration,
+                                                 String requestId, String correlationId, String userId) {
     JSONObject completionData = new JSONObject();
     completionData.put(SESSION_ID, sessionId);
     completionData.put(AGENT_ID, agentId);
@@ -1069,6 +1101,15 @@ public class AwsbedrockAgentsPayloadHelper {
     completionData.put("status", "completed");
     completionData.put("total_duration_ms", duration);
     completionData.put(TIMESTAMP, Instant.now().toString());
+    if (requestId != null && !requestId.isEmpty()) {
+      completionData.put("requestId", requestId);
+    }
+    if (correlationId != null && !correlationId.isEmpty()) {
+      completionData.put("correlationId", correlationId);
+    }
+    if (userId != null && !userId.isEmpty()) {
+      completionData.put("userId", userId);
+    }
     return completionData;
   }
 

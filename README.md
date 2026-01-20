@@ -91,8 +91,23 @@ Added operation-level timeout configuration in the "Response" tab for agent oper
 
 **UI Changes:**
 - New "Response" tab added to agent chat operations (appears below "MIME Type" tab)
-- Retry parameters moved from "Additional properties" to "Response" tab
-- "Additional properties" now only contains `modelName` and `region`
+- New "Response Logging" section added within the "Response" tab (appears below the "Response" section)
+
+**New Feature: Response Logging Fields**
+
+Added response logging fields to capture client request metadata in streaming agent operations. These fields allow you to track and correlate requests through the entire streaming lifecycle.
+
+**How It Works:**
+- All three fields are optional and can be populated using DataWeave expressions (e.g., `#[attributes.headers.'REQUEST-ID']`)
+- When provided, these fields are included in both `session-start` and `session-complete` SSE events
+- Fields are only included in the JSON if they have non-empty values
+- The "Response Logging" section appears as a separate section within the "Response" tab, below the "Response" section
+
+**Benefits:**
+- Track requests end-to-end through the streaming lifecycle
+- Correlate session-start and session-complete events using request/correlation IDs
+- Associate requests with specific users for auditing and analytics
+- Improve observability and debugging capabilities
 
 **Behavior Change: Streaming Agent Operation Session Start Event**
 
@@ -120,7 +135,8 @@ The `session-start` SSE event in the streaming agent operation (`AGENT-chat-stre
 - Retry is opt-in (disabled by default)
 - This is a **behavioral change** for `session-start` event timing that may affect clients expecting `session-start` immediately upon stream initiation
 - Clients should now wait for the first chunk to receive the `session-start` event
-- The event still contains the same metadata (sessionId, agentId, agentAlias, prompt, timestamp, status)
+- The event contains metadata (sessionId, agentId, agentAlias, prompt, timestamp, status) and optionally includes requestId, correlationId, and userId if provided in the Response Logging section
+- The same logging fields (requestId, correlationId, userId) are also included in the `session-complete` event for end-to-end correlation
 
 **Security Updates: Dependency Upgrades**
 
@@ -175,6 +191,37 @@ The reranking configuration is part of the knowledge base configuration and can 
 - Leverage Amazon Bedrock's reranker models for better search quality
 
 For more information, see the [AWS Bedrock documentation on reranking](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_InvokeAgent.html).
+
+**New Feature: Response Logging Fields**
+
+Added response logging fields to capture client request metadata in streaming agent operations. These fields allow you to track and correlate requests through the entire streaming lifecycle.
+
+**Response Logging Section Parameters:**
+- **Request ID**: Mapped from `REQUEST-ID` header - *Optional*
+- **Correlation ID**: Mapped from `CORRELATION-ID` header - *Optional*
+- **User ID**: Mapped from `USER-ID` header - *Optional*
+
+**How It Works:**
+- All three fields are optional and can be populated using DataWeave expressions (e.g., `#[attributes.headers.'REQUEST-ID']`)
+- When provided, these fields are included in both `session-start` and `session-complete` SSE events
+- Fields are only included in the JSON if they have non-empty values
+- The "Response Logging" section appears as a separate section within the "Response" tab, below the "Response" section
+
+**Usage Example:**
+```xml
+<mac-bedrock:agent-chat-streaming-s-s-e 
+    ...
+    requestId="#[attributes.headers.'REQUEST-ID']"
+    correlationId="#[attributes.headers.'CORRELATION-ID']"
+    userId="#[attributes.headers.'USER-ID']"
+    ... />
+```
+
+**Benefits:**
+- Track requests end-to-end through the streaming lifecycle
+- Correlate session-start and session-complete events using request/correlation IDs
+- Associate requests with specific users for auditing and analytics
+- Improve observability and debugging capabilities
 
 **Bug Fix: Dynamic Region Parameter Support**
 
