@@ -1,0 +1,56 @@
+package org.mule.extension.bedrock.api.params;
+
+import java.util.Map;
+import org.mule.runtime.extension.api.annotation.param.Parameter;
+import org.mule.sdk.api.annotation.param.Optional;
+
+public class BedrockAgentsFilteringParameters {
+
+  public enum RetrievalMetadataFilterType {
+    AND_ALL, OR_ALL
+  }
+
+  public enum SearchType {
+    HYBRID, SEMANTIC
+  }
+
+  @Parameter
+  @Optional
+  private String knowledgeBaseId;
+
+  @Parameter
+  @Optional
+  private Integer numberOfResults;
+
+  @Parameter
+  @Optional
+  private SearchType overrideSearchType;
+
+  @Parameter
+  @Optional
+  private RetrievalMetadataFilterType retrievalMetadataFilterType;
+
+  @Parameter
+  @Optional
+  private Map<String, String> metadataFilters;
+
+  public String getKnowledgeBaseId() {
+    return knowledgeBaseId;
+  }
+
+  public Integer getNumberOfResults() {
+    return numberOfResults;
+  }
+
+  public SearchType getOverrideSearchType() {
+    return overrideSearchType;
+  }
+
+  public RetrievalMetadataFilterType getRetrievalMetadataFilterType() {
+    return retrievalMetadataFilterType;
+  }
+
+  public Map<String, String> getMetadataFilters() {
+    return metadataFilters;
+  }
+}
