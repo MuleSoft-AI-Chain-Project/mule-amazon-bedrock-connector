@@ -2,6 +2,12 @@ package org.mule.extension.bedrock.internal.connection;
 
 import java.util.concurrent.CompletableFuture;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
+import org.mule.extension.bedrock.internal.error.BedrockErrorType;
+import org.mule.extension.bedrock.internal.error.ErrorHandler;
+import org.mule.extension.bedrock.internal.error.exception.BedrockException;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
 import software.amazon.awssdk.services.bedrock.model.GetCustomModelRequest;
@@ -12,6 +18,8 @@ import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
+import software.amazon.awssdk.services.bedrockagent.model.AccessDeniedException;
+import software.amazon.awssdk.services.bedrockagent.model.BedrockAgentException;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
 import software.amazon.awssdk.services.bedrockagent.model.CreateAgentRequest;
@@ -28,6 +36,9 @@ import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
 import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentResponse;
+import software.amazon.awssdk.services.bedrockagent.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.bedrockagent.model.ThrottlingException;
+import software.amazon.awssdk.services.bedrockagent.model.ValidationException;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
@@ -133,7 +144,49 @@ public class BedrockConnection implements ConnectorConnection {
 
   @Override
   public void validate() {
-
+    // Validate connection by making a lightweight API call
+    // This will throw an exception if credentials are invalid
+    try {
+      getBedrockClient().listFoundationModels(r -> {
+      });
+    } catch (software.amazon.awssdk.services.bedrock.model.BedrockException e) {
+      // Handle Bedrock service exceptions (from bedrock service, not bedrockagent)
+      // Check if it's a 403 (Forbidden) which indicates invalid credentials
+      if (e.statusCode() == 403) {
+        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+      }
+      // For other Bedrock service errors, use SERVICE_ERROR
+      throw new BedrockException("Bedrock service error", BedrockErrorType.SERVICE_ERROR, e);
+    } catch (AccessDeniedException e) {
+      throw ErrorHandler.handleAccessDeniedException(e);
+    } catch (ValidationException e) {
+      throw ErrorHandler.handleValidationException(e);
+    } catch (ResourceNotFoundException e) {
+      throw ErrorHandler.handleResourceNotFoundException(e);
+    } catch (ThrottlingException e) {
+      throw ErrorHandler.handleThrottlingException(e);
+    } catch (BedrockAgentException e) {
+      throw ErrorHandler.handleBedrockAgentException(e);
+    } catch (SdkServiceException e) {
+      // Check if it's a 403 (Forbidden) which indicates invalid credentials
+      if (e.statusCode() == 403) {
+        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+      }
+      throw ErrorHandler.handleSdkServiceException(e);
+    } catch (SdkClientException e) {
+      // Check if it's an authentication error (invalid credentials)
+      // SdkClientException for auth errors typically contains "Unable to load credentials"
+      // or similar messages, but network errors also use SdkClientException
+      String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+      if (message.contains("unable to load credentials") ||
+          (message.contains("invalid") && message.contains("credential"))) {
+        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+      }
+      // For other client errors (like network issues), use CLIENT_ERROR
+      throw ErrorHandler.handleSdkClientException(e, "Connection validation");
+    } catch (SdkException e) {
+      throw ErrorHandler.handleSdkException(e);
+    }
   }
 
 
