@@ -156,12 +156,18 @@ public class AwsbedrockAgentsOperations {
                                    @ParameterGroup(
                                        name = "Knowledge Base Metadata Filtering (for multiple KB Ids)") AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
                                    @ParameterGroup(
-                                       name = "Additional properties") AwsbedrockAgentsParameters awsBedrockAgentsParameters) {
+                                       name = "Additional properties") AwsbedrockAgentsParameters awsBedrockAgentsParameters,
+                                   @ParameterGroup(
+                                       name = "Response") AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters,
+                                   @ParameterGroup(
+                                       name = "Response Logging") AwsbedrockAgentsResponseLoggingParameters awsBedrockAgentsResponseLoggingParameters) {
     String response = AwsbedrockAgentsPayloadHelper.chatWithAgent(agentAliasId, agentId, prompt, enableTrace,
                                                                   latencyOptimized, configuration, awsBedrockSessionParameters,
                                                                   awsBedrockAgentsFilteringParameters,
                                                                   awsBedrockAgentsMultipleFilteringParameters,
-                                                                  awsBedrockAgentsParameters);
+                                                                  awsBedrockAgentsParameters,
+                                                                  awsBedrockAgentsResponseParameters,
+                                                                  awsBedrockAgentsResponseLoggingParameters);
     return toInputStream(response, StandardCharsets.UTF_8);
   }
 
@@ -180,12 +186,18 @@ public class AwsbedrockAgentsOperations {
                                             @ParameterGroup(
                                                 name = "Knowledge Base Metadata Filtering (for multiple KB Ids)") AwsbedrockAgentsMultipleFilteringParameters awsBedrockAgentsMultipleFilteringParameters,
                                             @ParameterGroup(
-                                                name = "Additional properties") AwsbedrockAgentsParameters awsBedrockAgentsParameters) {
+                                                name = "Additional properties") AwsbedrockAgentsParameters awsBedrockAgentsParameters,
+                                            @ParameterGroup(
+                                                name = "Response") AwsbedrockAgentsResponseParameters awsBedrockAgentsResponseParameters,
+                                            @ParameterGroup(
+                                                name = "Response Logging") AwsbedrockAgentsResponseLoggingParameters awsBedrockAgentsResponseLoggingParameters) {
     return AwsbedrockAgentsPayloadHelper.chatWithAgentSSEStream(agentAliasId, agentId, prompt, enableTrace,
                                                                 latencyOptimized, configuration, awsBedrockSessionParameters,
                                                                 awsBedrockAgentsFilteringParameters,
                                                                 awsBedrockAgentsMultipleFilteringParameters,
-                                                                awsBedrockAgentsParameters);
+                                                                awsBedrockAgentsParameters,
+                                                                awsBedrockAgentsResponseParameters,
+                                                                awsBedrockAgentsResponseLoggingParameters);
   }
 
 }
