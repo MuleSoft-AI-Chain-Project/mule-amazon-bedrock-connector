@@ -16,7 +16,7 @@ import org.mule.sdk.api.annotation.JavaVersionSupport;
 @Extension(name = "Amazon Bedrock", category = Category.SELECT)
 @RequiresEnterpriseLicense(allowEvaluationLicense = true)
 @Configurations(BedrockConfiguration.class)
-@Xml(prefix = "Bedrock")
+@Xml(prefix = "ms-bedrock")
 @ErrorTypes(BedrockErrorType.class)
 @JavaVersionSupport({JAVA_17})
 
