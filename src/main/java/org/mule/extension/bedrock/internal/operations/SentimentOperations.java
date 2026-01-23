@@ -18,6 +18,7 @@ import org.mule.runtime.extension.api.annotation.param.Config;
 import org.mule.runtime.extension.api.annotation.param.Connection;
 import org.mule.runtime.extension.api.annotation.param.MediaType;
 import org.mule.runtime.extension.api.annotation.param.ParameterGroup;
+import org.mule.runtime.extension.api.annotation.param.display.Summary;
 
 public class SentimentOperations extends BedrockOperation<SentimentService> {
 
@@ -25,10 +26,24 @@ public class SentimentOperations extends BedrockOperation<SentimentService> {
     super(SentimentServiceImpl::new);
   }
 
+
+  /**
+   * Analyzes the sentiment of the input text using Amazon Bedrock sentiment analysis models. Determines whether the text
+   * expresses positive, negative, or neutral sentiment.
+   *
+   * @param config Configuration for Bedrock connector.
+   * @param connection Bedrock connection instance.
+   * @param TextToAnalyze The text to analyze for sentiment.
+   * @param bedrockParameters Additional properties including model name, region, temperature, topP, topK, maxTokenCount, and
+   *        optional guardrail identifier.
+   * @return InputStream containing the JSON response with sentiment analysis results including sentiment label and confidence
+   *         scores.
+   */
   @MediaType(value = APPLICATION_JSON, strict = false)
   @Throws(BedrockErrorsProvider.class)
   @Execution(ExecutionType.BLOCKING)
   @Alias("SENTIMENT-analyze")
+  @Summary("Analyze sentiment of input text")
   public InputStream sentimentAnalysis(@Config BedrockConfiguration config,
                                        @Connection BedrockConnection connection,
                                        String TextToAnalyze,
