@@ -16,18 +16,6 @@ public interface AgentService extends ConnectorService {
 
   public String getAgentById(String agentId, BedrockAgentsParameters bedrockAgentsParameters);
 
-  public String getAgentByAgentName(String agentName, BedrockAgentsParameters bedrockAgentsParameters);
-
-  public String deleteAgentByAgentId(String agentId, BedrockAgentsParameters bedrockAgentsParameters);
-
-  public String createAgent(String agentName, String instructions, BedrockAgentsParameters bedrockAgentsParameters);
-
-  public String createAgentAlias(String agentAlias, String agentId, BedrockAgentsParameters bedrockAgentsParameters);
-
-  public String getAgentAliasById(String agentId, BedrockAgentsParameters bedrockAgentsParameters);
-
-  public String deleteAgentAlias(String agentId, String agentAliasName, BedrockAgentsParameters bedrockAgentsParameters);
-
   public String chatWithAgent(String agentId, String agentAliasId,
                               String prompt,
                               boolean enableTrace, boolean latencyOptimized,

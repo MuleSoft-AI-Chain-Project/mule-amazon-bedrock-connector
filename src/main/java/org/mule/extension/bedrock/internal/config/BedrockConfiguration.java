@@ -5,7 +5,6 @@ import org.mule.extension.bedrock.internal.connection.provider.AssumeRoleConnect
 import org.mule.extension.bedrock.internal.connection.provider.BasicConnectionProvider;
 import org.mule.extension.bedrock.internal.operations.AgentOperations;
 import org.mule.extension.bedrock.internal.operations.ChatOperations;
-import org.mule.extension.bedrock.internal.operations.CustomModelOperations;
 import org.mule.extension.bedrock.internal.operations.EmbeddingOperation;
 import org.mule.extension.bedrock.internal.operations.FoundationalModelOperations;
 import org.mule.extension.bedrock.internal.operations.ImageOperation;
@@ -22,7 +21,6 @@ import org.mule.runtime.extension.api.annotation.param.display.DisplayName;
     AgentOperations.class,
     SentimentOperations.class,
     FoundationalModelOperations.class,
-    CustomModelOperations.class,
     ImageOperation.class,
     EmbeddingOperation.class
 })

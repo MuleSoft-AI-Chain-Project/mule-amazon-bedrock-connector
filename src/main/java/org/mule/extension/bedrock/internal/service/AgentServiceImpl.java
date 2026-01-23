@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -33,26 +32,11 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
-import software.amazon.awssdk.services.bedrockagent.model.AgentAlias;
-import software.amazon.awssdk.services.bedrockagent.model.AgentAliasSummary;
-import software.amazon.awssdk.services.bedrockagent.model.AgentStatus;
 import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentResponse;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentAliasRequest;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentAliasResponse;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentResponse;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
-import software.amazon.awssdk.services.bedrockagent.model.ListAgentAliasesRequest;
-import software.amazon.awssdk.services.bedrockagent.model.ListAgentAliasesResponse;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
-import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentResponse;
 import software.amazon.awssdk.services.bedrockagentruntime.model.BedrockModelConfigurations;
 import software.amazon.awssdk.services.bedrockagentruntime.model.FilterAttribute;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
@@ -64,14 +48,6 @@ import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievalFilter
 import software.amazon.awssdk.services.bedrockagentruntime.model.SessionState;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
-import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
-import software.amazon.awssdk.services.iam.model.CreateRoleResponse;
-import software.amazon.awssdk.services.iam.model.GetRoleRequest;
-import software.amazon.awssdk.services.iam.model.GetRoleResponse;
-import software.amazon.awssdk.services.iam.model.IamException;
-import software.amazon.awssdk.services.iam.model.NoSuchEntityException;
-import software.amazon.awssdk.services.iam.model.PutRolePolicyRequest;
-import software.amazon.awssdk.services.iam.model.Role;
 
 public class AgentServiceImpl extends BedrockServiceImpl implements AgentService {
 
@@ -90,13 +66,6 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   private static final String INSTRUCTION = "instruction";
   private static final String PROMPT_OVERRIDE_CONFIGURATION = "promptOverrideConfiguration";
   private static final String UPDATED_AT = "updatedAt";
-  private static final String AGENT_ALIAS_ID = "agentAliasId";
-  private static final String AGENT_ALIAS_NAME = "agentAliasName";
-  private static final String AGENT_ALIAS_ARN = "agentAliasArn";
-  private static final String AGENT_ALIAS_SUMMARIES = "agentAliasSummaries";
-  private static final String AGENT_ALIAS_STATUS = "agentAliasStatus";
-  private static final String AGENT_VERSION = "agentVersion";
-  private static final String PREPARED_AT = "preparedAt";
   private static final String SESSION_ID = "sessionId";
   private static final String AGENT_ALIAS = "agentAlias";
   private static final String PROMPT = "prompt";
@@ -116,12 +85,6 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   private static final String LOCATION = "location";
   private static final String METADATA = "metadata";
 
-  private static final String AGENT_EXECUTION_ROLE_PREFIX = "AmazonBedrockExecutionRoleForAgents_";
-  private static final String AGENT_ROLE_POLICY_NAME = "agent_permissions";
-  private static final String AGENT_POSTFIX = "muc";
-  private static final long AGENT_STATUS_CHECK_INTERVAL_MS = 2000;
-
-  private static final String NO_AGENT_FOUND = "No Agent found!";
 
   private static final AtomicInteger eventCounter = new AtomicInteger(0);
 
@@ -187,296 +150,6 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     return jsonObject.toString();
   }
 
-  @Override
-  public String getAgentByAgentName(String agentName, BedrockAgentsParameters bedrockAgentsParameters) {
-    Optional<Agent> optionalAgent = getAgentByName(agentName);
-    if (optionalAgent.isPresent()) {
-      Agent agent = optionalAgent.get();
-      JSONObject jsonObject = new JSONObject();
-      jsonObject.put(AGENT_ID, agent.agentId());
-      jsonObject.put(AGENT_NAME, agent.agentName());
-      jsonObject.put(AGENT_ARN, agent.agentArn());
-      jsonObject.put(AGENT_STATUS, agent.agentStatusAsString());
-      jsonObject.put(AGENT_RESOURCE_ROLE_ARN, agent.agentResourceRoleArn());
-      jsonObject.put(CLIENT_TOKEN, agent.clientToken());
-      jsonObject.put(CREATED_AT, agent.createdAt());
-      jsonObject.put(DESCRIPTION, agent.description());
-      jsonObject.put(FOUNDATION_MODEL, agent.foundationModel());
-      jsonObject.put(IDLE_SESSION_TTL_IN_SECONDS, agent.idleSessionTTLInSeconds());
-      jsonObject.put(INSTRUCTION, agent.instruction());
-      jsonObject.put(PROMPT_OVERRIDE_CONFIGURATION, agent.promptOverrideConfiguration());
-      jsonObject.put(UPDATED_AT, agent.updatedAt());
-      return jsonObject.toString();
-    } else {
-      return NO_AGENT_FOUND;
-    }
-
-  }
-
-  private Optional<Agent> getAgentByName(String agentName) {
-    ListAgentsRequest listAgentsRequest = ListAgentsRequest.builder()
-        .build();
-    ListAgentsResponse listAgentsResponse = getConnection().listAgents(listAgentsRequest);
-    List<AgentSummary> agentSummaries = listAgentsResponse.agentSummaries();
-    for (AgentSummary agentSummary : agentSummaries) {
-      if (agentSummary.agentName().equals(agentName)) {
-        String agentId = agentSummary.agentId();
-        GetAgentRequest getAgentRequest = GetAgentRequest.builder()
-            .agentId(agentId)
-            .build();
-        GetAgentResponse getAgentResponse = getConnection().getAgent(getAgentRequest);
-        Agent agent = getAgentResponse.agent();
-        return Optional.of(agent);
-      }
-    }
-    return Optional.empty();
-  }
-
-  @Override
-  public String deleteAgentByAgentId(String agentId, BedrockAgentsParameters bedrockAgentsParameters) {
-    DeleteAgentRequest deleteAgentRequest = DeleteAgentRequest.builder()
-        .agentId(agentId)
-        .build();
-    DeleteAgentResponse deleteAgentResponse = getConnection().deleteAgent(deleteAgentRequest);
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(AGENT_ID, deleteAgentResponse.agentId());
-    jsonObject.put(AGENT_STATUS, deleteAgentResponse.agentStatusAsString());
-    return jsonObject.toString();
-  }
-
-  @Override
-  public String createAgent(String agentName, String instructions, BedrockAgentsParameters bedrockAgentsParameters) {
-    Role agentRole = createAgentRole(AGENT_POSTFIX, AGENT_ROLE_POLICY_NAME, bedrockAgentsParameters);
-    Agent agent = createAgentWithAgentRole(agentName, instructions, bedrockAgentsParameters.getModelName(), agentRole);
-    PrepareAgentResponse agentDetails = prepareAgent(agent.agentId());
-    JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put(AGENT_ID, agentDetails.agentId());
-    jsonRequest.put(AGENT_VERSION, agentDetails.agentVersion());
-    jsonRequest.put(AGENT_STATUS, agentDetails.agentStatusAsString());
-    jsonRequest.put(PREPARED_AT, agentDetails.preparedAt());
-    jsonRequest.put(AGENT_ARN, agent.agentArn());
-    jsonRequest.put(AGENT_NAME, agent.agentName());
-    jsonRequest.put(AGENT_RESOURCE_ROLE_ARN, agent.agentResourceRoleArn());
-    jsonRequest.put(CLIENT_TOKEN, agent.clientToken());
-    jsonRequest.put(CREATED_AT, agent.createdAt());
-    jsonRequest.put(DESCRIPTION, agent.description());
-    jsonRequest.put(FOUNDATION_MODEL, agent.foundationModel());
-    jsonRequest.put(IDLE_SESSION_TTL_IN_SECONDS, agent.idleSessionTTLInSeconds());
-    jsonRequest.put(INSTRUCTION, agent.instruction());
-    jsonRequest.put(PROMPT_OVERRIDE_CONFIGURATION, agent.promptOverrideConfiguration());
-    jsonRequest.put(UPDATED_AT, agent.updatedAt());
-    return jsonRequest.toString();
-  }
-
-  private PrepareAgentResponse prepareAgent(String agentId) {
-    logger.info("Preparing the agent...");
-
-    // String agentId = agent.agentId();
-    PrepareAgentResponse preparedAgentDetails = getConnection().prepareAgent(PrepareAgentRequest.builder()
-        .agentId(agentId)
-        .build());
-    waitForAgentStatus(agentId, "PREPARED");
-
-    return preparedAgentDetails;
-  }
-
-  private Agent createAgentWithAgentRole(String agentName, String instructions, String modelName, Role agentRole) {
-    CreateAgentResponse createAgentResponse = getConnection().createAgent(CreateAgentRequest.builder()
-        .agentName(agentName)
-        .foundationModel(modelName)
-        .instruction(instructions)
-        .agentResourceRoleArn(agentRole.arn())
-        .build());
-    waitForAgentStatus(createAgentResponse.agent().agentId(), AgentStatus.NOT_PREPARED.toString());
-    return createAgentResponse.agent();
-  }
-
-  private void waitForAgentStatus(String agentId, String status) {
-    while (true) {
-      GetAgentResponse response = getConnection().getAgent(GetAgentRequest.builder()
-          .agentId(agentId)
-          .build());
-
-      if (response.agent().agentStatus().toString().equals(status)) {
-
-        break;
-      }
-
-      try {
-        logger.info("Waiting for agent get prepared...");
-        Thread.sleep(AGENT_STATUS_CHECK_INTERVAL_MS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
-  }
-
-  private Role createAgentRole(String agentPostfix, String agentRolePolicyName, BedrockAgentsParameters bedrockAgentsParameters) {
-    String roleName = AGENT_EXECUTION_ROLE_PREFIX + agentPostfix;
-    String modelArn = "arn:aws:bedrock:" + bedrockAgentsParameters.getRegion() + "::foundation-model/"
-        + bedrockAgentsParameters.getModelName() + "*";
-    String ROLE_POLICY_NAME = agentRolePolicyName;
-
-    logger.info("Creating an execution role for the agent...");
-    Role agentRole = null;
-    try {
-      GetRoleResponse getRoleResponse = getConnection().getRole(GetRoleRequest.builder().roleName(roleName).build());
-      agentRole = getRoleResponse.role();
-      logger.info("Role already exists: {}", agentRole.arn());
-    } catch (NoSuchEntityException e) {
-      // Role does not exist, create it
-      try {
-        CreateRoleResponse createRoleResponse = getConnection().createRole(CreateRoleRequest.builder()
-            .roleName(roleName)
-            .assumeRolePolicyDocument(
-                                      "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Service\": \"bedrock.amazonaws.com\"},\"Action\": \"sts:AssumeRole\"}]}")
-            .build());
-
-        logger.info("Model ARN: {}", modelArn);
-        String policyDocument = "{\n"
-            + "    \"Version\": \"2012-10-17\",\n"
-            + "    \"Statement\": [\n"
-            + "        {\n"
-            + "            \"Effect\": \"Allow\",\n"
-            + "            \"Action\": [\n"
-            + "                \"bedrock:ListFoundationModels\",\n"
-            + "                \"bedrock:GetFoundationModel\",\n"
-            + "                \"bedrock:TagResource\",\n"
-            + "                \"bedrock:UntagResource\",\n"
-            + "                \"bedrock:ListTagsForResource\",\n"
-            + "                \"bedrock:CreateAgent\",\n"
-            + "                \"bedrock:UpdateAgent\",\n"
-            + "                \"bedrock:GetAgent\",\n"
-            + "                \"bedrock:ListAgents\",\n"
-            + "                \"bedrock:DeleteAgent\",\n"
-            + "                \"bedrock:CreateAgentActionGroup\",\n"
-            + "                \"bedrock:UpdateAgentActionGroup\",\n"
-            + "                \"bedrock:GetAgentActionGroup\",\n"
-            + "                \"bedrock:ListAgentActionGroups\",\n"
-            + "                \"bedrock:DeleteAgentActionGroup\",\n"
-            + "                \"bedrock:GetAgentVersion\",\n"
-            + "                \"bedrock:ListAgentVersions\",\n"
-            + "                \"bedrock:DeleteAgentVersion\",\n"
-            + "                \"bedrock:CreateAgentAlias\",\n"
-            + "                \"bedrock:UpdateAgentAlias\",\n"
-            + "                \"bedrock:GetAgentAlias\",\n"
-            + "                \"bedrock:ListAgentAliases\",\n"
-            + "                \"bedrock:DeleteAgentAlias\",\n"
-            + "                \"bedrock:AssociateAgentKnowledgeBase\",\n"
-            + "                \"bedrock:DisassociateAgentKnowledgeBase\",\n"
-            + "                \"bedrock:GetKnowledgeBase\",\n"
-            + "                \"bedrock:ListKnowledgeBases\",\n"
-            + "                \"bedrock:PrepareAgent\",\n"
-            + "                \"bedrock:InvokeAgent\",\n"
-            + "                \"bedrock:InvokeModel\"\n"
-            + "            ],\n"
-            + "            \"Resource\": \"*\"\n"
-            + "        }\n"
-            + "    ]\n"
-            + "}";
-        logger.info("Policy Document: {}", policyDocument);
-        getConnection().putRolePolicy(PutRolePolicyRequest.builder()
-            .roleName(roleName)
-            .policyName(ROLE_POLICY_NAME)
-            .policyDocument(policyDocument)
-            .build());
-
-        agentRole = Role.builder()
-            .roleName(roleName)
-            .arn(createRoleResponse.role().arn())
-            .build();
-      } catch (IamException ex) {
-        logger.error("Couldn't create role {}. Here's why: {}", roleName, ex.getMessage(), ex);
-        throw ex;
-      }
-    } catch (IamException ex) {
-      logger.error("Couldn't get role {}. Here's why: {}", roleName, ex.getMessage(), ex);
-      throw ex;
-    }
-    return agentRole;
-
-  }
-
-  @Override
-  public String createAgentAlias(String agentAliasName, String agentId, BedrockAgentsParameters bedrockAgentsParameters) {
-    logger.info("Creating an agent alias for agentId: {}", agentId);
-    CreateAgentAliasRequest request = CreateAgentAliasRequest.builder()
-        .agentId(agentId)
-        .agentAliasName(agentAliasName)
-        .build();
-
-    CreateAgentAliasResponse response = getConnection().createAgentAlias(request);
-    AgentAlias agentAlias = response.agentAlias();
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(AGENT_ALIAS_ID, agentAlias.agentAliasId());
-    jsonObject.put(AGENT_ALIAS_NAME, agentAlias.agentAliasName());
-    jsonObject.put(AGENT_ALIAS_ARN, agentAlias.agentAliasArn());
-    jsonObject.put(CLIENT_TOKEN, agentAlias.clientToken());
-    jsonObject.put(CREATED_AT, agentAlias.createdAt());
-    jsonObject.put(UPDATED_AT, agentAlias.updatedAt());
-
-    return jsonObject.toString();
-  }
-
-  @Override
-  public String getAgentAliasById(String agentId, BedrockAgentsParameters bedrockAgentsParameters) {
-    ListAgentAliasesRequest listAgentAliasesRequest = ListAgentAliasesRequest.builder()
-        .agentId(agentId)
-        .build();
-    ListAgentAliasesResponse listAgentAliasesResponse = getConnection()
-        .listAgentAliases(listAgentAliasesRequest);
-    List<AgentAliasSummary> agentAliasSummaries = listAgentAliasesResponse.agentAliasSummaries();
-    JSONArray jsonArray = new JSONArray();
-    for (AgentAliasSummary agentAliasSummary : agentAliasSummaries) {
-      JSONObject jsonObject = new JSONObject();
-      jsonObject.put(AGENT_ALIAS_ID, agentAliasSummary.agentAliasId());
-      jsonObject.put(AGENT_ALIAS_NAME, agentAliasSummary.agentAliasName());
-      jsonObject.put(CREATED_AT, agentAliasSummary.createdAt());
-      jsonObject.put(UPDATED_AT, agentAliasSummary.updatedAt());
-      jsonArray.put(jsonObject);
-    }
-
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(AGENT_ALIAS_SUMMARIES, jsonArray);
-
-    return jsonObject.toString();
-  }
-
-  @Override
-  public String deleteAgentAlias(String agentId, String agentAliasName, BedrockAgentsParameters bedrockAgentsParameters) {
-    JSONObject jsonObject = new JSONObject();
-    ListAgentAliasesRequest listAgentAliasesRequest = ListAgentAliasesRequest.builder()
-        .agentId(agentId)
-        .build();
-    ListAgentAliasesResponse listAgentAliasesResponse = getConnection()
-        .listAgentAliases(listAgentAliasesRequest);
-    List<AgentAliasSummary> agentAliasSummaries = listAgentAliasesResponse.agentAliasSummaries();
-    Optional<AgentAliasSummary> agentAliasSummary = agentAliasSummaries.stream()
-        .filter(alias -> alias.agentAliasName().equals(agentAliasName))
-        .findFirst();
-    if (agentAliasSummary.isPresent()) {
-      String agentAliasId = agentAliasSummary.get().agentAliasId();
-
-      // Build a DeleteAgentAliasRequest instance with the agent ID and agent alias ID
-      DeleteAgentAliasRequest deleteAgentAliasRequest = DeleteAgentAliasRequest.builder()
-          .agentId(agentId)
-          .agentAliasId(agentAliasId)
-          .build();
-
-      // Call the deleteAgentAlias method of the BedrockAgentClient instance
-      DeleteAgentAliasResponse deleteAgentAliasResponse = getConnection()
-          .deleteAgentAlias(deleteAgentAliasRequest);
-
-      logger.info("Agent alias with name " + agentAliasName + " deleted successfully.");
-      jsonObject.put(AGENT_ID, deleteAgentAliasResponse.agentId());
-      jsonObject.put(AGENT_ALIAS_ID, deleteAgentAliasResponse.agentAliasId());
-      jsonObject.put(AGENT_ALIAS_STATUS, deleteAgentAliasResponse.agentAliasStatus());
-      jsonObject.put(AGENT_STATUS, deleteAgentAliasResponse.agentAliasStatusAsString());
-    } else {
-      logger.info("No agent alias with name " + agentAliasName + " found.");
-    }
-    return jsonObject.toString();
-  }
 
   @Override
   public String chatWithAgent(String agentId, String agentAliasId, String prompt, boolean enableTrace, boolean latencyOptimized,
