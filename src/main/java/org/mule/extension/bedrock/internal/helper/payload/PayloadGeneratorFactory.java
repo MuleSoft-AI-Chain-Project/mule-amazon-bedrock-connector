@@ -18,7 +18,6 @@ public final class PayloadGeneratorFactory {
 
   static {
     // Register all specific generators
-    generators.add(new AmazonTitanPayloadGenerator());
     generators.add(new AmazonNovaPayloadGenerator());
     generators.add(new AnthropicClaudePayloadGenerator());
     generators.add(new AI21JambaPayloadGenerator());

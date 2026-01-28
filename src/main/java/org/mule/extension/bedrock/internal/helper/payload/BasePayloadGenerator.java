@@ -49,7 +49,9 @@ public abstract class BasePayloadGenerator implements PayloadGenerator {
   protected JSONObject createFullInferenceConfig(BedrockParameters parameters) {
     JSONObject config = new JSONObject();
     config.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    config.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    if (parameters.getTopP() != null) {
+      config.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    }
     if (parameters.getTopK() != null) {
       config.put(BedrockConstants.JsonKeys.TOP_K.toLowerCase(), parameters.getTopK());
     }

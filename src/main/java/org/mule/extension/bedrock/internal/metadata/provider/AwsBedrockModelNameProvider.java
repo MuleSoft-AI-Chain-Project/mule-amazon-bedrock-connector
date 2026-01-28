@@ -11,9 +11,6 @@ public class AwsBedrockModelNameProvider implements ValueProvider {
   public AwsBedrockModelNameProvider() {}
 
   private static final Set<Value> VALUES_FOR = ValueBuilder.getValuesFor(
-                                                                         "amazon.titan-text-express-v1",
-                                                                         "amazon.titan-text-lite-v1",
-                                                                         "amazon.titan-text-premier-v1:0",
                                                                          "amazon.nova-micro-v1:0",
                                                                          "amazon.nova-premier-v1:0",
                                                                          "amazon.nova-lite-v1:0",
@@ -25,7 +22,6 @@ public class AwsBedrockModelNameProvider implements ValueProvider {
                                                                          "anthropic.claude-v2:1",
                                                                          "anthropic.claude-instant-v1",
                                                                          "ai21.jamba-1-5-large-v1:0",
-                                                                         "ai21.jamba-instruct-v1:0",
                                                                          "ai21.jamba-1-5-mini-v1:0",
                                                                          "cohere.command-text-v14",
                                                                          "cohere.command-light-text-v14",
