@@ -33,7 +33,7 @@ public class MistralPayloadGenerator extends BasePayloadGenerator {
 
     jsonRequest.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
     if (parameters.getMaxTokenCount() != null) {
-      jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS.toLowerCase(), parameters.getMaxTokenCount());
+      jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS_LIMIT.toLowerCase(), parameters.getMaxTokenCount());
     }
 
     return jsonRequest.toString();

@@ -87,6 +87,7 @@ public final class BedrockConstants {
     public static final String PROMPT = "prompt";
     public static final String MAX_TOKENS_TO_SAMPLE = "max_tokens_to_sample";
     public static final String MAX_TOKENS = "maxTokens";
+    public static final String MAX_TOKENS_LIMIT = "MAX_TOKENS";
     public static final String P = "p";
     public static final String K = "k";
     public static final String MAX_GEN_LEN = "max_gen_len";
