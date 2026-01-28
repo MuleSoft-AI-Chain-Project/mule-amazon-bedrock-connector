@@ -27,7 +27,9 @@ public class AnthropicClaudePayloadGenerator extends BasePayloadGenerator {
     jsonRequest.put(BedrockConstants.JsonKeys.MESSAGES, messages);
     jsonRequest.put("anthropic_version", "bedrock-2023-05-31");
     jsonRequest.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    if (parameters.getTopP() != null) {
+      jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    }
     jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS.toLowerCase(), parameters.getMaxTokenCount());
 
     return jsonRequest.toString();

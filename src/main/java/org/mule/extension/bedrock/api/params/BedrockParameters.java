@@ -13,7 +13,7 @@ public class BedrockParameters {
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
   @OfValues(AwsBedrockModelNameProvider.class)
-  @Optional(defaultValue = "amazon.titan-text-express-v1")
+  @Optional(defaultValue = "amazon.nova-lite-v1:0")
   private String modelName;
 
   public String getModelName() {
@@ -41,7 +41,7 @@ public class BedrockParameters {
 
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
-  @Optional(defaultValue = "0.9")
+  @Optional()
   private Float topP;
 
   public Float getTopP() {
@@ -50,7 +50,7 @@ public class BedrockParameters {
 
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
-  @Optional(defaultValue = "250")
+  @Optional()
   private Integer topK;
 
   public Integer getTopK() {
@@ -59,7 +59,7 @@ public class BedrockParameters {
 
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
-  @Optional(defaultValue = "512")
+  @Optional()
   private Integer maxTokenCount;
 
   public Integer getMaxTokenCount() {

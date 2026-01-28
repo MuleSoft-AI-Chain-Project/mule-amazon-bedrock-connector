@@ -34,7 +34,9 @@ public class AmazonNovaPayloadGenerator extends BasePayloadGenerator {
     JSONObject inferenceConfig = new JSONObject();
     inferenceConfig.put(BedrockConstants.JsonKeys.MAX_NEW_TOKENS, parameters.getMaxTokenCount());
     inferenceConfig.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    inferenceConfig.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    if (parameters.getTopP() != null) {
+      inferenceConfig.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+    }
     if (parameters.getTopK() != null) {
       inferenceConfig.put(BedrockConstants.JsonKeys.TOP_K.toLowerCase(), parameters.getTopK());
     }
