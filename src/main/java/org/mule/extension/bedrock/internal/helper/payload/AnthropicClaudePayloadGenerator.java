@@ -30,7 +30,7 @@ public class AnthropicClaudePayloadGenerator extends BasePayloadGenerator {
     if (parameters.getTopP() != null) {
       jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
     }
-    jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS.toLowerCase(), parameters.getMaxTokenCount());
+    jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS_LIMIT.toLowerCase(), parameters.getMaxTokenCount());
 
     return jsonRequest.toString();
   }
