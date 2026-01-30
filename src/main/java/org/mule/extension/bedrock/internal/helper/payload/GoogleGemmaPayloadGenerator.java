@@ -7,9 +7,9 @@ import org.mule.extension.bedrock.internal.util.BedrockConstants;
 import org.mule.extension.bedrock.internal.util.ModelIdentifier;
 
 /**
- * Payload generator for Cohere Command models.
+ * Payload generator for Google Gemma 3 models. Supports Gemma 3 models available on Amazon Bedrock Marketplace.
  */
-public class CoherePayloadGenerator extends BasePayloadGenerator {
+public class GoogleGemmaPayloadGenerator extends BasePayloadGenerator {
 
   @Override
   public String generatePayload(String prompt, BedrockParameters parameters) {
@@ -21,12 +21,13 @@ public class CoherePayloadGenerator extends BasePayloadGenerator {
     // Add to messages array
     JSONArray messages = new JSONArray();
     messages.put(userMessage);
+
+    // Construct request body
     JSONObject jsonRequest = new JSONObject();
     jsonRequest.put(BedrockConstants.JsonKeys.MESSAGES, messages);
     jsonRequest.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    jsonRequest.put(BedrockConstants.JsonKeys.P, parameters.getTopP());
-    if (parameters.getTopK() != null) {
-      jsonRequest.put(BedrockConstants.JsonKeys.K, parameters.getTopK());
+    if (parameters.getTopP() != null) {
+      jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
     }
     jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS_LIMIT.toLowerCase(), parameters.getMaxTokenCount());
 
@@ -35,6 +36,6 @@ public class CoherePayloadGenerator extends BasePayloadGenerator {
 
   @Override
   public boolean supports(String modelId) {
-    return ModelIdentifier.matchesPattern(modelId, BedrockConstants.ModelPatterns.COHERE_COMMAND);
+    return ModelIdentifier.matchesPattern(modelId, BedrockConstants.ModelPatterns.GOOGLE_GEMMA);
   }
 }

@@ -23,8 +23,10 @@ public class AwsBedrockModelNameProvider implements ValueProvider {
                                                                          "anthropic.claude-instant-v1",
                                                                          "ai21.jamba-1-5-large-v1:0",
                                                                          "ai21.jamba-1-5-mini-v1:0",
-                                                                         "cohere.command-text-v14",
-                                                                         "cohere.command-light-text-v14",
+                                                                         "cohere.command-r-plus-v1:0",
+                                                                         "cohere.command-r-v1:0",
+                                                                         "google.gemma-3-12b-it",
+                                                                         "google.gemma-3-27b-it",
                                                                          "meta.llama3-3-70b-instruct-v1:0",
                                                                          "meta.llama3-2-3b-instruct-v1:0",
                                                                          "meta.llama3-2-1b-instruct-v1:0",
@@ -39,6 +41,10 @@ public class AwsBedrockModelNameProvider implements ValueProvider {
                                                                          "mistral.mixtral-8x7b-instruct-v0:1",
                                                                          "mistral.mistral-large-2402-v1:0",
                                                                          "mistral.mistral-small-2402-v1:0",
+                                                                         "openai.gpt-oss-safeguard-120b",
+                                                                         "openai.gpt-oss-safeguard-20b",
+                                                                         "openai.gpt-oss-120b-1:0",
+                                                                         "openai.gpt-oss-20b-1:0",
                                                                          "stability.stable-diffusion-xl-v0");
 
   @Override
