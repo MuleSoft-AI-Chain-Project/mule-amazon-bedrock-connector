@@ -35,6 +35,8 @@ public final class BedrockConstants {
     public static final String META_LLAMA_3_3 = "meta.llama3-3";
     public static final String META_LLAMA_4 = "meta.llama4";
     public static final String STABILITY_STABLE = "stability.stable";
+    public static final String GOOGLE_GEMMA = "google.gemma";
+    public static final String OPENAPI_GPT = "openai.gpt";
   }
 
   // Response Formatting

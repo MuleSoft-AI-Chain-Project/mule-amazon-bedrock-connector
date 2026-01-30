@@ -25,6 +25,8 @@ public final class PayloadGeneratorFactory {
     generators.add(new CoherePayloadGenerator());
     generators.add(new LlamaPayloadGenerator());
     generators.add(new StabilityPayloadGenerator());
+    generators.add(new GoogleGemmaPayloadGenerator());
+    generators.add(new OpenAIGPTPayloadGenerator());
   }
 
   private PayloadGeneratorFactory() {
