@@ -886,8 +886,9 @@ public class AwsbedrockAgentsPayloadHelper {
             outputStream.close();
             logger.error(errorEvent);
           } catch (IOException ioException) {
-            // Log error but can't do much more
-            logger.error("Error writing error event: {}", ioException.getMessage());
+            // Client disconnected - this is expected behavior, not an error
+            // Use debug level since "Pipe closed" is normal when clients disconnect early
+            logger.debug("Could not write error event (client likely disconnected): {}", ioException.getMessage());
           }
         }
       });
@@ -1009,8 +1010,8 @@ public class AwsbedrockAgentsPayloadHelper {
               outputStream.flush();
               logger.error(errorEvent);
             } catch (IOException ioException) {
-              // Can't write error, stream is likely closed
-              logger.error("Error writing error event: {}", ioException.getMessage());
+              // Client disconnected - this is expected behavior
+              logger.debug("Could not write chunk-error event (client likely disconnected): {}", ioException.getMessage());
             }
           }
         }).build();
@@ -1034,15 +1035,15 @@ public class AwsbedrockAgentsPayloadHelper {
               outputStream.flush();
               logger.error(errorEvent);
             } catch (IOException ioException) {
-              // Can't write error, stream is likely closed
-              logger.error("Error writing error event: {}", ioException.getMessage());
+              // Client disconnected - this is expected behavior
+              logger.debug("Could not write completion-error event (client likely disconnected): {}", ioException.getMessage());
             }
           } finally {
             try {
               outputStream.close();
             } catch (IOException ioException) {
-              // Log error but can't do much more
-              logger.error("Error writing error event: {}", ioException.getMessage());
+              // Client disconnected - this is expected behavior
+              logger.debug("Could not close output stream (client likely disconnected): {}", ioException.getMessage());
             }
           }
         })
