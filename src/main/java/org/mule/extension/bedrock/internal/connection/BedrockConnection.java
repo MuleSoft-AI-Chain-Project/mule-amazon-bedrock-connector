@@ -63,6 +63,7 @@ import software.amazon.awssdk.services.iam.model.PutRolePolicyRequest;
 
 public class BedrockConnection implements ConnectorConnection {
 
+  private final String region;
   private final BedrockRuntimeClient bedrockRuntimeClient;
   private final BedrockClient bedrockClient;
   private final BedrockAgentClient bedrockAgentClient;
@@ -71,13 +72,15 @@ public class BedrockConnection implements ConnectorConnection {
   private final BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient;
   private final BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient;
 
-  public BedrockConnection(BedrockRuntimeClientBuilder bedrockRuntimeClientBuilder,
+  public BedrockConnection(String region,
+                           BedrockRuntimeClientBuilder bedrockRuntimeClientBuilder,
                            BedrockClientBuilder bedrockClientBuilder,
                            BedrockAgentClientBuilder bedrockAgentClientBuilder,
                            BedrockAgentRuntimeClientBuilder bedrockAgentRuntimeClientBuilder,
                            IamClientBuilder iamClientBuilder,
                            BedrockAgentRuntimeAsyncClientBuilder bedrockAgentRuntimeAsyncClientBuilder,
                            BedrockRuntimeAsyncClientBuilder bedrockRuntimeAsyncClientBuilder) {
+    this.region = region;
     this.bedrockRuntimeClient = bedrockRuntimeClientBuilder.build();
     this.bedrockClient = bedrockClientBuilder.build();
     this.bedrockAgentClient = bedrockAgentClientBuilder.build();
@@ -85,6 +88,10 @@ public class BedrockConnection implements ConnectorConnection {
     this.iamClient = iamClientBuilder.build();
     this.bedrockAgentRuntimeAsyncClient = bedrockAgentRuntimeAsyncClientBuilder.build();
     this.bedrockRuntimeAsyncClient = bedrockRuntimeAsyncClientBuilder.build();
+  }
+
+  public String getRegion() {
+    return region;
   }
 
   public BedrockRuntimeClient getBedrockRuntimeClient() {

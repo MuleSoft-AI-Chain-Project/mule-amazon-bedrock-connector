@@ -37,6 +37,7 @@ public class PromptPayloadHelper {
 
 
   public static InvokeModelRequest createInvokeRequest(BedrockParameters bedrockParameters,
+                                                       String region,
                                                        String nativeRequest) {
 
     String modelId = bedrockParameters.getModelName();
@@ -44,8 +45,6 @@ public class PromptPayloadHelper {
 
     String accountId = ModelIdentifier.getAccountIdOrDefault(bedrockParameters.getAwsAccountId());
     logger.debug("accountId: {}", accountId);
-
-    String region = bedrockParameters.getRegion();
 
     // for Anthropic Claude 3-x, mistral.pxtral, meta.llama3, prep the model id
     // using the following format

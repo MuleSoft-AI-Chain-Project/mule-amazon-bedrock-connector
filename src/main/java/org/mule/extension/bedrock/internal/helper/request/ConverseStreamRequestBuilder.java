@@ -21,12 +21,13 @@ public final class ConverseStreamRequestBuilder {
 
   private final BedrockParameters parameters;
   private final String prompt;
+  private final String region;
   private String modelId;
   private String accountId;
-  private String region;
 
-  private ConverseStreamRequestBuilder(BedrockParameters parameters, String prompt) {
+  private ConverseStreamRequestBuilder(BedrockParameters parameters, String region, String prompt) {
     this.parameters = parameters;
+    this.region = region;
     this.prompt = prompt;
   }
 
@@ -34,11 +35,12 @@ public final class ConverseStreamRequestBuilder {
    * Creates a new builder instance.
    *
    * @param parameters the bedrock parameters
+   * @param region the connection region (used for inference profile ARN)
    * @param prompt the user prompt
    * @return new builder instance
    */
-  public static ConverseStreamRequestBuilder create(BedrockParameters parameters, String prompt) {
-    return new ConverseStreamRequestBuilder(parameters, prompt);
+  public static ConverseStreamRequestBuilder create(BedrockParameters parameters, String region, String prompt) {
+    return new ConverseStreamRequestBuilder(parameters, region, prompt);
   }
 
   /**
@@ -65,7 +67,6 @@ public final class ConverseStreamRequestBuilder {
   private void initializeModelConfiguration() {
     modelId = parameters.getModelName();
     accountId = ModelIdentifier.getAccountIdOrDefault(parameters.getAwsAccountId());
-    region = parameters.getRegion();
 
     logger.debug("accountId: {}", accountId);
 

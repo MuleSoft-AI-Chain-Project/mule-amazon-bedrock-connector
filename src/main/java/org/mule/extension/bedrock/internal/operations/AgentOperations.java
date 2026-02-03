@@ -4,7 +4,9 @@ import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICAT
 
 import java.io.InputStream;
 import org.mule.extension.bedrock.api.params.BedrockAgentsFilteringParameters;
-import org.mule.extension.bedrock.api.params.BedrockAgentsParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsMultipleFilteringParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsResponseLoggingParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsResponseParameters;
 import org.mule.extension.bedrock.api.params.BedrockAgentsSessionParameters;
 import org.mule.extension.bedrock.api.params.BedrockParameters;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
@@ -66,7 +68,6 @@ public class AgentOperations extends BedrockOperation<AgentService> {
    *
    * @param configuration Configuration for Bedrock connector.
    * @param connection Bedrock connection instance.
-   * @param bedrockAgentsParameters Additional properties including region and optional max results for pagination.
    * @return InputStream containing the JSON response with list of agents including agent IDs, names, and statuses.
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
@@ -75,12 +76,9 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Alias("AGENT-list")
   @Summary("List all available agents")
   public InputStream listAgents(@Config BedrockConfiguration configuration,
-                                @Connection BedrockConnection connection,
-                                @ParameterGroup(
-                                    name = "Additional properties") BedrockAgentsParameters bedrockAgentsParameters) {
+                                @Connection BedrockConnection connection) {
     return newExecutionBuilder(configuration, connection)
-        .execute(AgentService::listAgents, BedrockModelFactory::createInputStream)
-        .withParam(bedrockAgentsParameters);
+        .execute(AgentService::listAgents, BedrockModelFactory::createInputStream);
 
   }
 
@@ -90,7 +88,6 @@ public class AgentOperations extends BedrockOperation<AgentService> {
    * @param agentId The unique identifier of the agent to retrieve.
    * @param configuration Configuration for Bedrock connector.
    * @param connection Bedrock connection instance.
-   * @param bedrockAgentsParameters Additional properties including region.
    * @return InputStream containing the JSON response with agent details including name, instructions, knowledge base
    *         configuration, and status.
    */
@@ -100,13 +97,10 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Execution(ExecutionType.BLOCKING)
   @Summary("Retrieve agent details by agent ID")
   public InputStream getAgentById(String agentId, @Config BedrockConfiguration configuration,
-                                  @Connection BedrockConnection connection,
-                                  @ParameterGroup(
-                                      name = "Additional properties") BedrockAgentsParameters bedrockAgentsParameters) {
+                                  @Connection BedrockConnection connection) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::getAgentById, BedrockModelFactory::createInputStream)
-        .withParam(agentId)
-        .withParam(bedrockAgentsParameters);
+        .withParam(agentId);
   }
 
 
@@ -122,8 +116,7 @@ public class AgentOperations extends BedrockOperation<AgentService> {
    * @param configuration Configuration for Bedrock connector.
    * @param connection Bedrock connection instance.
    * @param bedrockAgentsSessionParameters Session properties including session ID for maintaining conversation context.
-   * @param awsBedrockAgentsFilteringParameters Knowledge base metadata filtering parameters for querying specific documents.
-   * @param bedrockAgentsParameters Additional properties including region.
+   * @param bedrockAgentsFilteringParameters Knowledge base metadata filtering parameters for querying specific documents.
    * @return InputStream containing the JSON response with agent's reply, citations, and trace information (if enabled).
    */
   @MediaType(value = APPLICATION_JSON, strict = false)
@@ -139,9 +132,13 @@ public class AgentOperations extends BedrockOperation<AgentService> {
                                    @ParameterGroup(
                                        name = "Session properties") BedrockAgentsSessionParameters bedrockAgentsSessionParameters,
                                    @ParameterGroup(
-                                       name = "Knowledge Base Metadata Filtering") BedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
+                                       name = "Knowledge Base Metadata Filtering (for single KB Id)") BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
                                    @ParameterGroup(
-                                       name = "Additional properties") BedrockAgentsParameters bedrockAgentsParameters) {
+                                       name = "Knowledge Base Metadata Filtering (for multiple KB Ids)") BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                                   @ParameterGroup(
+                                       name = "Response") BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                                   @ParameterGroup(
+                                       name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::chatWithAgent, BedrockModelFactory::createInputStream)
         .withParam(agentId)
@@ -150,9 +147,10 @@ public class AgentOperations extends BedrockOperation<AgentService> {
         .withParam(enableTrace)
         .withParam(latencyOptimized)
         .withParam(bedrockAgentsSessionParameters)
-        .withParam(awsBedrockAgentsFilteringParameters)
-        .withParam(bedrockAgentsParameters);
-
+        .withParam(bedrockAgentsFilteringParameters)
+        .withParam(bedrockAgentsMultipleFilteringParameters)
+        .withParam(bedrockAgentsResponseParameters)
+        .withParam(bedrockAgentsResponseLoggingParameters);
   }
 
   /**
@@ -167,8 +165,7 @@ public class AgentOperations extends BedrockOperation<AgentService> {
    * @param configuration Configuration for Bedrock connector.
    * @param connection Bedrock connection instance.
    * @param bedrockAgentsSessionParameters Session properties including session ID for maintaining conversation context.
-   * @param awsBedrockAgentsFilteringParameters Knowledge base metadata filtering parameters for querying specific documents.
-   * @param bedrockAgentsParameters Additional properties including region.
+   * @param bedrockAgentsFilteringParameters Knowledge base metadata filtering parameters for querying specific documents.
    * @return InputStream containing Server-Sent Events (SSE) stream with real-time agent response chunks, citations, and trace
    *         information (if enabled).
    */
@@ -186,9 +183,13 @@ public class AgentOperations extends BedrockOperation<AgentService> {
                                             @ParameterGroup(
                                                 name = "Session properties") BedrockAgentsSessionParameters bedrockAgentsSessionParameters,
                                             @ParameterGroup(
-                                                name = "Knowledge Base Metadata Filtering") BedrockAgentsFilteringParameters awsBedrockAgentsFilteringParameters,
+                                                name = "Knowledge Base Metadata Filtering (for single KB Id)") BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
                                             @ParameterGroup(
-                                                name = "Additional properties") BedrockAgentsParameters bedrockAgentsParameters) {
+                                                name = "Knowledge Base Metadata Filtering (for multiple KB Ids)") BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                                            @ParameterGroup(
+                                                name = "Response") BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                                            @ParameterGroup(
+                                                name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::chatWithAgentSSEStream)
         .withParam(agentId)
@@ -197,8 +198,10 @@ public class AgentOperations extends BedrockOperation<AgentService> {
         .withParam(enableTrace)
         .withParam(latencyOptimized)
         .withParam(bedrockAgentsSessionParameters)
-        .withParam(awsBedrockAgentsFilteringParameters)
-        .withParam(bedrockAgentsParameters);
+        .withParam(bedrockAgentsFilteringParameters)
+        .withParam(bedrockAgentsMultipleFilteringParameters)
+        .withParam(bedrockAgentsResponseParameters)
+        .withParam(bedrockAgentsResponseLoggingParameters);
 
   }
 

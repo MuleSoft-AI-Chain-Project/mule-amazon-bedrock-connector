@@ -8,8 +8,5 @@ public interface ChatService extends ConnectorService {
 
   public String answerPrompt(String prompt, BedrockParameters bedrockParameters);
 
-  public String answerPromptMemory(String prompt, String memoryPath, String memoryName, Integer keepLastMessages,
-                                   BedrockParameters bedrockParameters);
-
   public InputStream answerPromptStreaming(String prompt, BedrockParameters bedrockParameters);
 }
