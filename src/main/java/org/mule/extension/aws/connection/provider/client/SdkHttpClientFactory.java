@@ -99,11 +99,22 @@ public class SdkHttpClientFactory {
   }
 
   public SdkAsyncHttpClient buildHttpAsyncClient(CommonParameters commonParameters) throws ConnectionException {
+    return buildHttpAsyncClient(commonParameters, null);
+  }
+
+  /**
+   * Builds an async HTTP client with optional read/connection timeout override. When {@code readTimeoutMsOverride} is non-null,
+   * it is used for both connection and read timeout (so clients with different timeouts can be cached separately). Otherwise
+   * connection-level timeouts from {@code commonParameters} are used.
+   */
+  public SdkAsyncHttpClient buildHttpAsyncClient(CommonParameters commonParameters, Long readTimeoutMsOverride)
+      throws ConnectionException {
     NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
     proxyConfiguration(httpClientBuilder);
     tlsConfiguration(httpClientBuilder, commonParameters);
-    httpClientBuilder.connectionTimeout(Duration.ofMillis(commonParameters.getConnectionTimeout()));
-    httpClientBuilder.readTimeout(Duration.ofMillis(commonParameters.getConnectionTimeout()));
+    long timeoutMs = readTimeoutMsOverride != null ? readTimeoutMsOverride : commonParameters.getConnectionTimeout();
+    httpClientBuilder.connectionTimeout(Duration.ofMillis(timeoutMs));
+    httpClientBuilder.readTimeout(Duration.ofMillis(timeoutMs));
     return httpClientBuilder.build();
   }
 }

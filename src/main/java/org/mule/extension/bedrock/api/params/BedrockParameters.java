@@ -1,7 +1,6 @@
 package org.mule.extension.bedrock.api.params;
 
 import org.mule.extension.bedrock.internal.metadata.provider.AwsBedrockModelNameProvider;
-import org.mule.extension.bedrock.internal.metadata.provider.AwsBedrockRegionNameProvider;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -16,18 +15,8 @@ public class BedrockParameters {
   @Optional(defaultValue = "amazon.nova-lite-v1:0")
   private String modelName;
 
-  @Parameter
-  @Expression(ExpressionSupport.SUPPORTED)
-  @OfValues(AwsBedrockRegionNameProvider.class)
-  @Optional(defaultValue = "us-east-1")
-  private String region;
-
   public String getModelName() {
     return modelName;
-  }
-
-  public String getRegion() {
-    return region;
   }
 
   @Parameter

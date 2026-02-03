@@ -1,6 +1,9 @@
 package org.mule.extension.bedrock.internal.connection;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongFunction;
+import java.util.function.Supplier;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import org.mule.extension.bedrock.internal.error.BedrockErrorType;
 import org.mule.extension.bedrock.internal.error.ErrorHandler;
@@ -40,13 +43,11 @@ import software.amazon.awssdk.services.bedrockagent.model.ResourceNotFoundExcept
 import software.amazon.awssdk.services.bedrockagent.model.ThrottlingException;
 import software.amazon.awssdk.services.bedrockagent.model.ValidationException;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
-import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClientBuilder;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
@@ -63,14 +64,22 @@ import software.amazon.awssdk.services.iam.model.PutRolePolicyRequest;
 
 public class BedrockConnection implements ConnectorConnection {
 
+  private static final String AGENT_RUNTIME_ASYNC_CLIENT_TYPE = "BedrockAgentRuntimeAsync";
+  private static final String RUNTIME_ASYNC_CLIENT_TYPE = "BedrockRuntimeAsync";
+
   private final String region;
   private final BedrockRuntimeClient bedrockRuntimeClient;
   private final BedrockClient bedrockClient;
   private final BedrockAgentClient bedrockAgentClient;
   private final BedrockAgentRuntimeClient bedrockAgentRuntimeClient;
   private final IamClient iamClient;
-  private final BedrockAgentRuntimeAsyncClient bedrockAgentRuntimeAsyncClient;
-  private final BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient;
+  private final int connectionTimeoutMs;
+  private final ConcurrentHashMap<String, BedrockAgentRuntimeAsyncClient> agentRuntimeAsyncClients =
+      new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, BedrockRuntimeAsyncClient> runtimeAsyncClients =
+      new ConcurrentHashMap<>();
+  private final LongFunction<BedrockAgentRuntimeAsyncClient> agentRuntimeAsyncClientFactory;
+  private final LongFunction<BedrockRuntimeAsyncClient> runtimeAsyncClientFactory;
 
   public BedrockConnection(String region,
                            BedrockRuntimeClientBuilder bedrockRuntimeClientBuilder,
@@ -78,16 +87,71 @@ public class BedrockConnection implements ConnectorConnection {
                            BedrockAgentClientBuilder bedrockAgentClientBuilder,
                            BedrockAgentRuntimeClientBuilder bedrockAgentRuntimeClientBuilder,
                            IamClientBuilder iamClientBuilder,
-                           BedrockAgentRuntimeAsyncClientBuilder bedrockAgentRuntimeAsyncClientBuilder,
-                           BedrockRuntimeAsyncClientBuilder bedrockRuntimeAsyncClientBuilder) {
+                           int connectionTimeoutMs,
+                           LongFunction<BedrockAgentRuntimeAsyncClient> agentRuntimeAsyncClientFactory,
+                           LongFunction<BedrockRuntimeAsyncClient> runtimeAsyncClientFactory) {
     this.region = region;
     this.bedrockRuntimeClient = bedrockRuntimeClientBuilder.build();
     this.bedrockClient = bedrockClientBuilder.build();
     this.bedrockAgentClient = bedrockAgentClientBuilder.build();
     this.bedrockAgentRuntimeClient = bedrockAgentRuntimeClientBuilder.build();
     this.iamClient = iamClientBuilder.build();
-    this.bedrockAgentRuntimeAsyncClient = bedrockAgentRuntimeAsyncClientBuilder.build();
-    this.bedrockRuntimeAsyncClient = bedrockRuntimeAsyncClientBuilder.build();
+    this.connectionTimeoutMs = connectionTimeoutMs;
+    this.agentRuntimeAsyncClientFactory = agentRuntimeAsyncClientFactory;
+    this.runtimeAsyncClientFactory = runtimeAsyncClientFactory;
+  }
+
+  /**
+   * Returns the connection-level timeout in milliseconds (used for SdkAsyncHttpClient and as fallback when no operation-level
+   * timeout is provided).
+   */
+  public int getConnectionTimeoutMs() {
+    return connectionTimeoutMs;
+  }
+
+  /**
+   * Builds a cache key that includes client type and effective timeout so clients with different timeouts are cached separately
+   * (whether timeout is from operation-level or connection-level).
+   */
+  private static String buildCacheKey(String clientType, long effectiveTimeoutMs) {
+    return clientType + ":" + effectiveTimeoutMs;
+  }
+
+  /**
+   * If cache key is already in the cache, returns that instance. Otherwise creates the client once via {@code clientSupplier},
+   * stores it in the cache, and returns the new instance.
+   */
+  private static <T> T getOrCreateClient(java.util.Map<String, T> clients, String cacheKey,
+                                         Supplier<T> clientSupplier) {
+    return (T) clients.computeIfAbsent(cacheKey, k -> clientSupplier.get());
+  }
+
+  public BedrockAgentRuntimeAsyncClient getBedrockAgentRuntimeAsyncClient() {
+    return getOrCreateBedrockAgentRuntimeAsyncClient(connectionTimeoutMs);
+  }
+
+  /**
+   * Returns a cached or newly created BedrockAgentRuntimeAsyncClient for the given effective timeout (ms). Effective timeout
+   * should be operation-level when available, otherwise connection-level.
+   */
+  public BedrockAgentRuntimeAsyncClient getOrCreateBedrockAgentRuntimeAsyncClient(long effectiveTimeoutMs) {
+    String cacheKey = buildCacheKey(AGENT_RUNTIME_ASYNC_CLIENT_TYPE, effectiveTimeoutMs);
+    return getOrCreateClient(agentRuntimeAsyncClients, cacheKey,
+                             () -> agentRuntimeAsyncClientFactory.apply(effectiveTimeoutMs));
+  }
+
+  public BedrockRuntimeAsyncClient getBedrockRuntimeAsyncClient() {
+    return getOrCreateBedrockRuntimeAsyncClient(connectionTimeoutMs);
+  }
+
+  /**
+   * Returns a cached or newly created BedrockRuntimeAsyncClient for the given effective timeout (ms). Effective timeout should be
+   * operation-level when available, otherwise connection-level.
+   */
+  public BedrockRuntimeAsyncClient getOrCreateBedrockRuntimeAsyncClient(long effectiveTimeoutMs) {
+    String cacheKey = buildCacheKey(RUNTIME_ASYNC_CLIENT_TYPE, effectiveTimeoutMs);
+    return getOrCreateClient(runtimeAsyncClients, cacheKey,
+                             () -> runtimeAsyncClientFactory.apply(effectiveTimeoutMs));
   }
 
   public String getRegion() {
@@ -112,14 +176,6 @@ public class BedrockConnection implements ConnectorConnection {
 
   public IamClient getIamClient() {
     return iamClient;
-  }
-
-  public BedrockAgentRuntimeAsyncClient getBedrockAgentRuntimeAsyncClient() {
-    return bedrockAgentRuntimeAsyncClient;
-  }
-
-  public BedrockRuntimeAsyncClient getBedrockRuntimeAsyncClient() {
-    return bedrockRuntimeAsyncClient;
   }
 
   public InvokeModelResponse answerPrompt(InvokeModelRequest invokeModelRequest) {
@@ -242,7 +298,16 @@ public class BedrockConnection implements ConnectorConnection {
   }
 
   public CompletableFuture<Void> invokeAgent(InvokeAgentRequest request, InvokeAgentResponseHandler handler) {
-    return getBedrockAgentRuntimeAsyncClient().invokeAgent(request, handler);
+    return invokeAgent(request, handler, connectionTimeoutMs);
+  }
+
+  /**
+   * Invokes the agent using a client cached for the given effective timeout (operation-level if provided, otherwise
+   * connection-level).
+   */
+  public CompletableFuture<Void> invokeAgent(InvokeAgentRequest request, InvokeAgentResponseHandler handler,
+                                             long effectiveTimeoutMs) {
+    return getOrCreateBedrockAgentRuntimeAsyncClient(effectiveTimeoutMs).invokeAgent(request, handler);
   }
 
   public InvokeModelResponse invokeModel(InvokeModelRequest request) {
