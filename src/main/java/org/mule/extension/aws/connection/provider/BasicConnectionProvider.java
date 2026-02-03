@@ -4,6 +4,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.mule.extension.aws.connection.provider.parameters.CommonParameters;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
 import org.mule.extension.bedrock.internal.error.exception.AWSConnectionException;
+import org.mule.extension.bedrock.internal.util.RegionUtils;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
@@ -16,6 +17,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
@@ -78,27 +80,39 @@ public class BasicConnectionProvider extends AbstractBedrockConnectionProvider<B
     IamClientBuilder iamClientBuilder = IamClient.builder()
         .httpClient(sdkHttpClientFactory.buildHttpClient(commonParams))
         .credentialsProvider(credentialsProvider);
-    org.mule.extension.bedrock.internal.util.RegionUtils.configureRegionProperty(iamClientBuilder, commonParams);
+    RegionUtils.configureRegionProperty(iamClientBuilder, commonParams);
 
-    // Build BedrockAgentRuntimeAsyncClient
-    BedrockAgentRuntimeAsyncClientBuilder bedrockAgentRuntimeAsyncClientBuilder = BedrockAgentRuntimeAsyncClient.builder()
-        .httpClient(sdkHttpClientFactory.buildHttpAsyncClient(commonParams))
-        .credentialsProvider(credentialsProvider);
-    org.mule.extension.bedrock.internal.util.RegionUtils.configureRegionProperty(bedrockAgentRuntimeAsyncClientBuilder,
-                                                                                 commonParams);
+    int connectionTimeoutMs = commonParams.getConnectionTimeout();
+    // Factories build async clients with a given effective timeout so they can be cached by timeout
+    java.util.function.LongFunction<BedrockAgentRuntimeAsyncClient> agentRuntimeAsyncClientFactory = timeoutMs -> {
+      try {
+        SdkAsyncHttpClient httpClient = sdkHttpClientFactory.buildHttpAsyncClient(commonParams, timeoutMs);
+        BedrockAgentRuntimeAsyncClientBuilder builder = BedrockAgentRuntimeAsyncClient.builder()
+            .httpClient(httpClient)
+            .credentialsProvider(credentialsProvider);
+        RegionUtils.configureRegionProperty(builder, commonParams);
+        return builder.build();
+      } catch (ConnectionException e) {
+        throw new RuntimeException("Failed to build BedrockAgentRuntimeAsyncClient", e);
+      }
+    };
+    java.util.function.LongFunction<BedrockRuntimeAsyncClient> runtimeAsyncClientFactory = timeoutMs -> {
+      try {
+        SdkAsyncHttpClient httpClient = sdkHttpClientFactory.buildHttpAsyncClient(commonParams, timeoutMs);
+        BedrockRuntimeAsyncClientBuilder builder = BedrockRuntimeAsyncClient.builder()
+            .httpClient(httpClient)
+            .credentialsProvider(credentialsProvider);
+        RegionUtils.configureRegionProperty(builder, commonParams);
+        return builder.build();
+      } catch (ConnectionException e) {
+        throw new RuntimeException("Failed to build BedrockRuntimeAsyncClient", e);
+      }
+    };
 
-    // Build BedrockRuntimeAsyncClient
-    BedrockRuntimeAsyncClientBuilder bedrockRuntimeAsyncClientBuilder = BedrockRuntimeAsyncClient.builder()
-        .httpClient(sdkHttpClientFactory.buildHttpAsyncClient(commonParams))
-        .credentialsProvider(credentialsProvider);
-    org.mule.extension.bedrock.internal.util.RegionUtils.configureRegionProperty(bedrockRuntimeAsyncClientBuilder, commonParams);
-
-
-    String region = org.mule.extension.bedrock.internal.util.RegionUtils.getRegion(commonParams);
+    String region = RegionUtils.getRegion(commonParams);
     return new BedrockConnection(region, bedrockRuntimeClientBuilder, bedrockClientBuilder,
                                  bedrockAgentClientBuilder, bedrockAgentRuntimeClientBuilder, iamClientBuilder,
-                                 bedrockAgentRuntimeAsyncClientBuilder,
-                                 bedrockRuntimeAsyncClientBuilder);
+                                 connectionTimeoutMs, agentRuntimeAsyncClientFactory, runtimeAsyncClientFactory);
   }
 
   @Override
