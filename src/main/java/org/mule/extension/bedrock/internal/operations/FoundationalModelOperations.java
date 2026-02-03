@@ -3,7 +3,6 @@ package org.mule.extension.bedrock.internal.operations;
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
 import java.io.InputStream;
-import org.mule.extension.bedrock.api.params.BedrockParamRegion;
 import org.mule.extension.bedrock.api.params.BedrockParamsModelDetails;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
@@ -55,7 +54,6 @@ public class FoundationalModelOperations extends BedrockOperation<FoundationalSe
    *
    * @param config Configuration for Bedrock connector.
    * @param connection Bedrock connection instance.
-   * @param bedrockParamsRegion Parameters including region to list models for.
    * @return InputStream containing the JSON response with list of available foundation models including model IDs, names,
    *         providers, and capabilities.
    */
@@ -65,11 +63,8 @@ public class FoundationalModelOperations extends BedrockOperation<FoundationalSe
   @Alias("FOUNDATIONAL-models-list")
   @Summary("List available Bedrock foundation models")
   public InputStream listFoundationModels(@Config BedrockConfiguration config,
-                                          @Connection BedrockConnection connection,
-                                          @ParameterGroup(
-                                              name = "Additional properties") BedrockParamRegion bedrockParamsRegion) {
+                                          @Connection BedrockConnection connection) {
     return newExecutionBuilder(config, connection)
-        .execute(FoundationalService::listFoundationModels, BedrockModelFactory::createInputStream)
-        .withParam(bedrockParamsRegion);
+        .execute(FoundationalService::listFoundationModels, BedrockModelFactory::createInputStream);
   }
 }

@@ -16,15 +16,15 @@ public class BedrockParameters {
   @Optional(defaultValue = "amazon.nova-lite-v1:0")
   private String modelName;
 
-  public String getModelName() {
-    return modelName;
-  }
-
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
   @OfValues(AwsBedrockRegionNameProvider.class)
   @Optional(defaultValue = "us-east-1")
   private String region;
+
+  public String getModelName() {
+    return modelName;
+  }
 
   public String getRegion() {
     return region;

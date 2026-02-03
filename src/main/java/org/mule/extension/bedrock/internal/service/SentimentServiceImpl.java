@@ -26,7 +26,8 @@ public class SentimentServiceImpl extends BedrockServiceImpl implements Sentimen
           + ". Does it have a positive sentiment? Respond in JSON with Sentiment (value of POSITIVE, NEGATIVE, NEUTRAL) and IsPositive (true or false)";
       String nativeRequest = PromptPayloadHelper.identifyPayload(SentimentTemplate, bedrockParameters);
       logger.info("Native request: {}", nativeRequest);
-      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, nativeRequest);
+      String region = getConnection().getRegion();
+      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, region, nativeRequest);
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {

@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,7 +15,6 @@ import org.mule.extension.bedrock.api.params.BedrockParameters;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
 import org.mule.extension.bedrock.internal.error.ErrorHandler;
-import org.mule.extension.bedrock.internal.helper.BedrockChatMemory;
 import org.mule.extension.bedrock.internal.helper.PromptPayloadHelper;
 import org.mule.extension.bedrock.internal.helper.request.ConverseStreamRequestBuilder;
 import org.mule.extension.bedrock.internal.helper.streaming.StreamResponseHandlerFactory;
@@ -24,7 +22,6 @@ import org.mule.extension.bedrock.internal.metadata.provider.ModelProvider;
 import org.mule.extension.bedrock.internal.util.BedrockConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
@@ -170,106 +167,13 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     try {
       String nativeRequest = PromptPayloadHelper.identifyPayload(prompt, bedrockParameters);
       logger.info("Native request: {}", nativeRequest);
-      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, nativeRequest);
+      String region = getConnection().getRegion();
+      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, region, nativeRequest);
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
       throw ErrorHandler.handleSdkClientException(e, bedrockParameters.getModelName());
     }
-  }
-
-  @Override
-  public String answerPromptMemory(String prompt, String memoryPath, String memoryName,
-                                   Integer keepLastMessages, BedrockParameters bedrockParameters) {
-
-
-    BedrockChatMemory chatMemory = initializeChatMemory(memoryPath, memoryName);
-    // Get keepLastMessages
-    List<String> keepLastMessagesList = getKeepLastMessage(chatMemory, keepLastMessages);
-    keepLastMessagesList.add(prompt);
-    String memoryPrompt = formatMemoryPrompt(keepLastMessagesList);
-
-    String nativeRequest = identifyPayload(memoryPrompt, bedrockParameters);
-
-    addMessageToMemory(chatMemory, prompt);
-
-    // Encode and send the request to the Bedrock Runtime
-    InvokeModelRequest request = InvokeModelRequest.builder()
-        .body(SdkBytes.fromUtf8String(nativeRequest))
-        .modelId(bedrockParameters.getModelName())
-        .build();
-
-    logger.debug("Native request: {}", nativeRequest);
-
-    InvokeModelResponse response = getConnection().invokeModel(request);
-
-    // Decode the response body.
-    JSONObject responseBody = new JSONObject(response.body().asUtf8String());
-
-    return responseBody.toString();
-
-  }
-
-
-
-  private static List<String> getKeepLastMessage(BedrockChatMemory chatMemory, Integer keepLastMessages) {
-
-    // Retrieve all messages in ascending order of messageId
-    List<String> messagesAsc = chatMemory.getAllMessagesByMessageIdAsc();
-
-    // Keep only the last index messages
-    if (messagesAsc.size() > keepLastMessages) {
-      messagesAsc = messagesAsc.subList(messagesAsc.size() - keepLastMessages, messagesAsc.size());
-    }
-
-    return messagesAsc;
-
-  }
-
-  private static String formatMemoryPrompt(List<String> messages) {
-    StringBuilder formattedPrompt = new StringBuilder();
-    for (String message : messages) {
-      formattedPrompt.append(message).append("\n");
-    }
-    return formattedPrompt.toString().trim();
-  }
-
-  private static String identifyPayload(String prompt, BedrockParameters awsBedrockParameters) {
-    return ModelProvider.fromModelId(awsBedrockParameters.getModelName())
-        .map(provider -> payloadGeneratorMap.get(provider).apply(prompt, awsBedrockParameters))
-        .orElse("Unsupported model");
-  }
-
-  private static BedrockChatMemory initializeChatMemory(String memoryPath, String memoryName) {
-    return new BedrockChatMemory(memoryPath, memoryName);
-  }
-
-  private static void addMessageToMemory(BedrockChatMemory chatMemory, String prompt) {
-    if (!isQuestion(prompt)) {
-      chatMemory.addMessage(chatMemory.getMessageCount() + 1, prompt);
-    }
-  }
-
-  private static boolean isQuestion(String message) {
-    if (message == null || message.isBlank()) {
-      return false;
-    }
-
-    String trimmedMessage = message.trim();
-
-    // Check if the message ends with a question mark
-    if (trimmedMessage.endsWith(BedrockConstants.QUESTION_MARK)) {
-      return true;
-    }
-
-    // Check if the message starts with a question word (case insensitive)
-    String lowerCaseMessage = trimmedMessage.toLowerCase();
-    for (String questionWord : BedrockConstants.QUESTION_WORDS) {
-      if (lowerCaseMessage.startsWith(questionWord + BedrockConstants.SPACE)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   @Override
@@ -300,8 +204,9 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     // Track if stream is already closed to prevent double-closing
     AtomicBoolean streamClosed = new AtomicBoolean(false);
 
-    // Use Builder pattern to construct request
-    ConverseStreamRequest request = ConverseStreamRequestBuilder.create(bedrockParameters, prompt).build();
+    // Use Builder pattern to construct request (region from connection so ARN matches connection region)
+    String region = getConnection().getRegion();
+    ConverseStreamRequest request = ConverseStreamRequestBuilder.create(bedrockParameters, region, prompt).build();
     ConverseStreamResponseHandler handler = StreamResponseHandlerFactory.createHandler(outputStream, streamClosed);
 
     // Start the async streaming - don't block here

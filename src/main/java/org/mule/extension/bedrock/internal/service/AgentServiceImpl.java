@@ -20,7 +20,9 @@ import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.mule.extension.bedrock.api.params.BedrockAgentsFilteringParameters;
-import org.mule.extension.bedrock.api.params.BedrockAgentsParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsMultipleFilteringParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsResponseLoggingParameters;
+import org.mule.extension.bedrock.api.params.BedrockAgentsResponseParameters;
 import org.mule.extension.bedrock.api.params.BedrockAgentsSessionParameters;
 import org.mule.extension.bedrock.api.params.BedrockParameters;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
@@ -98,7 +100,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     try {
       String finalPromptTemplate = PromptPayloadHelper.definePromptTemplate(promptTemplate, instructions, dataset);
       String nativeRequest = PromptPayloadHelper.identifyPayload(finalPromptTemplate, bedrockParameters);
-      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, nativeRequest);
+      String region = getConnection().getRegion();
+      InvokeModelRequest invokeModelRequest = PromptPayloadHelper.createInvokeRequest(bedrockParameters, region, nativeRequest);
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
@@ -108,7 +111,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   @Override
-  public String listAgents(BedrockAgentsParameters bedrockAgentsParameters) {
+  public String listAgents() {
     ListAgentsRequest listAgentsRequest = ListAgentsRequest.builder().build();
     ListAgentsResponse listAgentsResponse = getConnection().listAgents(listAgentsRequest);
     List<AgentSummary> agentSummaries = listAgentsResponse.agentSummaries();
@@ -126,7 +129,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   @Override
-  public String getAgentById(String agentId, BedrockAgentsParameters bedrockAgentsParameters) {
+  public String getAgentById(String agentId) {
     GetAgentRequest getAgentRequest = GetAgentRequest.builder()
         .agentId(agentId)
         .build();
@@ -155,7 +158,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   public String chatWithAgent(String agentId, String agentAliasId, String prompt, boolean enableTrace, boolean latencyOptimized,
                               BedrockAgentsSessionParameters bedrockSessionParameters,
                               BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
-                              BedrockAgentsParameters bedrockAgentsParameters) {
+                              BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                              BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                              BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
         : UUID.randomUUID().toString();
@@ -407,7 +412,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                             String prompt, boolean enableTrace,
                                             boolean latencyOptimized, BedrockAgentsSessionParameters bedrockSessionParameters,
                                             BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
-                                            BedrockAgentsParameters bedrockAgentsParameters) {
+                                            BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                                            BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                                            BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
         : UUID.randomUUID().toString();

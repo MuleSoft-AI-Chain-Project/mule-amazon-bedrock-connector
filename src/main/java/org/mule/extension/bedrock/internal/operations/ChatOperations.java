@@ -54,39 +54,6 @@ public class ChatOperations extends BedrockOperation<ChatService> {
   }
 
   /**
-   * Generates a text response from a prompt with conversation memory support. Maintains conversation history in a persistent
-   * storage.
-   *
-   * @param config Configuration for Bedrock connector.
-   * @param connection Bedrock connection instance.
-   * @param prompt The text prompt to send to the model.
-   * @param memoryPath File system path where the memory database will be stored.
-   * @param memoryName Name identifier for the memory storage (used as database name).
-   * @param keepLastMessages Number of previous messages to include in the conversation context.
-   * @param bedrockParameters Additional properties including model name, region, temperature, topP, topK, maxTokenCount, and
-   *        optional guardrail identifier.
-   * @return InputStream containing the JSON response with generated text, usage metrics, and stop reason.
-   */
-  @MediaType(value = APPLICATION_JSON, strict = false)
-  @Throws(BedrockErrorsProvider.class)
-  @Execution(ExecutionType.BLOCKING)
-  @Alias("CHAT-answer-prompt-memory")
-  @Summary("Generate a response with conversational memory")
-  public InputStream chatAnswerPromptMemory(@Config BedrockConfiguration config,
-                                            @Connection BedrockConnection connection,
-                                            String prompt, String memoryPath, String memoryName, Integer keepLastMessages,
-                                            @ParameterGroup(name = "Additional properties") BedrockParameters bedrockParameters) {
-
-    return newExecutionBuilder(config, connection)
-        .execute(ChatService::answerPromptMemory, BedrockModelFactory::createInputStream)
-        .withParam(prompt)
-        .withParam(memoryPath)
-        .withParam(memoryName)
-        .withParam(keepLastMessages)
-        .withParam(bedrockParameters);
-  }
-
-  /**
    * Generates a streaming text response from a prompt using Server-Sent Events (SSE). Returns responses in real-time as they are
    * generated.
    *
@@ -97,7 +64,7 @@ public class ChatOperations extends BedrockOperation<ChatService> {
    *        optional guardrail identifier.
    * @return InputStream containing Server-Sent Events (SSE) stream with real-time text generation chunks.
    */
-  @MediaType(value = APPLICATION_JSON, strict = false)
+  @MediaType(value = "text/event-stream", strict = false)
   @Throws(BedrockErrorsProvider.class)
   @Execution(ExecutionType.BLOCKING)
   @Alias("CHAT-answer-prompt-streaming")

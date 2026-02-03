@@ -3,7 +3,6 @@ package org.mule.extension.bedrock.internal.service;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.mule.extension.bedrock.api.params.BedrockParamRegion;
 import org.mule.extension.bedrock.api.params.BedrockParamsModelDetails;
 import org.mule.extension.bedrock.internal.config.BedrockConfiguration;
 import org.mule.extension.bedrock.internal.connection.BedrockConnection;
@@ -56,12 +55,10 @@ public class FoundationalServiceImpl extends BedrockServiceImpl implements Found
       logger.error(e.getMessage(), e);
       throw new RuntimeException(e);
     }
-
-
   }
 
   @Override
-  public String listFoundationModels(BedrockParamRegion bedrockParamRegion) {
+  public String listFoundationModels() {
     try {
       ListFoundationModelsResponse response = getConnection().listFoundationalModels();
       List<FoundationModelSummary> models = response.modelSummaries();

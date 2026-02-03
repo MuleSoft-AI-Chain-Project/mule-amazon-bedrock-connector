@@ -94,7 +94,8 @@ public class BasicConnectionProvider extends AbstractBedrockConnectionProvider<B
     org.mule.extension.bedrock.internal.util.RegionUtils.configureRegionProperty(bedrockRuntimeAsyncClientBuilder, commonParams);
 
 
-    return new BedrockConnection(bedrockRuntimeClientBuilder, bedrockClientBuilder,
+    String region = org.mule.extension.bedrock.internal.util.RegionUtils.getRegion(commonParams);
+    return new BedrockConnection(region, bedrockRuntimeClientBuilder, bedrockClientBuilder,
                                  bedrockAgentClientBuilder, bedrockAgentRuntimeClientBuilder, iamClientBuilder,
                                  bedrockAgentRuntimeAsyncClientBuilder,
                                  bedrockRuntimeAsyncClientBuilder);
