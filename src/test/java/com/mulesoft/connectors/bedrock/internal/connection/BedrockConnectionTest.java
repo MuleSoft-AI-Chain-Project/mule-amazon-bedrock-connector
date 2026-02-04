@@ -21,7 +21,7 @@ import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
@@ -203,21 +203,21 @@ class BedrockConnectionTest {
   }
 
   @Test
-  @DisplayName("validate throws BedrockException when listFoundationModels throws SdkClientException with unable to load credentials")
+  @DisplayName("validate throws ModuleException when listFoundationModels throws SdkClientException with unable to load credentials")
   void validateThrowsWhenUnableToLoadCredentials() {
     when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
         .thenThrow(SdkClientException.builder().message("Unable to load credentials from").build());
     BedrockConnection conn = createConnection();
-    assertThatThrownBy(conn::validate).isInstanceOf(BedrockException.class).hasMessageContaining("Invalid credentials");
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class).hasMessageContaining("Invalid credentials");
   }
 
   @Test
-  @DisplayName("validate throws when listFoundationModels throws BedrockException with 403")
+  @DisplayName("validate throws when listFoundationModels throws AWS BedrockException with 403")
   void validateThrowsWhen403() {
     when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
         .thenThrow(software.amazon.awssdk.services.bedrock.model.BedrockException.builder().statusCode(403).build());
     BedrockConnection conn = createConnection();
-    assertThatThrownBy(conn::validate).isInstanceOf(BedrockException.class).hasMessageContaining("Invalid credentials");
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class).hasMessageContaining("Invalid credentials");
   }
 
   @Test

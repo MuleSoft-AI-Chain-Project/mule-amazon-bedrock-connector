@@ -35,7 +35,7 @@ public class StsClientHelper {
                                          SdkHttpClientFactory sdkHttpClientFactory,
                                          String customStsEndpoint)
       throws ConnectionException {
-    String region = RegionUtils.getRegion(commonParameters);
+    Region region = RegionUtils.getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
 
     StsClientBuilder stsClientBuilder = StsClient.builder()
@@ -52,9 +52,9 @@ public class StsClientHelper {
 
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       stsClientBuilder.endpointOverride(URI.create(serviceEndpoint))
-          .region(Region.of(region));
+          .region(region);
     } else {
-      stsClientBuilder.region(Region.of(region));
+      stsClientBuilder.region(region);
     }
 
     return stsClientBuilder.build();

@@ -11,30 +11,29 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 
 public interface AgentService extends ConnectorService {
 
-  public String definePromptTemplate(String promptTemplate, String instructions, String dataset,
-                                     BedrockParameters bedrockParameters);
+  String definePromptTemplate(String promptTemplate, String instructions, String dataset,
+                              BedrockParameters bedrockParameters);
 
-  public String listAgents();
+  String listAgents();
 
-  public String getAgentById(String agentId);
+  String getAgentById(String agentId);
 
-  public String chatWithAgent(String agentId, String agentAliasId,
-                              String prompt,
-                              boolean enableTrace, boolean latencyOptimized,
-                              BedrockAgentsSessionParameters bedrockSessionParameters,
-                              BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
-                              BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
-                              BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
-                              BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters);
+  String chatWithAgent(String agentId, String agentAliasId,
+                       String prompt,
+                       boolean enableTrace, boolean latencyOptimized,
+                       BedrockAgentsSessionParameters bedrockSessionParameters,
+                       BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
+                       BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                       BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                       BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters);
 
-
-  public InputStream chatWithAgentSSEStream(String agentId, String agentAliasId,
-                                            String prompt,
-                                            boolean enableTrace, boolean latencyOptimized,
-                                            BedrockAgentsSessionParameters bedrockSessionParameters,
-                                            BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
-                                            BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
-                                            BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
-                                            BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters);
+  InputStream chatWithAgentSSEStream(String agentId, String agentAliasId,
+                                     String prompt,
+                                     boolean enableTrace, boolean latencyOptimized,
+                                     BedrockAgentsSessionParameters bedrockSessionParameters,
+                                     BedrockAgentsFilteringParameters bedrockAgentsFilteringParameters,
+                                     BedrockAgentsMultipleFilteringParameters bedrockAgentsMultipleFilteringParameters,
+                                     BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
+                                     BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters);
 
 }

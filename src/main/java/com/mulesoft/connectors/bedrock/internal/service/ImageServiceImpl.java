@@ -12,6 +12,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.api.params.BedrockImageParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.metadata.provider.ModelProvider;
 import org.slf4j.Logger;
@@ -157,11 +159,11 @@ public class ImageServiceImpl extends BedrockServiceImpl implements ImageService
 
     byte[] imageBytes = ModelProvider.fromModelId(modelId)
         .map(provider -> imageBytesExtractorMap.get(provider).apply(responseBody))
-        .orElseThrow(() -> new RuntimeException("Unsupported model: " + modelId));
+        .orElseThrow(() -> new ModuleException("Unsupported model: " + modelId, BedrockErrorType.VALIDATION_ERROR));
 
     String finishReason = responseBody.optString("error", null);
     if (finishReason != null) {
-      throw new RuntimeException("Image generation error. Error is " + finishReason);
+      throw new ModuleException("Image generation error. Error is " + finishReason, BedrockErrorType.BEDROCK_ERROR);
     }
 
     return imageBytes;

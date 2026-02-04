@@ -1,10 +1,13 @@
 package com.mulesoft.connectors.bedrock.internal.connection.client;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.time.Duration;
 import javax.net.ssl.TrustManagerFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -66,7 +69,7 @@ public class SdkHttpClientFactory {
             .getInstance(TrustManagerFactory.getDefaultAlgorithm());
         trustManagerFactory.init(trustStore);
         clientBuilder.tlsTrustManagersProvider(trustManagerFactory::getTrustManagers);
-      } catch (Exception e) {
+      } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
         LOGGER.info("TLS configuration error: " + e.getMessage());
         throw new ConnectionException("TLS configuration error", e);
       }

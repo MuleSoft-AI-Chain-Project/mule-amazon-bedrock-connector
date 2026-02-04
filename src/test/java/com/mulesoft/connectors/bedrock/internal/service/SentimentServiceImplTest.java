@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
@@ -37,7 +37,7 @@ class SentimentServiceImplTest {
   }
 
   @Test
-  @DisplayName("extractSentiments throws BedrockException when connection throws SdkClientException")
+  @DisplayName("extractSentiments throws ModuleException when connection throws SdkClientException")
   void extractSentimentsThrowsWhenSdkClientException() {
     BedrockConfiguration config = mock(BedrockConfiguration.class);
     BedrockConnection connection = mock(BedrockConnection.class);
@@ -48,7 +48,7 @@ class SentimentServiceImplTest {
     BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.3f, 50);
     SentimentServiceImpl service = new SentimentServiceImpl(config, connection);
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.extractSentiments("Hello", params))
-        .isInstanceOf(BedrockException.class);
+        .isInstanceOf(ModuleException.class);
   }
 
   @Test

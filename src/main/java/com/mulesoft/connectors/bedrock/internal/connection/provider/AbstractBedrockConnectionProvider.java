@@ -1,8 +1,6 @@
 package com.mulesoft.connectors.bedrock.internal.connection.provider;
 
-import static com.mulesoft.connectors.bedrock.internal.util.StringUtils.isPresent;
-
-import com.mulesoft.connectors.bedrock.internal.connection.provider.AWSConnectionProvider;
+import org.apache.commons.lang3.StringUtils;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import com.mulesoft.connectors.bedrock.internal.error.exception.AWSConnectionException;
@@ -28,8 +26,8 @@ public abstract class AbstractBedrockConnectionProvider<CONNECTION extends Conne
       CommonParameters commonParams = getCommonParameters();
 
       if (commonParams.isTryDefaultAWSCredentialsProviderChain() ||
-          isPresent(commonParams.getAccessKey()) &&
-              isPresent(commonParams.getSecretKey())) {
+          StringUtils.isNotBlank(commonParams.getAccessKey()) &&
+              StringUtils.isNotBlank(commonParams.getSecretKey())) {
 
         CONNECTION connection = buildConnection(commonParams);
         this.onConnect(connection);

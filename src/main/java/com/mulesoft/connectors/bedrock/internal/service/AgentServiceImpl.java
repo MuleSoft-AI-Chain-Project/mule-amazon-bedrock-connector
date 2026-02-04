@@ -21,7 +21,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.mulesoft.connectors.bedrock.api.enums.TimeUnitEnum;
+import java.util.concurrent.TimeUnit;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsMultipleFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseLoggingParameters;
@@ -30,9 +30,11 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsSessionParameters
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import com.mulesoft.connectors.bedrock.internal.helper.PromptPayloadHelper;
 import com.mulesoft.connectors.bedrock.internal.util.StreamingRetryUtility;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
@@ -170,7 +172,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                               BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
                               BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
     Integer operationTimeout = bedrockAgentsResponseParameters.getRequestTimeout();
-    TimeUnitEnum operationTimeoutUnit = bedrockAgentsResponseParameters.getRequestTimeoutUnit();
+    TimeUnit operationTimeoutUnit = bedrockAgentsResponseParameters.getRequestTimeoutUnit();
 
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
@@ -253,7 +255,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                                 boolean latencyOptimized, String effectiveSessionId,
                                                 boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
                                                 java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
-                                                Integer operationTimeout, TimeUnitEnum operationTimeoutUnit) {
+                                                Integer operationTimeout, TimeUnit operationTimeoutUnit) {
     long startTime = System.currentTimeMillis();
 
     InvokeAgentRequest.Builder requestBuilder = InvokeAgentRequest.builder()
@@ -372,20 +374,11 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
   }
 
-  private static Duration toDuration(int amount, TimeUnitEnum unit) {
+  private static Duration toDuration(int amount, TimeUnit unit) {
     if (unit == null) {
       return Duration.ofSeconds(amount);
     }
-    switch (unit) {
-      case MILLISECONDS:
-        return Duration.ofMillis(amount);
-      case SECONDS:
-        return Duration.ofSeconds(amount);
-      case MINUTES:
-        return Duration.ofMinutes(amount);
-      default:
-        return Duration.ofSeconds(amount);
-    }
+    return Duration.ofMillis(unit.toMillis(amount));
   }
 
   private Consumer<PromptCreationConfigurations.Builder> buildPromptConfigurations(boolean excludePreviousThinkingSteps,
@@ -618,7 +611,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                             BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
 
     Integer operationTimeout = bedrockAgentsResponseParameters.getRequestTimeout();
-    TimeUnitEnum operationTimeoutUnit = bedrockAgentsResponseParameters.getRequestTimeoutUnit();
+    TimeUnit operationTimeoutUnit = bedrockAgentsResponseParameters.getRequestTimeoutUnit();
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
         : UUID.randomUUID().toString();
@@ -674,7 +667,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                            java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
                                            StreamingRetryUtility.RetryConfig retryConfig,
                                            String requestId, String correlationId, String userId,
-                                           Integer operationTimeout, TimeUnitEnum operationTimeoutUnit) {
+                                           Integer operationTimeout, TimeUnit operationTimeoutUnit) {
 
     try {
       // Create piped streams for real-time streaming
@@ -746,7 +739,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                               AtomicBoolean chunksReceived,
                                               AtomicBoolean sessionStartSent,
                                               String requestId, String correlationId, String userId,
-                                              Integer operationTimeout, TimeUnitEnum operationTimeoutUnit)
+                                              Integer operationTimeout, TimeUnit operationTimeoutUnit)
       throws ExecutionException, InterruptedException, IOException {
 
     StreamingRetryUtility.StreamingOperation operation = () -> {
@@ -783,8 +776,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       } else if (lastException instanceof IOException) {
         throw new IOException(errorMessage, lastException);
       } else {
-        // For other exceptions, wrap in RuntimeException
-        throw new RuntimeException(errorMessage, lastException);
+        // For other exceptions, wrap in ModuleException
+        throw new ModuleException(errorMessage, BedrockErrorType.CLIENT_ERROR, lastException);
       }
     }
   }
@@ -796,7 +789,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                      PipedOutputStream outputStream, AtomicBoolean chunksReceived,
                                      AtomicBoolean sessionStartSent, String requestId,
                                      String correlationId, String userId,
-                                     Integer operationTimeout, TimeUnitEnum operationTimeoutUnit)
+                                     Integer operationTimeout, TimeUnit operationTimeoutUnit)
       throws ExecutionException, InterruptedException, IOException {
 
     long startTime = System.currentTimeMillis();

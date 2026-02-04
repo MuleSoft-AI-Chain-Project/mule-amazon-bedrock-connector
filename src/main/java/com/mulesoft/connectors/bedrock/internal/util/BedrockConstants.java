@@ -10,7 +10,6 @@ public final class BedrockConstants {
   }
 
   // AWS Configuration
-  public static final String DEFAULT_AWS_ACCOUNT_ID = "076261412953";
   public static final String INFERENCE_PROFILE_ARN_TEMPLATE = "arn:aws:bedrock:%s:%s:inference-profile/us.%s";
 
   // Model ID Patterns
@@ -51,21 +50,6 @@ public final class BedrockConstants {
     public static final String TITAN = "titan";
     public static final String DEFAULT = "default";
   }
-
-  // Question Detection
-  public static final String[] QUESTION_WORDS = {
-      "who", "what", "when", "where", "why", "how",
-      "tell", "tell me", "do you", "what is",
-      "can you", "could you", "would you",
-      "is there", "are there", "will you", "won't you",
-      "can't you", "couldn't you", "wouldn't you",
-      "is it", "isn't it", "are they", "aren't they",
-      "will they", "won't they", "can they", "can't they",
-      "could they", "couldn't they", "would they", "wouldn't they"
-  };
-
-  public static final String QUESTION_MARK = "?";
-  public static final String SPACE = " ";
 
   // JSON Keys
   public static final class JsonKeys {

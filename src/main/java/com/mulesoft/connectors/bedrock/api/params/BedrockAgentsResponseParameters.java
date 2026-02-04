@@ -1,6 +1,6 @@
 package com.mulesoft.connectors.bedrock.api.params;
 
-import com.mulesoft.connectors.bedrock.api.enums.TimeUnitEnum;
+import java.util.concurrent.TimeUnit;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -26,7 +26,7 @@ public class BedrockAgentsResponseParameters {
   @Optional
   @Summary("Unit of time for the request timeout")
   @Placement(tab = "Response")
-  private TimeUnitEnum requestTimeoutUnit;
+  private TimeUnit requestTimeoutUnit;
 
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
@@ -53,7 +53,7 @@ public class BedrockAgentsResponseParameters {
     return requestTimeout;
   }
 
-  public TimeUnitEnum getRequestTimeoutUnit() {
+  public TimeUnit getRequestTimeoutUnit() {
     return requestTimeoutUnit;
   }
 

@@ -9,9 +9,9 @@ import org.xml.sax.SAXException;
 
 public interface EmbeddingService extends ConnectorService {
 
-  public String generateEmbeddings(String prompt, BedrockParametersEmbedding bedrockEmbeddingParameters);
+  String generateEmbeddings(String prompt, BedrockParametersEmbedding bedrockEmbeddingParameters);
 
-  public String invokeAdhocRAG(String prompt, String filePath, BedrockParametersEmbeddingDocument bedrockEmbeddingParameters)
+  String invokeAdhocRAG(String prompt, String filePath, BedrockParametersEmbeddingDocument bedrockEmbeddingParameters)
       throws IOException, SAXException, TikaException;
 
 }

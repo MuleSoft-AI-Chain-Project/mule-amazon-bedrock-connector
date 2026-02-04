@@ -23,7 +23,6 @@ public final class ConverseStreamRequestBuilder {
   private final String prompt;
   private final String region;
   private String modelId;
-  private String accountId;
 
   private ConverseStreamRequestBuilder(BedrockParameters parameters, String region, String prompt) {
     this.parameters = parameters;
@@ -66,11 +65,10 @@ public final class ConverseStreamRequestBuilder {
 
   private void initializeModelConfiguration() {
     modelId = parameters.getModelName();
-    accountId = ModelIdentifier.getAccountIdOrDefault(parameters.getAwsAccountId());
-
-    logger.debug("accountId: {}", accountId);
 
     if (ModelIdentifier.requiresInferenceProfileArn(modelId)) {
+      String accountId = ModelIdentifier.requireAccountId(parameters.getAwsAccountId());
+      logger.debug("accountId: {}", accountId);
       modelId = ModelIdentifier.buildInferenceProfileArn(region, accountId, modelId);
     }
   }

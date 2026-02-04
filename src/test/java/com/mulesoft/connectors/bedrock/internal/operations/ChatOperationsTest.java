@@ -9,7 +9,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
@@ -59,7 +59,7 @@ class ChatOperationsTest {
   }
 
   @Test
-  @DisplayName("chatAnswerPrompt throws BedrockException when connection throws SdkClientException")
+  @DisplayName("chatAnswerPrompt throws ModuleException when connection throws SdkClientException")
   void chatAnswerPromptThrowsWhenSdkClientException() {
     BedrockConfiguration config = mock(BedrockConfiguration.class);
     BedrockConnection connection = mock(BedrockConnection.class);
@@ -70,7 +70,7 @@ class ChatOperationsTest {
 
     ChatOperations ops = new ChatOperations();
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> ops.chatAnswerPrompt(config, connection, "Hi", params))
-        .isInstanceOf(BedrockException.class);
+        .isInstanceOf(ModuleException.class);
   }
 
   @Test

@@ -5,7 +5,7 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockImageParameters;
 
 public interface ImageService extends ConnectorService {
 
-  public String invokeModel(String prompt, String avoidInImage, String fullPath,
-                            BedrockImageParameters awsBedrockParameters);
+  String invokeModel(String prompt, String avoidInImage, String fullPath,
+                     BedrockImageParameters awsBedrockParameters);
 
 }

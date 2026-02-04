@@ -19,9 +19,8 @@ class BedrockConstantsTest {
   }
 
   @Test
-  @DisplayName("DEFAULT_AWS_ACCOUNT_ID and INFERENCE_PROFILE_ARN_TEMPLATE are set")
+  @DisplayName("INFERENCE_PROFILE_ARN_TEMPLATE is set")
   void awsConstants() {
-    assertThat(BedrockConstants.DEFAULT_AWS_ACCOUNT_ID).isNotEmpty();
     assertThat(BedrockConstants.INFERENCE_PROFILE_ARN_TEMPLATE).contains("arn:aws:bedrock:");
   }
 
@@ -41,9 +40,8 @@ class BedrockConstantsTest {
   }
 
   @Test
-  @DisplayName("QUESTION_WORDS and JsonKeys are non-empty")
-  void questionWordsAndJsonKeys() {
-    assertThat(BedrockConstants.QUESTION_WORDS).isNotEmpty();
+  @DisplayName("JsonKeys are set")
+  void jsonKeys() {
     assertThat(BedrockConstants.JsonKeys.TEXT).isEqualTo("text");
     assertThat(BedrockConstants.JsonKeys.USAGE).isEqualTo("usage");
   }

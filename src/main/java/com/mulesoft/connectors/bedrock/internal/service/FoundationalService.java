@@ -5,7 +5,7 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockParamsModelDetails;
 
 public interface FoundationalService extends ConnectorService {
 
-  public String getFoundationModel(BedrockParamsModelDetails bedrockParamsModelDetails);
+  String getFoundationModel(BedrockParamsModelDetails bedrockParamsModelDetails);
 
-  public String listFoundationModels();
+  String listFoundationModels();
 }

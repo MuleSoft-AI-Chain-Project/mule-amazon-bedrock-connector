@@ -15,32 +15,6 @@ public abstract class BasePayloadGenerator implements PayloadGenerator {
   protected final Logger logger = LoggerFactory.getLogger(getClass());
 
   /**
-   * Creates a JSON object with common inference parameters.
-   *
-   * @param parameters the bedrock parameters
-   * @return JSONObject with inference config
-   */
-  protected JSONObject createInferenceConfig(BedrockParameters parameters) {
-    JSONObject config = new JSONObject();
-    config.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    config.put(BedrockConstants.JsonKeys.MAX_TOKENS.toLowerCase(), parameters.getMaxTokenCount());
-    return config;
-  }
-
-  /**
-   * Creates a JSON object with temperature and topP parameters.
-   *
-   * @param parameters the bedrock parameters
-   * @return JSONObject with temperature and topP
-   */
-  protected JSONObject createTemperatureAndTopP(BedrockParameters parameters) {
-    JSONObject config = new JSONObject();
-    config.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    config.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
-    return config;
-  }
-
-  /**
    * Creates a JSON object with all common parameters (temperature, topP, topK, maxTokens).
    *
    * @param parameters the bedrock parameters

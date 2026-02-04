@@ -8,6 +8,7 @@ import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.extension.api.annotation.Alias;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
@@ -91,8 +92,8 @@ public class AssumeRoleConnectionProvider extends AbstractAssumeRoleConnectionPr
       }
     };
 
-    String region = RegionUtils.getRegion(commonParams);
-    return new BedrockConnection(region, bedrockRuntimeClientBuilder, bedrockClientBuilder,
+    Region region = RegionUtils.getRegion(commonParams);
+    return new BedrockConnection(region.id(), bedrockRuntimeClientBuilder, bedrockClientBuilder,
                                  bedrockAgentClientBuilder, bedrockAgentRuntimeClientBuilder, iamClientBuilder,
                                  connectionTimeoutMs, agentRuntimeAsyncClientFactory, runtimeAsyncClientFactory);
   }

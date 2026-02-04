@@ -2,7 +2,7 @@ package com.mulesoft.connectors.bedrock.api.params;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.mulesoft.connectors.bedrock.api.enums.TimeUnitEnum;
+import java.util.concurrent.TimeUnit;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,9 +32,9 @@ class BedrockParametersTest {
   @DisplayName("BedrockAgentsResponseParameters getters return set values")
   void responseParamsGetters() {
     BedrockAgentsResponseParameters p =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, true, 3, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, true, 3, 1000L);
     assertThat(p.getRequestTimeout()).isEqualTo(30);
-    assertThat(p.getRequestTimeoutUnit()).isEqualTo(TimeUnitEnum.SECONDS);
+    assertThat(p.getRequestTimeoutUnit()).isEqualTo(TimeUnit.SECONDS);
     assertThat(p.getEnableRetry()).isTrue();
     assertThat(p.getMaxRetries()).isEqualTo(3);
     assertThat(p.getRetryBackoffMs()).isEqualTo(1000L);

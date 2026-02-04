@@ -1,15 +1,14 @@
 package com.mulesoft.connectors.bedrock.internal.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.ModelProvider;
 
 @DisplayName("ModelIdentifier")
 class ModelIdentifierTest {
@@ -57,26 +56,6 @@ class ModelIdentifierTest {
     void buildsArn() {
       String arn = ModelIdentifier.buildInferenceProfileArn("us-east-1", "123456789", "anthropic.claude-3");
       assertThat(arn).isEqualTo("arn:aws:bedrock:us-east-1:123456789:inference-profile/us.anthropic.claude-3");
-    }
-  }
-
-  @Nested
-  @DisplayName("identifyModelProvider")
-  class IdentifyModelProvider {
-
-    @ParameterizedTest
-    @NullAndEmptySource
-    @DisplayName("returns empty for null and blank")
-    void returnsEmptyForNullAndBlank(String modelId) {
-      assertThat(ModelIdentifier.identifyModelProvider(modelId)).isEqualTo(Optional.empty());
-    }
-
-    @Test
-    @DisplayName("identifies provider from model ID")
-    void identifiesProvider() {
-      assertThat(ModelIdentifier.identifyModelProvider("amazon.titan-text-express-v1")).hasValue(ModelProvider.AMAZON);
-      assertThat(ModelIdentifier.identifyModelProvider("anthropic.claude-3")).hasValue(ModelProvider.ANTHROPIC);
-      assertThat(ModelIdentifier.identifyModelProvider("mistral.mistral-7b")).hasValue(ModelProvider.MISTRAL);
     }
   }
 
@@ -131,21 +110,23 @@ class ModelIdentifierTest {
   }
 
   @Nested
-  @DisplayName("getAccountIdOrDefault")
-  class GetAccountIdOrDefault {
+  @DisplayName("requireAccountId")
+  class RequireAccountId {
 
     @Test
-    @DisplayName("returns provided account ID when non-null and non-blank")
+    @DisplayName("returns account ID when non-null and non-blank")
     void returnsProvided() {
-      assertThat(ModelIdentifier.getAccountIdOrDefault("123456789")).isEqualTo("123456789");
+      assertThat(ModelIdentifier.requireAccountId("123456789")).isEqualTo("123456789");
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = "   ")
-    @DisplayName("returns default when null or blank")
-    void returnsDefaultWhenNullOrBlank(String accountId) {
-      assertThat(ModelIdentifier.getAccountIdOrDefault(accountId)).isEqualTo(BedrockConstants.DEFAULT_AWS_ACCOUNT_ID);
+    @DisplayName("throws ModuleException when null or blank")
+    void throwsWhenNullOrBlank(String accountId) {
+      assertThatThrownBy(() -> ModelIdentifier.requireAccountId(accountId))
+          .isInstanceOf(org.mule.runtime.extension.api.exception.ModuleException.class)
+          .hasMessageContaining("AWS account ID is required");
     }
   }
 }

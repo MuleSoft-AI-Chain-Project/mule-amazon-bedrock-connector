@@ -7,7 +7,7 @@ import org.mule.connectors.commons.template.service.ConnectorService;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
@@ -26,8 +26,8 @@ public class BedrockOperation<SERVICE extends ConnectorService>
 
   protected ExecutionBuilder<SERVICE> newExecutionBuilder(BedrockConfiguration config, BedrockConnection connection) {
     return super.newExecutionBuilder(config, connection)
-        .withExceptionHandler(BedrockException.class, (e) -> {
-          // Already a BedrockException, re-throw as-is
+        .withExceptionHandler(ModuleException.class, (e) -> {
+          // Already a ModuleException, re-throw as-is
           throw e;
         })
         .withExceptionHandler(SdkClientException.class, (e) -> {
@@ -59,7 +59,7 @@ public class BedrockOperation<SERVICE extends ConnectorService>
           throw ErrorHandler.handleSdkException(e);
         })
         .withExceptionHandler(RuntimeException.class, (e) -> {
-          // Log and re-throw - don't convert to BedrockException
+          // Log and re-throw - don't convert to ModuleException
           ErrorHandler.handleRuntimeException(e, "BedrockOperation");
           throw e;
         });

@@ -5,5 +5,5 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 
 public interface SentimentService extends ConnectorService {
 
-  public String extractSentiments(String textToAnalyze, BedrockParameters bedrockParameters);
+  String extractSentiments(String textToAnalyze, BedrockParameters bedrockParameters);
 }

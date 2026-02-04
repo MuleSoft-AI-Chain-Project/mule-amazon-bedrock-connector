@@ -1,6 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
@@ -19,11 +21,11 @@ class RegionUtilsTest {
   class GetRegion {
 
     @Test
-    @DisplayName("returns normalized region from CommonParameters")
+    @DisplayName("returns Region from CommonParameters")
     void returnsRegion() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-east-1");
-      assertThat(RegionUtils.getRegion(params)).isEqualTo("us-east-1");
+      assertThat(RegionUtils.getRegion(params)).isEqualTo(Region.US_EAST_1);
     }
 
     @Test
@@ -31,23 +33,33 @@ class RegionUtilsTest {
     void normalizesRegion() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us_east_1");
-      assertThat(RegionUtils.getRegion(params)).isEqualTo("us-east-1");
+      assertThat(RegionUtils.getRegion(params)).isEqualTo(Region.US_EAST_1);
     }
 
     @Test
-    @DisplayName("returns region as-is when Region.of throws")
-    void returnsRegionWhenInvalid() {
+    @DisplayName("returns Region for any non-empty region id (SDK accepts custom region strings)")
+    void returnsRegionForCustomId() {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("invalid-region-id");
-      assertThat(RegionUtils.getRegion(params)).isEqualTo("invalid-region-id");
+      assertThat(RegionUtils.getRegion(params).id()).isEqualTo("invalid-region-id");
     }
 
     @Test
-    @DisplayName("returns region as-is when Region.of throws for null")
-    void returnsRegionWhenNull() {
+    @DisplayName("throws IllegalArgumentException when region is null")
+    void throwsWhenNull() {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn(null);
-      assertThat(RegionUtils.getRegion(params)).isNull();
+      assertThatThrownBy(() -> RegionUtils.getRegion(params))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("region must not be null or empty");
+    }
+
+    @Test
+    @DisplayName("throws IllegalArgumentException when commonParameters is null")
+    void throwsWhenCommonParametersNull() {
+      assertThatThrownBy(() -> RegionUtils.getRegion(null))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("commonParameters must not be null");
     }
   }
 

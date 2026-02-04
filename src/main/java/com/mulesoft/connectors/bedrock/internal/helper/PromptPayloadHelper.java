@@ -43,16 +43,11 @@ public class PromptPayloadHelper {
     String modelId = bedrockParameters.getModelName();
     logger.debug("modelId: {}", modelId);
 
-    String accountId = ModelIdentifier.getAccountIdOrDefault(bedrockParameters.getAwsAccountId());
-    logger.debug("accountId: {}", accountId);
-
-    // for Anthropic Claude 3-x, mistral.pxtral, meta.llama3, prep the model id
-    // using the following format
-    // arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0
-    // arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.mistral.pixtral-large-2502-v1:0
-    // arn:aws:bedrock:us-east-1:076261412953:inference-profile/us.meta.llama3-3-70b-instruct-v1:0
-
+    // For models that require inference profile ARN (e.g. Claude 3-x, Mistral Pixtral, Llama 3.x),
+    // AWS account ID must be provided in parameters.
     if (ModelIdentifier.requiresInferenceProfileArn(modelId)) {
+      String accountId = ModelIdentifier.requireAccountId(bedrockParameters.getAwsAccountId());
+      logger.debug("accountId: {}", accountId);
       modelId = ModelIdentifier.buildInferenceProfileArn(region, accountId, modelId);
     }
 

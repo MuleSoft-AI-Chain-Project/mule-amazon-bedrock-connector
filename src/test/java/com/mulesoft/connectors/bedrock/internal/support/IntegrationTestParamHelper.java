@@ -1,8 +1,8 @@
 package com.mulesoft.connectors.bedrock.internal.support;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.TimeUnit;
 
-import com.mulesoft.connectors.bedrock.api.enums.TimeUnitEnum;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
@@ -31,7 +31,7 @@ public final class IntegrationTestParamHelper {
   }
 
   public static BedrockAgentsResponseParameters responseParams(Integer timeout,
-                                                               TimeUnitEnum unit,
+                                                               TimeUnit unit,
                                                                boolean enableRetry,
                                                                Integer maxRetries,
                                                                Long backoffMs) {

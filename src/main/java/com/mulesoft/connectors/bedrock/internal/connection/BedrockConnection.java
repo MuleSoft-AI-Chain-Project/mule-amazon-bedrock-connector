@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
@@ -179,10 +179,10 @@ public class BedrockConnection implements ConnectorConnection {
       // Handle Bedrock service exceptions (from bedrock service, not bedrockagent)
       // Check if it's a 403 (Forbidden) which indicates invalid credentials
       if (e.statusCode() == 403) {
-        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
       }
       // For other Bedrock service errors, use SERVICE_ERROR
-      throw new BedrockException("Bedrock service error", BedrockErrorType.SERVICE_ERROR, e);
+      throw new ModuleException("Bedrock service error", BedrockErrorType.SERVICE_ERROR, e);
     } catch (AccessDeniedException e) {
       throw ErrorHandler.handleAccessDeniedException(e);
     } catch (ValidationException e) {
@@ -196,7 +196,7 @@ public class BedrockConnection implements ConnectorConnection {
     } catch (SdkServiceException e) {
       // Check if it's a 403 (Forbidden) which indicates invalid credentials
       if (e.statusCode() == 403) {
-        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
       }
       throw ErrorHandler.handleSdkServiceException(e);
     } catch (SdkClientException e) {
@@ -206,7 +206,7 @@ public class BedrockConnection implements ConnectorConnection {
       String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
       if (message.contains("unable to load credentials") ||
           (message.contains("invalid") && message.contains("credential"))) {
-        throw new BedrockException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
+        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
       }
       // For other client errors (like network issues), use CLIENT_ERROR
       throw ErrorHandler.handleSdkClientException(e, "Connection validation");

@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -72,8 +72,8 @@ public class AssumeRoleCredentialsProvider implements AwsCredentialsProvider {
     try {
       return stsClient.assumeRole(assumeRoleRequestBuilder.build());
     } catch (RegionDisabledException e) {
-      throw new BedrockException("STS is not activated in the requested region for the account that is being asked to generate credentials. The account administrator must use the IAM console to activate STS in that region.",
-                                 BedrockErrorType.AUTHORIZATION_NOT_FOUND);
+      throw new ModuleException("STS is not activated in the requested region for the account that is being asked to generate credentials. The account administrator must use the IAM console to activate STS in that region.",
+                                BedrockErrorType.AUTHORIZATION_NOT_FOUND);
     }
   }
 }

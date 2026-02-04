@@ -50,6 +50,24 @@ Then, follow the MuleSoft [documentation](https://docs.mulesoft.com/exchange/to-
 
 ## Version History
 
+### Version 1.0.0
+
+**New Feature: IAM role based authentication**
+
+AWS IAM role–based authentication with an external ID allows a third party to assume an IAM role using STS AssumeRole, where the external ID is a shared secret that prevents the confused-deputy problem.
+The role trust policy requires this external ID, ensuring only the intended external account can assume the role securely.
+
+**Removed Operations:**
+- Agent create
+- Agent create alias
+- Agent delete agent aliases
+- Agent delete by id
+- Agent get alias by agent id
+- Agent get by name
+- Chat answer prompt memory
+- Custom model details
+- Custom model list
+
 ### Version 0.6.0
 
 **New Feature: Retry Mechanism with Exponential Backoff**
@@ -208,6 +226,7 @@ Added response logging fields to capture client request metadata in streaming ag
 - The "Response Logging" section appears as a separate section within the "Response" tab, below the "Response" section
 
 **Usage Example:**
+
 ```xml
 <mac-bedrock:agent-chat-streaming-s-s-e 
     ...

@@ -13,16 +13,19 @@ import software.amazon.awssdk.services.iam.IamClientBuilder;
 
 public class RegionUtils {
 
-  public static String getRegion(CommonParameters commonParameters) {
-    try {
-      return Region.of(commonParameters.getRegion()).toString();
-    } catch (IllegalArgumentException | NullPointerException e) {
-      return commonParameters.getRegion();
+  public static Region getRegion(CommonParameters commonParameters) {
+    if (commonParameters == null) {
+      throw new IllegalArgumentException("commonParameters must not be null");
     }
+    String regionId = commonParameters.getRegion();
+    if (regionId == null || regionId.isEmpty()) {
+      throw new IllegalArgumentException("region must not be null or empty");
+    }
+    return Region.of(regionId);
   }
 
   public static void configureRegionProperty(BedrockRuntimeClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -32,7 +35,7 @@ public class RegionUtils {
   }
 
   public static void configureRegionProperty(BedrockClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -42,7 +45,7 @@ public class RegionUtils {
   }
 
   public static void configureRegionProperty(BedrockAgentClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -52,7 +55,7 @@ public class RegionUtils {
   }
 
   public static void configureRegionProperty(BedrockAgentRuntimeClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -62,7 +65,7 @@ public class RegionUtils {
   }
 
   public static void configureRegionProperty(IamClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -73,7 +76,7 @@ public class RegionUtils {
 
   public static void configureRegionProperty(BedrockAgentRuntimeAsyncClientBuilder clientBuilder,
                                              CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);
@@ -83,7 +86,7 @@ public class RegionUtils {
   }
 
   public static void configureRegionProperty(BedrockRuntimeAsyncClientBuilder clientBuilder, CommonParameters commonParameters) {
-    Region region = Region.of(getRegion(commonParameters));
+    Region region = getRegion(commonParameters);
     String serviceEndpoint = commonParameters.getCustomServiceEndpoint();
     if (serviceEndpoint != null && !serviceEndpoint.isEmpty()) {
       clientBuilder.endpointOverride(URI.create(commonParameters.getCustomServiceEndpoint())).region(region);

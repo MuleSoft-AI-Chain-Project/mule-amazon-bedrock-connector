@@ -14,10 +14,10 @@ import software.amazon.awssdk.core.document.Document;
 
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsMultipleFilteringParameters;
-import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.api.enums.TimeUnitEnum;
+import java.util.concurrent.TimeUnit;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
@@ -172,7 +172,7 @@ class AgentServiceImplTest {
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     org.assertj.core.api.Assertions.assertThatThrownBy(
                                                        () -> service.definePromptTemplate("Hi", "instr", "data", params))
-        .isInstanceOf(BedrockException.class);
+        .isInstanceOf(ModuleException.class);
   }
 
   @Test
@@ -184,7 +184,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 2);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 3, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -210,7 +210,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("", false, null);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(10, TimeUnitEnum.MINUTES, false, 1, 2000L);
+        IntegrationTestParamHelper.responseParams(10, TimeUnit.MINUTES, false, 1, 2000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -234,7 +234,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
     IntegrationTestParamHelper.setField(responseParams, "requestTimeoutUnit", null);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
@@ -254,7 +254,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", true, 3);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(5000, TimeUnitEnum.MILLISECONDS, true, 2, 500L);
+        IntegrationTestParamHelper.responseParams(5000, TimeUnit.MILLISECONDS, true, 2, 500L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -278,7 +278,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 3, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
 
     BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
     IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-123");
@@ -309,7 +309,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", true, 2);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(60, TimeUnitEnum.SECONDS, false, 2, 500L);
+        IntegrationTestParamHelper.responseParams(60, TimeUnit.SECONDS, false, 2, 500L);
 
     BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
         new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10,
@@ -354,7 +354,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 3, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -408,7 +408,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 3, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -446,7 +446,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     InputStream stream = service.chatWithAgentSSEStream(
@@ -468,7 +468,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     org.assertj.core.api.Assertions.assertThatThrownBy(
@@ -489,7 +489,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters legacyParams = new BedrockAgentsFilteringParameters();
     IntegrationTestParamHelper.setField(legacyParams, "knowledgeBaseId", "legacy-kb");
@@ -519,7 +519,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
     IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "");
@@ -542,7 +542,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
     IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
@@ -568,7 +568,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     java.util.Map<String, String> filters = new java.util.HashMap<>();
     filters.put("k1", "v1");
@@ -597,7 +597,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     java.util.Map<String, String> filters = new java.util.HashMap<>();
     filters.put("a", "1");
@@ -626,7 +626,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
         new BedrockAgentsFilteringParameters.RerankingConfiguration();
@@ -660,7 +660,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
         new BedrockAgentsFilteringParameters.RerankingConfiguration();
@@ -693,7 +693,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
 
     BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
         new BedrockAgentsFilteringParameters.RerankingConfiguration();
@@ -726,7 +726,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(2, TimeUnitEnum.MINUTES, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(2, TimeUnit.MINUTES, false, 2, 1000L);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(
@@ -746,7 +746,7 @@ class AgentServiceImplTest {
 
     BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
     BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnitEnum.SECONDS, false, 2, 1000L);
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
     com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseLoggingParameters loggingParams =
         new com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseLoggingParameters();
     IntegrationTestParamHelper.setField(loggingParams, "requestId", "req-123");

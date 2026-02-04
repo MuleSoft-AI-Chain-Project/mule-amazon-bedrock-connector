@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.util;
 
-import java.util.Optional;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.ModelProvider;
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
+import org.mule.runtime.extension.api.exception.ModuleException;
 
 /**
  * Factory class for model identification using Strategy pattern. Centralizes model ID pattern matching logic.
@@ -42,19 +42,6 @@ public final class ModelIdentifier {
    */
   public static String buildInferenceProfileArn(String region, String accountId, String modelId) {
     return String.format(BedrockConstants.INFERENCE_PROFILE_ARN_TEMPLATE, region, accountId, modelId);
-  }
-
-  /**
-   * Identifies the model provider from model ID. Uses existing ModelProvider enum with enhanced matching.
-   *
-   * @param modelId the model identifier
-   * @return Optional ModelProvider if identified
-   */
-  public static Optional<ModelProvider> identifyModelProvider(String modelId) {
-    if (modelId == null || modelId.isBlank()) {
-      return Optional.empty();
-    }
-    return ModelProvider.fromModelId(modelId);
   }
 
   /**
@@ -99,14 +86,17 @@ public final class ModelIdentifier {
   }
 
   /**
-   * Gets the default account ID if none is provided.
+   * Returns the account ID when required (e.g. for inference profile ARN). Throws if null or blank.
    *
-   * @param accountId the provided account ID (may be null or blank)
-   * @return the account ID to use (default if provided is null/blank)
+   * @param accountId the AWS account ID from parameters (may be null or blank)
+   * @return the account ID
+   * @throws ModuleException with VALIDATION_ERROR if accountId is null or blank
    */
-  public static String getAccountIdOrDefault(String accountId) {
-    return (accountId != null && !accountId.isBlank())
-        ? accountId
-        : BedrockConstants.DEFAULT_AWS_ACCOUNT_ID;
+  public static String requireAccountId(String accountId) {
+    if (accountId == null || accountId.isBlank()) {
+      throw new ModuleException("AWS account ID is required for this operation but was not provided",
+                                BedrockErrorType.VALIDATION_ERROR);
+    }
+    return accountId;
   }
 }
