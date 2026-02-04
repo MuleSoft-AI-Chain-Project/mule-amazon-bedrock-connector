@@ -21,9 +21,9 @@
     <dependencies>
 
         <dependency>
-            <groupId>com.mulesoft.connectors</groupId>
+            <groupId>io.github.mulesoft-ai-chain-project</groupId>
             <artifactId>mule4-amazon-bedrock-connector</artifactId>
-            <version>0.5.5</version>
+            <version>0.6.0</version>
             <classifier>mule-plugin</classifier>
         </dependency>
         <dependency>
