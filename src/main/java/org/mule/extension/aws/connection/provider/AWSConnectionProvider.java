@@ -75,8 +75,4 @@ abstract class AWSConnectionProvider<T extends ConnectorConnection> extends Conn
   public void setCommonParameters(CommonParameters commonParameters) {
     this.commonParameters = commonParameters;
   }
-
-  protected SdkHttpClientFactory getSdkHttpClientFactory() {
-    return sdkHttpClientFactory;
-  }
 }

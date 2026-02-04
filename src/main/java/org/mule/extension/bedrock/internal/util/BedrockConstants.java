@@ -12,7 +12,6 @@ public final class BedrockConstants {
   // AWS Configuration
   public static final String DEFAULT_AWS_ACCOUNT_ID = "076261412953";
   public static final String INFERENCE_PROFILE_ARN_TEMPLATE = "arn:aws:bedrock:%s:%s:inference-profile/us.%s";
-  public static final int STREAM_BUFFER_SIZE = 64 * 1024; // 64KB
 
   // Model ID Patterns
   public static final class ModelPatterns {
