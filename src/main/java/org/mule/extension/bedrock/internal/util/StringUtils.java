@@ -7,7 +7,7 @@ public class StringUtils {
 
   /**
    * Returns false if the String param is null or empty. Otherwise returns true.
-   * 
+   *
    * @param string
    * @return boolean result
    */
