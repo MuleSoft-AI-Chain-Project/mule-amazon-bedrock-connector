@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>org.mule.extensions</groupId>
         <artifactId>mule-modules-parent</artifactId>
-        <version>1.9.6</version>
+        <version>1.9.0</version>
     </parent>
 
     <groupId>com.mulesoft.connectors</groupId>
@@ -49,34 +49,39 @@
             <organization>Hoegg Software, Co.</organization>
             <organizationUrl>https://hoegg.software</organizationUrl>
         </developer>
+        <developer>
+            <name>Rashmi prakash das</name>
+            <email>rashmiprakash.das@salesforce.com</email>
+            <organization>Salesforce</organization>
+            <organizationUrl>https://www.salesforce.com</organizationUrl>
+        </developer>
     </developers>
 
     <scm>
         <connection>scm:git:git://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</connection>
         <developerConnection>scm:git:ssh://github.com:MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector.git</developerConnection>
-        <tag>mule-amazon-bedrock-connector-1.6.0</tag>
+        <tag>mule-amazon-bedrock-connector-${project.version}</tag>
         <url>https://github.com/MuleSoft-AI-Chain-Project/mule-amazon-bedrock-connector/tree/master</url>
     </scm>
 
     <properties>
-        <!-- Property added to comply with a faulty feature on SDK 1.1 which makes the connector fail. -->
         <apt.phase>compile</apt.phase>
-        <aws.sdk.version>2.38.7</aws.sdk.version>
+        <aws.sdk.version>2.41.20</aws.sdk.version>
         <beanutils.version>1.9.4</beanutils.version>
-        <commons.lang3.version>3.18.0</commons.lang3.version>
+        <commons.lang3.version>3.20.0</commons.lang3.version>
         <jacoco.version>0.8.13</jacoco.version>
         <junit.version>4.13.2</junit.version>
         <maven.surefire.plugin.version>3.2.5</maven.surefire.plugin.version>
         <mtf.tools.version>1.2.0</mtf.tools.version>
-        <mule-sdk-api.version>0.11.4</mule-sdk-api.version>
-        <muleJavaEeBomVersion>4.6.0</muleJavaEeBomVersion>
-        <munit.extensions.maven.plugin.version>1.6.0</munit.extensions.maven.plugin.version>
-
-        <!-- JDK 17 Compatibility Props -->
-        <munit.version>3.5.0</munit.version>
+        <munit.extensions.maven.plugin.version>1.6.1</munit.extensions.maven.plugin.version>
+        <munit.version>3.6.3</munit.version>
         <runtimeProduct>MULE_EE</runtimeProduct>
-        <skipVerifications>true</skipVerifications>
         <slf4jApi.version>2.1.0-alpha1</slf4jApi.version>
+        <javaFormatter.plugin.version>2.26.0</javaFormatter.plugin.version>
+        <formatterConfigPath>formatter.xml</formatterConfigPath>
+        <formatterGoal>validate</formatterGoal>
+        <skipVerifications>false</skipVerifications>
+        <mule-sdk-api.version>0.11.4</mule-sdk-api.version>
     </properties>
 
     <dependencyManagement>
@@ -88,25 +93,18 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <dependency>
-                <groupId>org.mule</groupId>
-                <artifactId>mule-javaee-runtime-bom</artifactId>
-                <version>${muleJavaEeBomVersion}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
         </dependencies>
     </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.17.0</version>
+            <version>2.21.0</version>
         </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <version>2.2.224</version>
+            <version>2.4.240</version>
         </dependency>
         <!-- Commons dependency that should be used to provide ConnectorService interface. -->
         <dependency>
@@ -294,47 +292,28 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>com.diffplug.spotless</groupId>
-                <artifactId>spotless-maven-plugin</artifactId>
-                <version>2.46.1</version>
+                <groupId>net.revelc.code.formatter</groupId>
+                <artifactId>formatter-maven-plugin</artifactId>
+                <version>${javaFormatter.plugin.version}</version>
                 <configuration>
-                    <java>
-                        <eclipse>
-                            <file>${project.basedir}/formatter.xml</file>
-                        </eclipse>
-                        <!-- <googleJavaFormat/>-->
-                        <importOrder/>
-                        <removeUnusedImports/>
-                        <formatAnnotations/>
-                    </java>
-                    <markdown>
-                        <includes>
-                            <include>**/*.md</include>
-                        </includes>
-                        <flexmark/>
-                    </markdown>
-                    <pom>
-                        <includes>
-                            <include>**/pom.xml</include>
-                        </includes>
-                        <sortPom>
-                            <indentAttribute>schemaLocation</indentAttribute>
-                            <nrOfIndentSpace>4</nrOfIndentSpace>
-                            <predefinedSortOrder>recommended_2008_06</predefinedSortOrder>
-                            <sortDependencies>groupId,artifactId</sortDependencies>
-                            <sortDependencyManagement>true</sortDependencyManagement>
-                            <sortProperties>true</sortProperties>
-                            <sortExecutions>true</sortExecutions>
-                        </sortPom>
-                    </pom>
+                    <compilerCompliance>${java.release.version}</compilerCompliance>
+                    <compilerSource>${java.release.version}</compilerSource>
+                    <compilerTargetPlatform>${java.release.version}</compilerTargetPlatform>
+                    <configFile>${basedir}/${formatterConfigPath}</configFile>
+                    <configJsFile>${basedir}/${formatterConfigPath}</configJsFile>
+                    <aggregator>false</aggregator>
+                    <executionRoot>true</executionRoot>
                 </configuration>
                 <executions>
                     <execution>
-                        <id>format</id>
+                        <id>apply-format</id>
+                        <phase>compile</phase>
                         <goals>
-                            <goal>apply</goal>
+                            <goal>${formatterGoal}</goal>
                         </goals>
-                        <phase>process-sources</phase>
+                        <configuration>
+                            <skipFormatting>${skipVerifications}</skipFormatting>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -366,7 +345,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.9.0</version>
                 <executions>
                     <execution>
                         <id>connector-analyze</id>
@@ -448,6 +427,10 @@
                         <configuration>
                             <dataFile>${project.build.directory}/jacoco.exec</dataFile>
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+                            <excludes>
+                                <exclude>**/BedrockConnector.class</exclude>
+                                <exclude>**/internal/extension/**</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                     <execution>
@@ -470,6 +453,32 @@
                         </configuration>
                     </execution>
                     <execution>
+                        <id>check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>verify</phase>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.10</minimum>
+                                        </limit>
+                                    </limits>
+                                    <excludes>
+                                        <exclude>**/BedrockConnector.class</exclude>
+                                        <exclude>**/internal/extension/**</exclude>
+                                    </excludes>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>report-merged</id>
                         <goals>
                             <goal>report</goal>
@@ -478,6 +487,10 @@
                         <configuration>
                             <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+                            <excludes>
+                                <exclude>**/BedrockConnector.class</exclude>
+                                <exclude>**/internal/extension/**</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                 </executions>
