@@ -13,32 +13,17 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
-import software.amazon.awssdk.services.bedrock.model.GetCustomModelRequest;
-import software.amazon.awssdk.services.bedrock.model.GetCustomModelResponse;
 import software.amazon.awssdk.services.bedrock.model.GetFoundationModelRequest;
 import software.amazon.awssdk.services.bedrock.model.GetFoundationModelResponse;
-import software.amazon.awssdk.services.bedrock.model.ListCustomModelsResponse;
 import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsResponse;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.AccessDeniedException;
 import software.amazon.awssdk.services.bedrockagent.model.BedrockAgentException;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasRequest;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentAliasResponse;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.CreateAgentResponse;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentAliasRequest;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentAliasResponse;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.DeleteAgentResponse;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
-import software.amazon.awssdk.services.bedrockagent.model.ListAgentAliasesRequest;
-import software.amazon.awssdk.services.bedrockagent.model.ListAgentAliasesResponse;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
-import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentRequest;
-import software.amazon.awssdk.services.bedrockagent.model.PrepareAgentResponse;
 import software.amazon.awssdk.services.bedrockagent.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.bedrockagent.model.ThrottlingException;
 import software.amazon.awssdk.services.bedrockagent.model.ValidationException;
@@ -56,11 +41,6 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.IamClientBuilder;
-import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
-import software.amazon.awssdk.services.iam.model.CreateRoleResponse;
-import software.amazon.awssdk.services.iam.model.GetRoleRequest;
-import software.amazon.awssdk.services.iam.model.GetRoleResponse;
-import software.amazon.awssdk.services.iam.model.PutRolePolicyRequest;
 
 public class BedrockConnection implements ConnectorConnection {
 
@@ -126,10 +106,6 @@ public class BedrockConnection implements ConnectorConnection {
     return (T) clients.computeIfAbsent(cacheKey, k -> clientSupplier.get());
   }
 
-  public BedrockAgentRuntimeAsyncClient getBedrockAgentRuntimeAsyncClient() {
-    return getOrCreateBedrockAgentRuntimeAsyncClient(connectionTimeoutMs);
-  }
-
   /**
    * Returns a cached or newly created BedrockAgentRuntimeAsyncClient for the given effective timeout (ms). Effective timeout
    * should be operation-level when available, otherwise connection-level.
@@ -170,10 +146,6 @@ public class BedrockConnection implements ConnectorConnection {
     return bedrockAgentClient;
   }
 
-  public BedrockAgentRuntimeClient getBedrockAgentRuntimeClient() {
-    return bedrockAgentRuntimeClient;
-  }
-
   public IamClient getIamClient() {
     return iamClient;
   }
@@ -188,15 +160,6 @@ public class BedrockConnection implements ConnectorConnection {
 
   public ListFoundationModelsResponse listFoundationalModels() {
     return getBedrockClient().listFoundationModels(r -> {
-    });
-  }
-
-  public GetCustomModelResponse getCustomModel(GetCustomModelRequest getCustomModelRequest) {
-    return getBedrockClient().getCustomModel(getCustomModelRequest);
-  }
-
-  public ListCustomModelsResponse listCustomModels() {
-    return getBedrockClient().listCustomModels(r -> {
     });
   }
 
@@ -259,42 +222,6 @@ public class BedrockConnection implements ConnectorConnection {
 
   public GetAgentResponse getAgent(GetAgentRequest getAgentRequest) {
     return getBedrockAgentClient().getAgent(getAgentRequest);
-  }
-
-  public DeleteAgentResponse deleteAgent(DeleteAgentRequest deleteAgentRequest) {
-    return getBedrockAgentClient().deleteAgent(deleteAgentRequest);
-  }
-
-  public GetRoleResponse getRole(GetRoleRequest getRoleRequest) {
-    return getIamClient().getRole(getRoleRequest);
-  }
-
-  public CreateRoleResponse createRole(CreateRoleRequest createRoleRequest) {
-    return getIamClient().createRole(createRoleRequest);
-  }
-
-  public void putRolePolicy(PutRolePolicyRequest putRolePolicyRequest) {
-    getIamClient().putRolePolicy(putRolePolicyRequest);
-  }
-
-  public CreateAgentResponse createAgent(CreateAgentRequest createAgentRequest) {
-    return getBedrockAgentClient().createAgent(createAgentRequest);
-  }
-
-  public PrepareAgentResponse prepareAgent(PrepareAgentRequest prepareAgentRequest) {
-    return getBedrockAgentClient().prepareAgent(prepareAgentRequest);
-  }
-
-  public CreateAgentAliasResponse createAgentAlias(CreateAgentAliasRequest createAgentAliasRequest) {
-    return getBedrockAgentClient().createAgentAlias(createAgentAliasRequest);
-  }
-
-  public ListAgentAliasesResponse listAgentAliases(ListAgentAliasesRequest listAgentAliasesRequest) {
-    return getBedrockAgentClient().listAgentAliases(listAgentAliasesRequest);
-  }
-
-  public DeleteAgentAliasResponse deleteAgentAlias(DeleteAgentAliasRequest deleteAgentAliasRequest) {
-    return getBedrockAgentClient().deleteAgentAlias(deleteAgentAliasRequest);
   }
 
   public CompletableFuture<Void> invokeAgent(InvokeAgentRequest request, InvokeAgentResponseHandler handler) {
