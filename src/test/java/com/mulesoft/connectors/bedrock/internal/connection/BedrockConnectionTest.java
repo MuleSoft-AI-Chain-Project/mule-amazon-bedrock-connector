@@ -1,6 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -20,6 +21,8 @@ import software.amazon.awssdk.services.bedrockagent.BedrockAgentClient;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
+import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
@@ -184,9 +187,44 @@ class BedrockConnectionTest {
   }
 
   @Test
+  @DisplayName("getOrCreateBedrockAgentRuntimeAsyncClient returns client from factory and caches by timeout")
+  void getOrCreateBedrockAgentRuntimeAsyncClient() {
+    BedrockConnection conn = createConnection();
+    assertThat(conn.getOrCreateBedrockAgentRuntimeAsyncClient(60_000)).isNotNull();
+    assertThat(conn.getOrCreateBedrockAgentRuntimeAsyncClient(60_000))
+        .isSameAs(conn.getOrCreateBedrockAgentRuntimeAsyncClient(60_000));
+  }
+
+  @Test
   @DisplayName("getBedrockRuntimeAsyncClient returns client")
   void getBedrockRuntimeAsyncClient() {
     BedrockConnection conn = createConnection();
     assertThat(conn.getBedrockRuntimeAsyncClient()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("validate throws BedrockException when listFoundationModels throws SdkClientException with unable to load credentials")
+  void validateThrowsWhenUnableToLoadCredentials() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(SdkClientException.builder().message("Unable to load credentials from").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(BedrockException.class).hasMessageContaining("Invalid credentials");
+  }
+
+  @Test
+  @DisplayName("validate throws when listFoundationModels throws BedrockException with 403")
+  void validateThrowsWhen403() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrock.model.BedrockException.builder().statusCode(403).build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(BedrockException.class).hasMessageContaining("Invalid credentials");
+  }
+
+  @Test
+  @DisplayName("validate succeeds when listFoundationModels returns")
+  void validateSucceeds() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class))).thenReturn(ListFoundationModelsResponse.builder().build());
+    BedrockConnection conn = createConnection();
+    conn.validate();
   }
 }

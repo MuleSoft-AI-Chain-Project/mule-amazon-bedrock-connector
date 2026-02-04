@@ -5,10 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.InputStream;
+
 import com.mulesoft.connectors.bedrock.internal.error.exception.BedrockException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
+import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
@@ -170,5 +174,55 @@ class ChatServiceImplTest {
     ChatServiceImpl service = new ChatServiceImpl(config, connection);
     String result = service.answerPrompt("Hi", params);
     assertThat(result).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("answerPromptStreaming returns InputStream when connection completes immediately")
+  void answerPromptStreamingReturnsInputStream() {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getRegion()).thenReturn("us-east-1");
+    when(connection.answerPromptStreaming(any(ConverseStreamRequest.class), any(ConverseStreamResponseHandler.class)))
+        .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
+
+    BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
+    ChatServiceImpl service = new ChatServiceImpl(config, connection);
+    InputStream stream = service.answerPromptStreaming("Hi", params);
+
+    assertThat(stream).isNotNull();
+  }
+
+  @Test
+  @DisplayName("private payload methods produce valid JSON when invoked via reflection")
+  void privatePayloadMethodsProduceJson() throws Exception {
+    BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.titan-text-express-v1", 0.5f, 100);
+    String prompt = "Hello";
+
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getAmazonTitanText", prompt, params))
+        .contains("inputText").contains("Hello");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getAmazonNovaText", prompt, params))
+        .contains("messages").contains("inferenceConfig");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getAnthropicClaudeText", prompt, params))
+        .contains("prompt").contains("Human:");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getAI21Text", prompt, params))
+        .contains("prompt");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getMistralAIText", prompt, params))
+        .contains("prompt");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getCohereText", prompt, params))
+        .contains("prompt");
+    assertThat(invokePrivatePayloadMethod(ChatServiceImpl.class, "getLlamaText", prompt, params))
+        .contains("prompt");
+    java.lang.reflect.Method stabilityMethod =
+        ChatServiceImpl.class.getDeclaredMethod("getStabilityTitanText", String.class);
+    stabilityMethod.setAccessible(true);
+    assertThat((String) stabilityMethod.invoke(null, prompt)).contains("text_prompts");
+  }
+
+  private static String invokePrivatePayloadMethod(Class<?> clazz, String methodName, String prompt,
+                                                   BedrockParameters params)
+      throws Exception {
+    java.lang.reflect.Method m = clazz.getDeclaredMethod(methodName, String.class, BedrockParameters.class);
+    m.setAccessible(true);
+    return (String) m.invoke(null, prompt, params);
   }
 }

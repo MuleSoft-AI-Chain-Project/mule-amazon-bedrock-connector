@@ -65,6 +65,31 @@ class ImageServiceImplTest {
     assertThat(new File(result)).exists();
   }
 
+  @Test
+  @DisplayName("invokeModel returns file path when connection returns Amazon Nova Canvas image body")
+  void invokeModelAmazonNovaCanvas(@TempDir File tempDir) throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    String responseBody = "{\"images\":[\"" + MINIMAL_BASE64_PNG + "\"]}";
+    when(connection.invokeModel(any(InvokeModelRequest.class)))
+        .thenReturn(InvokeModelResponse.builder().body(SdkBytes.fromUtf8String(responseBody)).build());
+
+    BedrockImageParameters params = new BedrockImageParameters();
+    setField(params, "modelName", "amazon.nova-canvas-v1:0");
+    setField(params, "numOfImages", 1);
+    setField(params, "height", 512);
+    setField(params, "width", 512);
+    setField(params, "cfgScale", 7.0f);
+    setField(params, "seed", 0);
+
+    ImageServiceImpl service = new ImageServiceImpl(config, connection);
+    File outFile = new File(tempDir, "nova.png");
+    String result = service.invokeModel("A bird", "", outFile.getAbsolutePath(), params);
+
+    assertThat(result).isNotBlank();
+    assertThat(new File(result)).exists();
+  }
+
   private static void setField(Object target, String fieldName, Object value) throws Exception {
     Field f = target.getClass().getDeclaredField(fieldName);
     f.setAccessible(true);

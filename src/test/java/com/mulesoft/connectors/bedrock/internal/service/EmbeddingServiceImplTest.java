@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbedding;
+import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbeddingDocument;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import software.amazon.awssdk.core.SdkBytes;
@@ -111,6 +112,65 @@ class EmbeddingServiceImplTest {
     Field f = target.getClass().getDeclaredField(fieldName);
     f.setAccessible(true);
     f.set(target, value);
+  }
+
+  @Test
+  @DisplayName("generateEmbeddings with unsupported model uses fallback body")
+  void generateEmbeddingsUnsupportedModel() throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.invokeModel(any(InvokeModelRequest.class)))
+        .thenReturn(InvokeModelResponse.builder()
+            .body(SdkBytes.fromUtf8String("{\"embedding\":[0.0]}"))
+            .build());
+
+    BedrockParametersEmbedding params = new BedrockParametersEmbedding();
+    setField(params, "modelName", "unsupported.embed-model-v1");
+    EmbeddingServiceImpl service = new EmbeddingServiceImpl(config, connection);
+    String result = service.generateEmbeddings("text", params);
+    assertThat(result).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("invokeAdhocRAG throws when file does not exist")
+  void invokeAdhocRAGInvalidFileThrows() throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    BedrockParametersEmbeddingDocument params = new BedrockParametersEmbeddingDocument();
+    setField(params, "modelName", "amazon.titan-embed-text-v1");
+    setField(params, "optionType", "FULL");
+    EmbeddingServiceImpl service = new EmbeddingServiceImpl(config, connection);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+                                                       () -> service.invokeAdhocRAG("query", "/nonexistent/path/to/file.pdf",
+                                                                                    params))
+        .isInstanceOf(java.io.IOException.class);
+  }
+
+  @Test
+  @DisplayName("document payload methods produce valid JSON when invoked via reflection")
+  void documentPayloadMethodsProduceJson() throws Exception {
+    BedrockParametersEmbeddingDocument docParams = new BedrockParametersEmbeddingDocument();
+    setField(docParams, "modelName", "amazon.titan-embed-text-v2:0");
+    setField(docParams, "dimension", 256);
+    setField(docParams, "normalize", true);
+    String prompt = "doc text";
+
+    java.lang.reflect.Method g2Doc =
+        EmbeddingServiceImpl.class.getDeclaredMethod("identifyPayloadInternal", String.class, String.class, Object.class);
+    g2Doc.setAccessible(true);
+    Object body = g2Doc.invoke(null, prompt, "amazon.titan-embed-text-v2:0", docParams);
+    assertThat(body).isNotNull();
+    assertThat(body.toString()).contains("inputText");
+
+    setField(docParams, "modelName", "amazon.titan-embed-image-v1");
+    body = g2Doc.invoke(null, prompt, "amazon.titan-embed-image-v1", docParams);
+    assertThat(body).isNotNull();
+    assertThat(body.toString()).contains("embeddingConfig");
+
+    setField(docParams, "modelName", "cohere.embed-multilingual-v3");
+    body = g2Doc.invoke(null, prompt, "cohere.embed-multilingual-v3", docParams);
+    assertThat(body).isNotNull();
+    assertThat(body.toString()).contains("texts");
   }
 
   @Nested

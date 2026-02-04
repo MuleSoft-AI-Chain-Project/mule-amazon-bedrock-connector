@@ -1,8 +1,8 @@
 package com.mulesoft.connectors.bedrock.internal.config;
 
+import org.mule.connectors.commons.template.config.ConnectorConfig;
 import com.mulesoft.connectors.bedrock.internal.connection.provider.AssumeRoleConnectionProvider;
 import com.mulesoft.connectors.bedrock.internal.connection.provider.BasicConnectionProvider;
-import org.mule.connectors.commons.template.config.ConnectorConfig;
 import com.mulesoft.connectors.bedrock.internal.operations.AgentOperations;
 import com.mulesoft.connectors.bedrock.internal.operations.ChatOperations;
 import com.mulesoft.connectors.bedrock.internal.operations.EmbeddingOperation;

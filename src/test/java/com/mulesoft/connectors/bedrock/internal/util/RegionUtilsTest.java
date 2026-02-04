@@ -120,5 +120,67 @@ class RegionUtilsTest {
       RegionUtils.configureRegionProperty(
                                           software.amazon.awssdk.services.iam.IamClient.builder(), params);
     }
+
+    @Test
+    @DisplayName("configures BedrockClientBuilder with custom endpoint")
+    void configuresBedrockClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(software.amazon.awssdk.services.bedrock.BedrockClient.builder(), params);
+    }
+
+    @Test
+    @DisplayName("configures BedrockAgentClientBuilder with custom endpoint")
+    void configuresBedrockAgentClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(
+                                          software.amazon.awssdk.services.bedrockagent.BedrockAgentClient.builder(), params);
+    }
+
+    @Test
+    @DisplayName("configures BedrockAgentRuntimeClientBuilder with custom endpoint")
+    void configuresBedrockAgentRuntimeClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(
+                                          software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient.builder(),
+                                          params);
+    }
+
+    @Test
+    @DisplayName("configures IamClientBuilder with custom endpoint")
+    void configuresIamClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(software.amazon.awssdk.services.iam.IamClient.builder(), params);
+    }
+
+    @Test
+    @DisplayName("configures BedrockAgentRuntimeAsyncClientBuilder with custom endpoint")
+    void configuresBedrockAgentRuntimeAsyncClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(
+                                          software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient
+                                              .builder(),
+                                          params);
+    }
+
+    @Test
+    @DisplayName("configures BedrockRuntimeAsyncClientBuilder with custom endpoint")
+    void configuresBedrockRuntimeAsyncClientBuilderWithCustomEndpoint() {
+      CommonParameters params = mock(CommonParameters.class);
+      when(params.getRegion()).thenReturn("us-east-1");
+      when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
+      RegionUtils.configureRegionProperty(
+                                          software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient.builder(),
+                                          params);
+    }
   }
 }
