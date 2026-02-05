@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.SentimentService;
 import com.mulesoft.connectors.bedrock.internal.service.SentimentServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
@@ -46,8 +46,8 @@ public class SentimentOperations extends BedrockOperation<SentimentService> {
   @Summary("Analyze sentiment of input text")
   public InputStream sentimentAnalysis(@Config BedrockConfiguration config,
                                        @Connection BedrockConnection connection,
-                                       String TextToAnalyze,
-                                       @ParameterGroup(name = "Additional properties") BedrockParameters bedrockParameters) {
+                                       @ParameterGroup(name = "Additional properties") BedrockParameters bedrockParameters,
+                                       String TextToAnalyze) {
 
     return newExecutionBuilder(config, connection)
         .execute(SentimentService::extractSentiments, BedrockModelFactory::createInputStream)

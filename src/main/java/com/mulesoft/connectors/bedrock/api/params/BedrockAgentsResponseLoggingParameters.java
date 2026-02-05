@@ -7,6 +7,8 @@ import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.Placement;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
 
+import java.util.Objects;
+
 /**
  * Parameter group for response logging fields. This group appears as a "Response Logging" section within the "Response" tab in
  * agent operations.
@@ -44,5 +46,18 @@ public class BedrockAgentsResponseLoggingParameters {
 
   public String getUserId() {
     return userId;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof BedrockAgentsResponseLoggingParameters that))
+      return false;
+    return Objects.equals(requestId, that.requestId) && Objects.equals(correlationId, that.correlationId)
+        && Objects.equals(userId, that.userId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(requestId, correlationId, userId);
   }
 }

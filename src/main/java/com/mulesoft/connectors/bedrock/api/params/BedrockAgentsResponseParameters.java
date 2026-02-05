@@ -1,5 +1,6 @@
 package com.mulesoft.connectors.bedrock.api.params;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
@@ -69,4 +70,17 @@ public class BedrockAgentsResponseParameters {
     return retryBackoffMs != null ? retryBackoffMs : 1000L;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof BedrockAgentsResponseParameters that))
+      return false;
+    return enableRetry == that.enableRetry && Objects.equals(requestTimeout, that.requestTimeout)
+        && requestTimeoutUnit == that.requestTimeoutUnit && Objects.equals(maxRetries, that.maxRetries)
+        && Objects.equals(retryBackoffMs, that.retryBackoffMs);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(requestTimeout, requestTimeoutUnit, enableRetry, maxRetries, retryBackoffMs);
+  }
 }

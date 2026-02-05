@@ -41,6 +41,12 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
   private static final String TEXT = "text";
   private static final String CHUNK = "chunk";
   private static final String TYPE = "type";
+  private static final String TEMPERATURE = "temperature";
+  private static final String TOP_P = "top_p";
+  private static final String TOP_K = "top_k";
+  private static final String SESSION_START = "session-start";
+  private static final String ERROR_KEY = "error";
+  private static final String ERROR_WRITING_EVENT_LOG = "Error writing error event: {}";
 
   @FunctionalInterface
   private interface PayloadGenerator extends BiFunction<String, BedrockParameters, String> {
@@ -68,7 +74,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     jsonRequest.put("inputText", prompt);
 
     JSONObject textGenerationConfig = new JSONObject();
-    textGenerationConfig.put("temperature", awsBedrockParameters.getTemperature());
+    textGenerationConfig.put(TEMPERATURE, awsBedrockParameters.getTemperature());
     textGenerationConfig.put("topP", awsBedrockParameters.getTopP());
     textGenerationConfig.put("maxTokenCount", awsBedrockParameters.getMaxTokenCount());
 
@@ -96,9 +102,9 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     // Create the "inferenceConfig" object with optional parameters
     JSONObject inferenceConfig = new JSONObject();
     inferenceConfig.put("max_new_tokens", awsBedrockParameters.getMaxTokenCount());
-    inferenceConfig.put("temperature", awsBedrockParameters.getTemperature());
-    inferenceConfig.put("top_p", awsBedrockParameters.getTopP());
-    inferenceConfig.put("top_k", awsBedrockParameters.getTopK());
+    inferenceConfig.put(TEMPERATURE, awsBedrockParameters.getTemperature());
+    inferenceConfig.put(TOP_P, awsBedrockParameters.getTopP());
+    inferenceConfig.put(TOP_K, awsBedrockParameters.getTopK());
 
     // Combine everything into the root JSON object
     JSONObject rootObject = new JSONObject();
@@ -110,10 +116,10 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static String getAnthropicClaudeText(String prompt, BedrockParameters awsBedrockParameters) {
     JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("top_k", awsBedrockParameters.getTopK());
+    jsonRequest.put(PROMPT, "\n\nHuman:" + prompt + "\n\nAssistant:");
+    jsonRequest.put(TEMPERATURE, awsBedrockParameters.getTemperature());
+    jsonRequest.put(TOP_P, awsBedrockParameters.getTopP());
+    jsonRequest.put(TOP_K, awsBedrockParameters.getTopK());
     jsonRequest.put("max_tokens_to_sample", awsBedrockParameters.getMaxTokenCount());
 
     return jsonRequest.toString();
@@ -121,8 +127,8 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static String getAI21Text(String prompt, BedrockParameters awsBedrockParameters) {
     JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
+    jsonRequest.put(PROMPT, prompt);
+    jsonRequest.put(TEMPERATURE, awsBedrockParameters.getTemperature());
     jsonRequest.put("topP", awsBedrockParameters.getTopP());
     jsonRequest.put("maxTokens", awsBedrockParameters.getMaxTokenCount());
 
@@ -131,10 +137,10 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static String getMistralAIText(String prompt, BedrockParameters awsBedrockParameters) {
     JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", "\n\nHuman:" + prompt + "\n\nAssistant:");
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
-    jsonRequest.put("top_k", awsBedrockParameters.getTopK());
+    jsonRequest.put(PROMPT, "\n\nHuman:" + prompt + "\n\nAssistant:");
+    jsonRequest.put(TEMPERATURE, awsBedrockParameters.getTemperature());
+    jsonRequest.put(TOP_P, awsBedrockParameters.getTopP());
+    jsonRequest.put(TOP_K, awsBedrockParameters.getTopK());
     jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
 
     return jsonRequest.toString();
@@ -142,8 +148,8 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static String getCohereText(String prompt, BedrockParameters awsBedrockParameters) {
     JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
+    jsonRequest.put(PROMPT, prompt);
+    jsonRequest.put(TEMPERATURE, awsBedrockParameters.getTemperature());
     jsonRequest.put("p", awsBedrockParameters.getTopP());
     jsonRequest.put("k", awsBedrockParameters.getTopK());
     jsonRequest.put("max_tokens", awsBedrockParameters.getMaxTokenCount());
@@ -153,9 +159,9 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static String getLlamaText(String prompt, BedrockParameters awsBedrockParameters) {
     JSONObject jsonRequest = new JSONObject();
-    jsonRequest.put("prompt", prompt);
-    jsonRequest.put("temperature", awsBedrockParameters.getTemperature());
-    jsonRequest.put("top_p", awsBedrockParameters.getTopP());
+    jsonRequest.put(PROMPT, prompt);
+    jsonRequest.put(TEMPERATURE, awsBedrockParameters.getTemperature());
+    jsonRequest.put(TOP_P, awsBedrockParameters.getTopP());
     jsonRequest.put("max_gen_len", awsBedrockParameters.getMaxTokenCount());
 
     return jsonRequest.toString();
@@ -207,7 +213,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
         } catch (Exception e) {
           try {
             if (sessionStartSent.compareAndSet(false, true)) {
-              String sseStart = formatSSEEvent("session-start",
+              String sseStart = formatSSEEvent(SESSION_START,
                                                createSessionStartJson(prompt, bedrockParameters.getModelName(),
                                                                       Instant.now().toString())
                                                    .toString());
@@ -216,13 +222,18 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
               logger.info(sseStart);
             }
             JSONObject errorJson = createErrorJson(e);
-            String errorEvent = formatSSEEvent("error", errorJson.toString());
+            String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
             outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
-            outputStream.close();
             logger.error(errorEvent);
           } catch (IOException ioException) {
-            logger.error("Error writing error event: {}", ioException.getMessage());
+            logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+          }
+        } finally {
+          try {
+            outputStream.close();
+          } catch (IOException ioException) {
+            logger.debug("Error closing stream: {}", ioException.getMessage());
           }
         }
       });
@@ -230,7 +241,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
       return inputStream;
 
     } catch (IOException e) {
-      String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
+      String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(e).toString());
       logger.error(errorEvent);
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
     }
@@ -250,98 +261,105 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
     ConverseStreamResponseHandler.Visitor visitor = ConverseStreamResponseHandler.Visitor.builder()
         .onContentBlockDelta(deltaEvent -> {
-          try {
-            String text = deltaEvent.delta().text();
-            if (text == null) {
-              return;
-            }
-            if (sessionStartSent.compareAndSet(false, true)) {
-              String sseStart = formatSSEEvent("session-start",
-                                               createSessionStartJson(prompt, bedrockParameters.getModelName(),
-                                                                      Instant.now().toString())
-                                                   .toString());
-              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-              logger.info(sseStart);
-            }
-            JSONObject chunkData = createChunkJson(text);
-            String sseEvent = formatSSEEvent("chunk", chunkData.toString());
-            outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
-            logger.debug(sseEvent);
-          } catch (IOException e) {
-            try {
-              String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
-              outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-              logger.error(errorEvent);
-            } catch (IOException ioException) {
-              logger.error("Error writing error event: {}", ioException.getMessage());
-            }
+          String text = deltaEvent.delta().text();
+          if (text != null) {
+            handleConverseContentDelta(prompt, bedrockParameters, outputStream, sessionStartSent, text);
           }
         })
         .onMessageStop(stopEvent -> {
-          // Completion is sent in onComplete
-        })
-        .onDefault(unknown -> {
-          logger.debug("Received event type: {}", unknown.getClass().getSimpleName());
-        })
+          /* Completion is sent in onComplete */ })
+        .onDefault(unknown -> logger.debug("Received event type: {}", unknown.getClass().getSimpleName()))
         .build();
 
     ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder()
         .onResponse(response -> logger.debug("Streaming connection opened"))
         .onEventStream(publisher -> publisher.subscribe(event -> event.accept(visitor)))
-        .onError(error -> {
-          try {
-            if (sessionStartSent.compareAndSet(false, true)) {
-              String sseStart = formatSSEEvent("session-start",
-                                               createSessionStartJson(prompt, bedrockParameters.getModelName(),
-                                                                      Instant.now().toString())
-                                                   .toString());
-              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-            }
-            String errorEvent = formatSSEEvent("error", createErrorJson(error).toString());
-            outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
-          } catch (IOException e) {
-            logger.error("Error writing error event: {}", e.getMessage());
-          } finally {
-            try {
-              outputStream.close();
-            } catch (IOException ignored) {
-            }
-          }
-        })
-        .onComplete(() -> {
-          try {
-            long duration = System.currentTimeMillis() - startTime;
-            JSONObject completionData =
-                createCompletionJson(prompt, bedrockParameters.getModelName(), duration);
-            String completionEvent = formatSSEEvent("session-complete", completionData.toString());
-            outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
-            logger.info(completionEvent);
-          } catch (IOException e) {
-            try {
-              String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
-              outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-            } catch (IOException ioException) {
-              logger.error("Error writing completion error event: {}", ioException.getMessage());
-            }
-          } finally {
-            try {
-              outputStream.close();
-            } catch (IOException ioException) {
-              logger.error("Error closing stream: {}", ioException.getMessage());
-            }
-          }
-        })
+        .onError(error -> handleConverseError(prompt, bedrockParameters, outputStream, sessionStartSent, error))
+        .onComplete(() -> handleConverseComplete(prompt, bedrockParameters, outputStream, startTime))
         .build();
 
-    CompletableFuture<Void> invocationFuture = getConnection().answerPromptStreaming(request, handler);
-    invocationFuture.get();
+    getConnection().answerPromptStreaming(request, handler).get();
+  }
+
+  private void handleConverseContentDelta(String prompt, BedrockParameters bedrockParameters,
+                                          PipedOutputStream outputStream, AtomicBoolean sessionStartSent, String text) {
+    try {
+      if (sessionStartSent.compareAndSet(false, true)) {
+        writeConverseSessionStart(prompt, bedrockParameters.getModelName(), outputStream);
+      }
+      JSONObject chunkData = createChunkJson(text);
+      String sseEvent = formatSSEEvent(CHUNK, chunkData.toString());
+      outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.debug(sseEvent);
+    } catch (IOException e) {
+      writeConverseChunkError(e, outputStream);
+    }
+  }
+
+  private void writeConverseSessionStart(String prompt, String modelName, PipedOutputStream outputStream)
+      throws IOException {
+    String sseStart = formatSSEEvent(SESSION_START,
+                                     createSessionStartJson(prompt, modelName, Instant.now().toString()).toString());
+    outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
+    outputStream.flush();
+    logger.info(sseStart);
+  }
+
+  private void writeConverseChunkError(IOException e, PipedOutputStream outputStream) {
+    try {
+      String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
+      outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.error(errorEvent);
+    } catch (IOException ioException) {
+      logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+    }
+  }
+
+  private void handleConverseError(String prompt, BedrockParameters bedrockParameters,
+                                   PipedOutputStream outputStream, AtomicBoolean sessionStartSent, Throwable error) {
+    try {
+      if (sessionStartSent.compareAndSet(false, true)) {
+        writeConverseSessionStart(prompt, bedrockParameters.getModelName(), outputStream);
+      }
+      String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(error).toString());
+      outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+    } catch (IOException e) {
+      logger.error(ERROR_WRITING_EVENT_LOG, e.getMessage());
+    } finally {
+      try {
+        outputStream.close();
+      } catch (IOException ignored) {
+      }
+    }
+  }
+
+  private void handleConverseComplete(String prompt, BedrockParameters bedrockParameters,
+                                      PipedOutputStream outputStream, long startTime) {
+    try {
+      long duration = System.currentTimeMillis() - startTime;
+      JSONObject completionData = createCompletionJson(prompt, bedrockParameters.getModelName(), duration);
+      String completionEvent = formatSSEEvent("session-complete", completionData.toString());
+      outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.info(completionEvent);
+    } catch (IOException e) {
+      try {
+        String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
+        outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+        outputStream.flush();
+      } catch (IOException ioException) {
+        logger.error("Error writing completion error event: {}", ioException.getMessage());
+      }
+    } finally {
+      try {
+        outputStream.close();
+      } catch (IOException ioException) {
+        logger.error("Error closing stream: {}", ioException.getMessage());
+      }
+    }
   }
 
   private static JSONObject createSessionStartJson(String prompt, String modelId, String timestamp) {
@@ -373,7 +391,7 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
 
   private static JSONObject createErrorJson(Throwable error) {
     JSONObject errorData = new JSONObject();
-    errorData.put("error", error.getMessage());
+    errorData.put(ERROR_KEY, error.getMessage());
     errorData.put("type", error.getClass().getSimpleName());
     errorData.put(TIMESTAMP, Instant.now().toString());
     return errorData;

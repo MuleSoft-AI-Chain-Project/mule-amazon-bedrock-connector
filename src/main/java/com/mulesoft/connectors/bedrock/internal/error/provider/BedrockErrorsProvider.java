@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.metadata.provider;
+package com.mulesoft.connectors.bedrock.internal.error.provider;
 
 import java.util.Set;
 import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;

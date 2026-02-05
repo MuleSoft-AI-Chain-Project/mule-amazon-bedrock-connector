@@ -94,6 +94,19 @@ class AgentServiceImplTest {
   }
 
   @Test
+  @DisplayName("listAgents throws when connection throws")
+  void listAgentsThrowsWhenConnectionThrows() {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.listAgents(any()))
+        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("timeout").build());
+
+    AgentServiceImpl service = new AgentServiceImpl(config, connection);
+    org.assertj.core.api.Assertions.assertThatThrownBy(service::listAgents)
+        .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class);
+  }
+
+  @Test
   @DisplayName("getAgentById returns JSON with agent details when connection returns response")
   void getAgentByIdReturnsJson() {
     BedrockConfiguration config = mock(BedrockConfiguration.class);
@@ -112,6 +125,19 @@ class AgentServiceImplTest {
     assertThat(result).isNotBlank();
     assertThat(result).contains("AGENT1");
     assertThat(result).contains("TestAgent");
+  }
+
+  @Test
+  @DisplayName("getAgentById throws when connection throws")
+  void getAgentByIdThrowsWhenConnectionThrows() {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getAgent(any()))
+        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("not found").build());
+
+    AgentServiceImpl service = new AgentServiceImpl(config, connection);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getAgentById("agent-1"))
+        .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class);
   }
 
   @Test
@@ -457,6 +483,43 @@ class AgentServiceImplTest {
   }
 
   @Test
+  @DisplayName("chatWithAgentSSEStream writes error event when invokeAgent fails")
+  void chatWithAgentSSEStreamWritesErrorWhenInvokeFails() throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
+    CompletableFuture<Void> failingFuture = new CompletableFuture<>();
+    failingFuture
+        .completeExceptionally(new java.util.concurrent.ExecutionException("stream fail", new RuntimeException("cause")));
+    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(failingFuture);
+
+    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
+    BedrockAgentsResponseParameters responseParams =
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+
+    AgentServiceImpl service = new AgentServiceImpl(config, connection);
+    InputStream stream = service.chatWithAgentSSEStream(
+                                                        "agentId", "aliasId", "Hi", false, false,
+                                                        sessionParams, null, null, responseParams, null);
+    assertThat(stream).isNotNull();
+    byte[] buf = new byte[8192];
+    int total = 0;
+    long deadline = System.currentTimeMillis() + 5000;
+    while (total < buf.length && System.currentTimeMillis() < deadline) {
+      int n = stream.read(buf, total, buf.length - total);
+      if (n <= 0)
+        break;
+      total += n;
+      String soFar = new String(buf, 0, total, java.nio.charset.StandardCharsets.UTF_8);
+      if (soFar.contains("event:") && soFar.contains("error"))
+        break;
+    }
+    String content = new String(buf, 0, total, java.nio.charset.StandardCharsets.UTF_8);
+    assertThat(content).contains("event:");
+    assertThat(content).contains("error").as("stream should contain error event when invoke fails");
+  }
+
+  @Test
   @DisplayName("chatWithAgent throws when invokeAgent completes exceptionally")
   void chatWithAgentThrowsWhenInvokeAgentFails() {
     BedrockConfiguration config = mock(BedrockConfiguration.class);
@@ -523,6 +586,59 @@ class AgentServiceImplTest {
 
     BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
     IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "");
+
+    AgentServiceImpl service = new AgentServiceImpl(config, connection);
+    String result = service.chatWithAgent(
+                                          "agentId", "aliasId", "Hi", false, false,
+                                          sessionParams, filteringParams, null, responseParams, null);
+
+    assertThat(result).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("chatWithAgent with legacy only numberOfResults uses buildVectorSearchConfiguration")
+  void chatWithAgentLegacyOnlyNumberOfResults() {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
+    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+
+    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
+    BedrockAgentsResponseParameters responseParams =
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+
+    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
+    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
+    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", 8);
+    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", null);
+    IntegrationTestParamHelper.setField(filteringParams, "overrideSearchType", null);
+
+    AgentServiceImpl service = new AgentServiceImpl(config, connection);
+    String result = service.chatWithAgent(
+                                          "agentId", "aliasId", "Hi", false, false,
+                                          sessionParams, filteringParams, null, responseParams, null);
+
+    assertThat(result).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("chatWithAgent with legacy only overrideSearchType uses buildVectorSearchConfiguration")
+  void chatWithAgentLegacyOnlyOverrideSearchType() {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
+    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+
+    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
+    BedrockAgentsResponseParameters responseParams =
+        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+
+    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
+    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
+    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", null);
+    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", null);
+    IntegrationTestParamHelper.setField(filteringParams, "overrideSearchType",
+                                        BedrockAgentsFilteringParameters.SearchType.SEMANTIC);
 
     AgentServiceImpl service = new AgentServiceImpl(config, connection);
     String result = service.chatWithAgent(

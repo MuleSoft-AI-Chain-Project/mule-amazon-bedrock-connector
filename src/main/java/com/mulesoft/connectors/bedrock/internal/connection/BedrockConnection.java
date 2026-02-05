@@ -46,6 +46,7 @@ public class BedrockConnection implements ConnectorConnection {
 
   private static final String AGENT_RUNTIME_ASYNC_CLIENT_TYPE = "BedrockAgentRuntimeAsync";
   private static final String RUNTIME_ASYNC_CLIENT_TYPE = "BedrockRuntimeAsync";
+  private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid credentials";
 
   private final String region;
   private final BedrockRuntimeClient bedrockRuntimeClient;
@@ -165,24 +166,18 @@ public class BedrockConnection implements ConnectorConnection {
 
   @Override
   public void disconnect() {
+    // Default method
+    // no need of any implementation
 
   }
 
   @Override
   public void validate() {
-    // Validate connection by making a lightweight API call
-    // This will throw an exception if credentials are invalid
     try {
       getBedrockClient().listFoundationModels(r -> {
       });
     } catch (software.amazon.awssdk.services.bedrock.model.BedrockException e) {
-      // Handle Bedrock service exceptions (from bedrock service, not bedrockagent)
-      // Check if it's a 403 (Forbidden) which indicates invalid credentials
-      if (e.statusCode() == 403) {
-        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
-      }
-      // For other Bedrock service errors, use SERVICE_ERROR
-      throw new ModuleException("Bedrock service error", BedrockErrorType.SERVICE_ERROR, e);
+      handleBedrockException(e);
     } catch (AccessDeniedException e) {
       throw ErrorHandler.handleAccessDeniedException(e);
     } catch (ValidationException e) {
@@ -194,25 +189,39 @@ public class BedrockConnection implements ConnectorConnection {
     } catch (BedrockAgentException e) {
       throw ErrorHandler.handleBedrockAgentException(e);
     } catch (SdkServiceException e) {
-      // Check if it's a 403 (Forbidden) which indicates invalid credentials
-      if (e.statusCode() == 403) {
-        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
-      }
-      throw ErrorHandler.handleSdkServiceException(e);
+      handleSdkServiceExceptionOnValidate(e);
     } catch (SdkClientException e) {
-      // Check if it's an authentication error (invalid credentials)
-      // SdkClientException for auth errors typically contains "Unable to load credentials"
-      // or similar messages, but network errors also use SdkClientException
-      String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-      if (message.contains("unable to load credentials") ||
-          (message.contains("invalid") && message.contains("credential"))) {
-        throw new ModuleException("Invalid credentials", BedrockErrorType.ACCESS_DENIED, e);
-      }
-      // For other client errors (like network issues), use CLIENT_ERROR
-      throw ErrorHandler.handleSdkClientException(e, "Connection validation");
+      handleSdkClientExceptionOnValidate(e);
     } catch (SdkException e) {
       throw ErrorHandler.handleSdkException(e);
     }
+  }
+
+  private void handleBedrockException(software.amazon.awssdk.services.bedrock.model.BedrockException e) {
+    if (e.statusCode() == 403) {
+      throw new ModuleException(INVALID_CREDENTIALS_MESSAGE, BedrockErrorType.ACCESS_DENIED, e);
+    }
+    throw new ModuleException("Bedrock service error", BedrockErrorType.SERVICE_ERROR, e);
+  }
+
+  private void handleSdkServiceExceptionOnValidate(SdkServiceException e) {
+    if (e.statusCode() == 403) {
+      throw new ModuleException(INVALID_CREDENTIALS_MESSAGE, BedrockErrorType.ACCESS_DENIED, e);
+    }
+    throw ErrorHandler.handleSdkServiceException(e);
+  }
+
+  private void handleSdkClientExceptionOnValidate(SdkClientException e) {
+    if (isCredentialRelatedClientError(e)) {
+      throw new ModuleException(INVALID_CREDENTIALS_MESSAGE, BedrockErrorType.ACCESS_DENIED, e);
+    }
+    throw ErrorHandler.handleSdkClientException(e, "Connection validation");
+  }
+
+  private static boolean isCredentialRelatedClientError(SdkClientException e) {
+    String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+    return message.contains("unable to load credentials")
+        || (message.contains("invalid") && message.contains("credential"));
   }
 
 

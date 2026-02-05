@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

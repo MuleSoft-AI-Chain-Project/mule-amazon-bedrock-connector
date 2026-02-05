@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 public class EmbeddingServiceImpl extends BedrockServiceImpl implements EmbeddingService {
 
   private static final Logger logger = LoggerFactory.getLogger(EmbeddingServiceImpl.class);
+  private static final String INPUT_TEXT = "inputText";
 
   public EmbeddingServiceImpl(BedrockConfiguration config, BedrockConnection bedrockConnection) {
     super(config, bedrockConnection);
@@ -36,14 +37,14 @@ public class EmbeddingServiceImpl extends BedrockServiceImpl implements Embeddin
   private static String getAmazonTitanEmbeddingG1(String prompt) {
 
     return new JSONObject()
-        .put("inputText", prompt)
+        .put(INPUT_TEXT, prompt)
         .toString();
   }
 
   private static String getAmazonTitanEmbeddingG2(String prompt, BedrockParametersEmbedding awsBedrockParameters) {
 
     return new JSONObject()
-        .put("inputText", prompt)
+        .put(INPUT_TEXT, prompt)
         .put("dimensions", awsBedrockParameters.getDimension())
         .put("normalize", awsBedrockParameters.getNormalize())
         .toString();
@@ -53,7 +54,7 @@ public class EmbeddingServiceImpl extends BedrockServiceImpl implements Embeddin
                                                      BedrockParametersEmbeddingDocument awsBedrockParameters) {
 
     return new JSONObject()
-        .put("inputText", prompt)
+        .put(INPUT_TEXT, prompt)
         .put("dimensions", awsBedrockParameters.getDimension())
         .put("normalize", awsBedrockParameters.getNormalize())
         .toString();
@@ -66,7 +67,7 @@ public class EmbeddingServiceImpl extends BedrockServiceImpl implements Embeddin
     embeddingConfig.put("outputEmbeddingLength", 256);
 
     JSONObject body = new JSONObject();
-    body.put("inputText", prompt);
+    body.put(INPUT_TEXT, prompt);
     body.put("embeddingConfig", embeddingConfig);
 
     return body.toString();
@@ -80,7 +81,7 @@ public class EmbeddingServiceImpl extends BedrockServiceImpl implements Embeddin
     embeddingConfig.put("outputEmbeddingLength", 256);
 
     JSONObject body = new JSONObject();
-    body.put("inputText", prompt);
+    body.put(INPUT_TEXT, prompt);
     body.put("embeddingConfig", embeddingConfig);
 
     return body.toString();

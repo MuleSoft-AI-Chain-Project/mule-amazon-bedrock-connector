@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -9,7 +9,7 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbedding;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbeddingDocument;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.EmbeddingService;
 import com.mulesoft.connectors.bedrock.internal.service.EmbeddingServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
@@ -46,11 +46,11 @@ public class EmbeddingOperation extends BedrockOperation<EmbeddingService> {
   @Alias("EMBEDDING-generate-from-text")
   @Execution(ExecutionType.BLOCKING)
   @Summary("Generate embeddings from input text")
-  public InputStream generateEmbedding(String prompt,
-                                       @Config BedrockConfiguration config,
+  public InputStream generateEmbedding(@Config BedrockConfiguration config,
                                        @Connection BedrockConnection connection,
                                        @ParameterGroup(
-                                           name = "Additional properties") BedrockParametersEmbedding awsBedrockParameters) {
+                                           name = "Additional properties") BedrockParametersEmbedding awsBedrockParameters,
+                                       String prompt) {
     return newExecutionBuilder(config, connection)
         .execute(EmbeddingService::generateEmbeddings, BedrockModelFactory::createInputStream)
         .withParam(prompt)
@@ -78,11 +78,11 @@ public class EmbeddingOperation extends BedrockOperation<EmbeddingService> {
   @Alias("EMBEDDING-adhoc-query")
   @Execution(ExecutionType.BLOCKING)
   @Summary("Run an ad-hoc embedding query")
-  public InputStream ragEmbeddingTextScore(String prompt, String filePath,
-                                           @Config BedrockConfiguration config,
+  public InputStream ragEmbeddingTextScore(@Config BedrockConfiguration config,
                                            @Connection BedrockConnection connection,
                                            @ParameterGroup(
-                                               name = "Additional properties") BedrockParametersEmbeddingDocument awsBedrockParameters)
+                                               name = "Additional properties") BedrockParametersEmbeddingDocument awsBedrockParameters,
+                                           String prompt, String filePath)
       throws IOException, SAXException, TikaException {
     return newExecutionBuilder(config, connection)
         .execute(EmbeddingService::invokeAdhocRAG, BedrockModelFactory::createInputStream)

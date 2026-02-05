@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import org.mule.connectors.atlantic.commons.builder.execution.ExecutionBuilder;
 import org.mule.connectors.atlantic.commons.builder.lambda.function.BiFunction;

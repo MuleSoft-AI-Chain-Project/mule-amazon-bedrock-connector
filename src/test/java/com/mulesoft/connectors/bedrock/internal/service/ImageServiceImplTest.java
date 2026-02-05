@@ -90,6 +90,27 @@ class ImageServiceImplTest {
     assertThat(new File(result)).exists();
   }
 
+  @Test
+  @DisplayName("invokeModel returns null when connection throws")
+  void invokeModelThrowsWhenConnectionThrows(@TempDir File tempDir) throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getRegion()).thenReturn("us-east-1");
+    when(connection.invokeModel(any(InvokeModelRequest.class)))
+        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("network error").build());
+
+    BedrockImageParameters params = new BedrockImageParameters();
+    setField(params, "modelName", "stability.stable-diffusion-xl-v1");
+    setField(params, "numOfImages", 1);
+    setField(params, "height", 512);
+    setField(params, "width", 512);
+
+    ImageServiceImpl service = new ImageServiceImpl(config, connection);
+    File outFile = new File(tempDir, "out.png");
+    String result = service.invokeModel("A cat", "", outFile.getAbsolutePath(), params);
+    org.assertj.core.api.Assertions.assertThat(result).isNull();
+  }
+
   private static void setField(Object target, String fieldName, Object value) throws Exception {
     Field f = target.getClass().getDeclaredField(fieldName);
     f.setAccessible(true);

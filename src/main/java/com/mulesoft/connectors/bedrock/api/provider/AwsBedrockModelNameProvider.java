@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.metadata.provider;
+package com.mulesoft.connectors.bedrock.api.provider;
 
 import java.util.Set;
 import org.mule.runtime.api.value.Value;
@@ -8,7 +8,10 @@ import org.mule.runtime.extension.api.values.ValueResolvingException;
 
 public class AwsBedrockModelNameProvider implements ValueProvider {
 
-  public AwsBedrockModelNameProvider() {}
+  public AwsBedrockModelNameProvider() {
+    // Default constructor intentionally empty.
+    // Required for framework/deserialization/reflection-based instantiation.
+  }
 
   private static final Set<Value> VALUES_FOR = ValueBuilder.getValuesFor(
                                                                          "amazon.nova-micro-v1:0",

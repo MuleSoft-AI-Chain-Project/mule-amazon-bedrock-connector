@@ -58,6 +58,7 @@ import software.amazon.awssdk.services.bedrockagentruntime.model.PayloadPart;
 import software.amazon.awssdk.services.bedrockagentruntime.model.PromptCreationConfigurations;
 import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievalFilter;
 import software.amazon.awssdk.services.bedrockagentruntime.model.SessionState;
+import software.amazon.awssdk.services.bedrockagentruntime.model.VectorSearchBedrockRerankingConfiguration;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -96,7 +97,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   private static final String CONTENT = "content";
   private static final String LOCATION = "location";
   private static final String METADATA = "metadata";
-
+  private static final String ERROR_KEY = "error";
+  private static final String ERROR_WRITING_EVENT_LOG = "Error writing error event: {}";
 
   private static final AtomicInteger eventCounter = new AtomicInteger(0);
 
@@ -257,7 +259,40 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                                 java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
                                                 Integer operationTimeout, TimeUnit operationTimeoutUnit) {
     long startTime = System.currentTimeMillis();
+    InvokeAgentRequest request = buildInvokeAgentRequest(agentAliasId, agentId, prompt, enableTrace, latencyOptimized,
+                                                         effectiveSessionId, excludePreviousThinkingSteps,
+                                                         previousConversationTurnsToInclude, knowledgeBaseConfigs,
+                                                         operationTimeout, operationTimeoutUnit);
+    CompletableFuture<String> completionFuture = new CompletableFuture<>();
+    List<JSONObject> chunks = Collections.synchronizedList(new ArrayList<>());
+    InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
+        .onChunk(chunk -> chunks.add(buildInvokeAgentChunkJson(chunk)))
+        .build();
+    InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
+        .subscriber(visitor)
+        .build();
+    long effectiveTimeoutMs = (operationTimeout != null && operationTimeout > 0)
+        ? toDuration(operationTimeout, operationTimeoutUnit).toMillis()
+        : getConnection().getConnectionTimeoutMs();
+    CompletableFuture<Void> invocationFuture = getConnection().invokeAgent(request, handler, effectiveTimeoutMs);
+    invocationFuture.whenComplete((result, throwable) -> {
+      if (throwable != null) {
+        completionFuture.completeExceptionally(throwable);
+      } else {
+        completionFuture.complete(buildInvokeAgentResult(effectiveSessionId, agentId, agentAliasId, prompt, chunks,
+                                                         startTime)
+            .toString());
+      }
+    });
+    return completionFuture;
+  }
 
+  private InvokeAgentRequest buildInvokeAgentRequest(String agentAliasId, String agentId, String prompt,
+                                                     boolean enableTrace, boolean latencyOptimized,
+                                                     String effectiveSessionId, boolean excludePreviousThinkingSteps,
+                                                     Integer previousConversationTurnsToInclude,
+                                                     java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
+                                                     Integer operationTimeout, TimeUnit operationTimeoutUnit) {
     InvokeAgentRequest.Builder requestBuilder = InvokeAgentRequest.builder()
         .agentId(agentId)
         .agentAliasId(agentAliasId)
@@ -271,114 +306,100 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     if (operationTimeout != null && operationTimeout > 0) {
       Duration timeout = toDuration(operationTimeout, operationTimeoutUnit);
       requestBuilder.overrideConfiguration(
-                                           AwsRequestOverrideConfiguration.builder()
-                                               .apiCallTimeout(timeout)
-                                               .build());
+                                           AwsRequestOverrideConfiguration.builder().apiCallTimeout(timeout).build());
     }
-    InvokeAgentRequest request = requestBuilder.build();
-    CompletableFuture<String> completionFuture = new CompletableFuture<>();
-    List<JSONObject> chunks = Collections.synchronizedList(new ArrayList<>());
-    InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
-        .onChunk(chunk -> {
-          JSONObject chunkData = new JSONObject();
-          chunkData.put(TYPE, CHUNK);
-          chunkData.put(TIMESTAMP, Instant.now().toString());
-
-          if (chunk.bytes() != null) {
-            String text = new String(chunk.bytes().asByteArray(), StandardCharsets.UTF_8);
-            chunkData.put(TEXT, text);
-          }
-
-          // Add attribution/citations if present
-          if (chunk.attribution() != null && chunk.attribution().citations() != null) {
-            JSONArray citationsArray = new JSONArray();
-            chunk.attribution().citations().forEach(citation -> {
-              JSONObject citationData = new JSONObject();
-
-              if (citation.generatedResponsePart() != null
-                  && citation.generatedResponsePart().textResponsePart() != null) {
-                citationData.put(GENERATED_RESPONSE_PART,
-                                 citation.generatedResponsePart().textResponsePart().text());
-              }
-
-              if (citation.retrievedReferences() != null) {
-                JSONArray referencesArray = new JSONArray();
-                citation.retrievedReferences().forEach(ref -> {
-                  JSONObject refData = new JSONObject();
-                  if (ref.content() != null && ref.content().text() != null) {
-                    refData.put(CONTENT, ref.content().text());
-                  }
-                  if (ref.location() != null) {
-                    refData.put(LOCATION, ref.location().toString());
-                  }
-                  if (ref.metadata() != null) {
-                    JSONObject metadataObject = new JSONObject(ref.metadata());
-                    refData.put(METADATA, metadataObject);
-                  }
-                  referencesArray.put(refData);
-                });
-                citationData.put(RETRIEVED_REFERENCES, referencesArray);
-              }
-              citationsArray.put(citationData);
-            });
-            chunkData.put(CITATIONS, citationsArray);
-          }
-
-          chunks.add(chunkData);
-        })
-        .build();
-    InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
-        .subscriber(visitor)
-        .build();
-    long effectiveTimeoutMs = (operationTimeout != null && operationTimeout > 0)
-        ? toDuration(operationTimeout, operationTimeoutUnit).toMillis()
-        : getConnection().getConnectionTimeoutMs();
-    CompletableFuture<Void> invocationFuture = getConnection().invokeAgent(request, handler, effectiveTimeoutMs);
-    invocationFuture.whenComplete((result, throwable) -> {
-      if (throwable != null) {
-        completionFuture.completeExceptionally(throwable);
-      } else {
-        JSONObject finalResult = new JSONObject();
-        finalResult.put(SESSION_ID, effectiveSessionId);
-        finalResult.put(AGENT_ID, agentId);
-        finalResult.put(AGENT_ALIAS, agentAliasId);
-        finalResult.put(PROMPT, prompt);
-        finalResult.put(PROCESSED_AT, Instant.now().toString());
-        finalResult.put(CHUNKS, new JSONArray(chunks));
-
-        // Add summary statistics
-        JSONObject summary = new JSONObject();
-        summary.put(TOTAL_CHUNKS, chunks.size());
-
-        // Concatenate all chunk text for full response
-        StringBuilder fullText = new StringBuilder();
-        chunks.forEach(chunk -> {
-          if (chunk.has(TEXT)) {
-            fullText.append(chunk.getString(TEXT));
-          }
-        });
-        summary.put(FULL_RESPONSE, fullText.toString());
-
-        long endTime = System.currentTimeMillis();
-        summary.put("total_duration_ms", endTime - startTime);
-
-        finalResult.put(SUMMARY, summary);
-
-        String finalJson = finalResult.toString();
-        completionFuture.complete(finalJson);
-      }
-    });
-
-
-    return completionFuture;
-
+    return requestBuilder.build();
   }
 
-  private static Duration toDuration(int amount, TimeUnit unit) {
-    if (unit == null) {
+  private JSONObject buildInvokeAgentChunkJson(PayloadPart chunk) {
+    JSONObject chunkData = new JSONObject();
+    chunkData.put(TYPE, CHUNK);
+    chunkData.put(TIMESTAMP, Instant.now().toString());
+    if (chunk.bytes() != null) {
+      String text = new String(chunk.bytes().asByteArray(), StandardCharsets.UTF_8);
+      chunkData.put(TEXT, text);
+    }
+    if (chunk.attribution() != null && chunk.attribution().citations() != null) {
+      chunkData.put(CITATIONS, buildCitationsJson(chunk.attribution().citations()));
+    }
+    return chunkData;
+  }
+
+  private JSONArray buildCitationsJson(
+                                       java.util.List<software.amazon.awssdk.services.bedrockagentruntime.model.Citation> citations) {
+    JSONArray citationsArray = new JSONArray();
+    citations.forEach(citation -> citationsArray.put(buildCitationJson(citation)));
+    return citationsArray;
+  }
+
+  private JSONObject buildCitationJson(
+                                       software.amazon.awssdk.services.bedrockagentruntime.model.Citation citation) {
+    JSONObject citationData = new JSONObject();
+    if (citation.generatedResponsePart() != null
+        && citation.generatedResponsePart().textResponsePart() != null) {
+      citationData.put(GENERATED_RESPONSE_PART,
+                       citation.generatedResponsePart().textResponsePart().text());
+    }
+    if (citation.retrievedReferences() != null) {
+      citationData.put(RETRIEVED_REFERENCES, buildRetrievedReferencesJson(citation.retrievedReferences()));
+    }
+    return citationData;
+  }
+
+  private JSONArray buildRetrievedReferencesJson(
+                                                 java.util.List<software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference> refs) {
+    JSONArray referencesArray = new JSONArray();
+    refs.forEach(ref -> referencesArray.put(buildRetrievedReferenceJson(ref)));
+    return referencesArray;
+  }
+
+  private JSONObject buildRetrievedReferenceJson(
+                                                 software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference ref) {
+    JSONObject refData = new JSONObject();
+    if (ref.content() != null && ref.content().text() != null) {
+      refData.put(CONTENT, ref.content().text());
+    }
+    if (ref.location() != null) {
+      refData.put(LOCATION, ref.location().toString());
+    }
+    if (ref.metadata() != null) {
+      refData.put(METADATA, new JSONObject(ref.metadata()));
+    }
+    return refData;
+  }
+
+  private JSONObject buildInvokeAgentResult(String effectiveSessionId, String agentId, String agentAliasId,
+                                            String prompt, List<JSONObject> chunks, long startTime) {
+    JSONObject finalResult = new JSONObject();
+    finalResult.put(SESSION_ID, effectiveSessionId);
+    finalResult.put(AGENT_ID, agentId);
+    finalResult.put(AGENT_ALIAS, agentAliasId);
+    finalResult.put(PROMPT, prompt);
+    finalResult.put(PROCESSED_AT, Instant.now().toString());
+    finalResult.put(CHUNKS, new JSONArray(chunks));
+    finalResult.put(SUMMARY, buildInvokeAgentSummary(chunks, startTime));
+    return finalResult;
+  }
+
+  private JSONObject buildInvokeAgentSummary(List<JSONObject> chunks, long startTime) {
+    JSONObject summary = new JSONObject();
+    summary.put(TOTAL_CHUNKS, chunks.size());
+    StringBuilder fullText = new StringBuilder();
+    chunks.forEach(chunk -> {
+      if (chunk.has(TEXT)) {
+        fullText.append(chunk.getString(TEXT));
+      }
+    });
+    summary.put(FULL_RESPONSE, fullText.toString());
+    summary.put("total_duration_ms", System.currentTimeMillis() - startTime);
+    return summary;
+  }
+
+  private static Duration toDuration(int amount, TimeUnit amountUnit) {
+    if (amountUnit == null) {
       return Duration.ofSeconds(amount);
     }
-    return Duration.ofMillis(unit.toMillis(amount));
+    return Duration.ofMillis(amountUnit.toMillis(amount));
   }
 
   private Consumer<PromptCreationConfigurations.Builder> buildPromptConfigurations(boolean excludePreviousThinkingSteps,
@@ -435,155 +456,144 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                                                                        BedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType,
                                                                                        Map<String, String> metadataFilters,
                                                                                        BedrockAgentsFilteringParameters.RerankingConfiguration rerankingConfig) {
-
-    // Filter out null and empty values from metadata filters
-    Map<String, String> nonEmptyFilters = null;
-    if (metadataFilters != null && !metadataFilters.isEmpty()) {
-      nonEmptyFilters = metadataFilters.entrySet().stream()
-          .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
-          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    Map<String, String> nonEmptyFilters = getNonEmptyMetadataFilters(metadataFilters);
+    if (!hasAnyVectorSearchConfig(numberOfResults, overrideSearchType, nonEmptyFilters, rerankingConfig)) {
+      return null;
     }
+    KnowledgeBaseVectorSearchConfiguration.Builder builder = KnowledgeBaseVectorSearchConfiguration.builder();
+    applyFilterToBuilder(builder, nonEmptyFilters, filterType);
+    applyNumberOfResults(builder, numberOfResults);
+    applyOverrideSearchType(builder, overrideSearchType);
+    applyRerankingConfig(builder, rerankingConfig);
+    return builder.build();
+  }
 
-    // Check if we have any valid configuration to build
-    // Build configuration if we have: numberOfResults, overrideSearchType, filters, or reranking config
-    boolean hasNumberOfResults = numberOfResults != null && numberOfResults.intValue() > 0;
+  private static Map<String, String> getNonEmptyMetadataFilters(Map<String, String> metadataFilters) {
+    if (metadataFilters == null || metadataFilters.isEmpty()) {
+      return null;
+    }
+    return metadataFilters.entrySet().stream()
+        .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
+  private static boolean hasAnyVectorSearchConfig(Integer numberOfResults,
+                                                  BedrockAgentsFilteringParameters.SearchType overrideSearchType,
+                                                  Map<String, String> nonEmptyFilters,
+                                                  BedrockAgentsFilteringParameters.RerankingConfiguration rerankingConfig) {
+    boolean hasNumberOfResults = numberOfResults != null && numberOfResults > 0;
     boolean hasOverrideSearchType = overrideSearchType != null;
     boolean hasFilters = nonEmptyFilters != null && !nonEmptyFilters.isEmpty();
     boolean hasRerankingConfig = rerankingConfig != null;
+    return hasNumberOfResults || hasOverrideSearchType || hasFilters || hasRerankingConfig;
+  }
 
-    // If none of the configurations are provided, return null
-    if (!hasNumberOfResults && !hasOverrideSearchType && !hasFilters && !hasRerankingConfig) {
-      return null;
+  private static void applyFilterToBuilder(KnowledgeBaseVectorSearchConfiguration.Builder builder,
+                                           Map<String, String> nonEmptyFilters,
+                                           BedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType) {
+    if (nonEmptyFilters == null || nonEmptyFilters.isEmpty()) {
+      return;
     }
+    RetrievalFilter filter = nonEmptyFilters.size() > 1
+        ? buildCompositeRetrievalFilter(nonEmptyFilters, filterType)
+        : buildSingleRetrievalFilter(nonEmptyFilters);
+    builder.filter(filter);
+  }
 
-    // apply numberOfResults only if not null and greater than 0
-    Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalNumberOfResults =
-        b -> {
-          if (numberOfResults != null && numberOfResults.intValue() > 0)
-            b.numberOfResults(numberOfResults);
-        };
+  private static RetrievalFilter buildSingleRetrievalFilter(Map<String, String> nonEmptyFilters) {
+    Map.Entry<String, String> entry = nonEmptyFilters.entrySet().iterator().next();
+    return RetrievalFilter.builder()
+        .equalsValue(FilterAttribute.builder()
+            .key(entry.getKey())
+            .value(Document.fromString(entry.getValue()))
+            .build())
+        .build();
+  }
 
-    // apply overrideSearchType only if not null
-    Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalOverrideSearchType =
-        b -> {
-          if (overrideSearchType != null)
-            // Use the conversion function to pass the SDK's SearchType
-            b.overrideSearchType(convertToSdkSearchType(overrideSearchType));
-        };
-
-    // Build reranking configuration if provided and valid
-    // Only build if rerankingConfig is provided AND modelArn is specified (required for bedrockRerankingConfiguration)
-    Consumer<KnowledgeBaseVectorSearchConfiguration.Builder> applyOptionalRerankingConfig =
-        b -> {
-          if (rerankingConfig != null && rerankingConfig.getModelArn() != null
-              && !rerankingConfig.getModelArn().isEmpty()) {
-            b.rerankingConfiguration(rerankingBuilder -> {
-              // Set the type if provided, otherwise default to "BEDROCK"
-              if (rerankingConfig.getRerankingType() != null && !rerankingConfig.getRerankingType().isEmpty()) {
-                rerankingBuilder.type(rerankingConfig.getRerankingType());
-              } else {
-                rerankingBuilder.type("BEDROCK");
-              }
-
-              // Build bedrockRerankingConfiguration
-              rerankingBuilder.bedrockRerankingConfiguration(bedrockRerankingBuilder -> {
-                // Build modelConfiguration (modelArn is guaranteed to be non-null here)
-                bedrockRerankingBuilder.modelConfiguration(modelConfigBuilder -> {
-                  modelConfigBuilder.modelArn(rerankingConfig.getModelArn());
-
-                  // Add additionalModelRequestFields if provided
-                  if (rerankingConfig.getAdditionalModelRequestFields() != null
-                      && !rerankingConfig.getAdditionalModelRequestFields().isEmpty()) {
-                    Map<String, Document> additionalFields = rerankingConfig.getAdditionalModelRequestFields()
-                        .entrySet().stream()
-                        .collect(Collectors.toMap(
-                                                  Map.Entry::getKey,
-                                                  entry -> Document.fromString(entry.getValue())));
-                    modelConfigBuilder.additionalModelRequestFields(additionalFields);
-                  }
-                });
-
-                // Build metadataConfiguration
-                if (rerankingConfig.getSelectionMode() != null) {
-                  bedrockRerankingBuilder.metadataConfiguration(metadataConfigBuilder -> {
-                    // Convert selectionMode
-                    String selectionModeStr = rerankingConfig.getSelectionMode().name();
-                    metadataConfigBuilder.selectionMode(selectionModeStr);
-
-                    // Build selectiveModeConfiguration if SELECTIVE
-                    if (rerankingConfig
-                        .getSelectionMode() == BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE) {
-                      metadataConfigBuilder.selectiveModeConfiguration(selectiveModeBuilder -> {
-                        // Handle fieldsToExclude or fieldsToInclude (union type - only one can be set)
-                        if (rerankingConfig.getFieldsToExclude() != null
-                            && !rerankingConfig.getFieldsToExclude().isEmpty()) {
-                          List<FieldForReranking> fieldsToExclude = rerankingConfig.getFieldsToExclude().stream()
-                              .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
-                              .collect(Collectors.toList());
-                          selectiveModeBuilder.fieldsToExclude(fieldsToExclude);
-                        } else if (rerankingConfig.getFieldsToInclude() != null
-                            && !rerankingConfig.getFieldsToInclude().isEmpty()) {
-                          List<FieldForReranking> fieldsToInclude = rerankingConfig.getFieldsToInclude().stream()
-                              .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
-                              .collect(Collectors.toList());
-                          selectiveModeBuilder.fieldsToInclude(fieldsToInclude);
-                        }
-                      });
-                    }
-                  });
-                }
-
-                // Add numberOfRerankedResults if provided
-                if (rerankingConfig.getNumberOfRerankedResults() != null) {
-                  bedrockRerankingBuilder.numberOfRerankedResults(rerankingConfig.getNumberOfRerankedResults());
-                }
-              });
-            });
-          }
-        };
-
-    KnowledgeBaseVectorSearchConfiguration.Builder builder = KnowledgeBaseVectorSearchConfiguration.builder();
-
-    // Build filter if metadata filters are provided
-    if (nonEmptyFilters != null && !nonEmptyFilters.isEmpty()) {
-      if (nonEmptyFilters.size() > 1) {
-        List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
-            .map(entry -> RetrievalFilter.builder()
-                .equalsValue(FilterAttribute.builder()
-                    .key(entry.getKey())
-                    .value(Document.fromString(entry.getValue()))
-                    .build())
-                .build())
-            .collect(Collectors.toList());
-
-        RetrievalFilter compositeFilter = RetrievalFilter.builder()
-            .applyMutation(filterBuilder -> {
-              if (filterType == BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL) {
-                filterBuilder.andAll(retrievalFilters);
-              } else if (filterType == BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL) {
-                filterBuilder.orAll(retrievalFilters);
-              }
-            })
-            .build();
-
-        builder.filter(compositeFilter);
-      } else {
-        String key = nonEmptyFilters.entrySet().iterator().next().getKey();
-        builder.filter(RetrievalFilter.builder()
+  private static RetrievalFilter buildCompositeRetrievalFilter(Map<String, String> nonEmptyFilters,
+                                                               BedrockAgentsFilteringParameters.RetrievalMetadataFilterType filterType) {
+    List<RetrievalFilter> retrievalFilters = nonEmptyFilters.entrySet().stream()
+        .map(entry -> RetrievalFilter.builder()
             .equalsValue(FilterAttribute.builder()
-                .key(key)
-                .value(Document.fromString(nonEmptyFilters.get(key)))
+                .key(entry.getKey())
+                .value(Document.fromString(entry.getValue()))
                 .build())
-            .build());
-      }
+            .build())
+        .collect(Collectors.toList());
+    return RetrievalFilter.builder()
+        .applyMutation(filterBuilder -> {
+          if (filterType == BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL) {
+            filterBuilder.andAll(retrievalFilters);
+          } else {
+            filterBuilder.orAll(retrievalFilters);
+          }
+        })
+        .build();
+  }
+
+  private static void applyNumberOfResults(KnowledgeBaseVectorSearchConfiguration.Builder builder, Integer numberOfResults) {
+    if (numberOfResults != null && numberOfResults > 0) {
+      builder.numberOfResults(numberOfResults);
     }
+  }
 
-    // Apply optional configurations
-    builder.applyMutation(applyOptionalNumberOfResults);
-    builder.applyMutation(applyOptionalOverrideSearchType);
-    builder.applyMutation(applyOptionalRerankingConfig);
+  private static void applyOverrideSearchType(KnowledgeBaseVectorSearchConfiguration.Builder builder,
+                                              BedrockAgentsFilteringParameters.SearchType overrideSearchType) {
+    if (overrideSearchType != null) {
+      builder.overrideSearchType(convertToSdkSearchType(overrideSearchType));
+    }
+  }
 
-    return builder.build();
+  private static void applyRerankingConfig(KnowledgeBaseVectorSearchConfiguration.Builder builder,
+                                           BedrockAgentsFilteringParameters.RerankingConfiguration rerankingConfig) {
+    if (rerankingConfig == null || rerankingConfig.getModelArn() == null
+        || rerankingConfig.getModelArn().isEmpty()) {
+      return;
+    }
+    builder.rerankingConfiguration(rerankingBuilder -> {
+      String rerankingType = (rerankingConfig.getRerankingType() != null && !rerankingConfig.getRerankingType().isEmpty())
+          ? rerankingConfig.getRerankingType()
+          : "BEDROCK";
+      rerankingBuilder.type(rerankingType);
+      rerankingBuilder
+          .bedrockRerankingConfiguration(bedrockBuilder -> configureBedrockReranking(bedrockBuilder, rerankingConfig));
+    });
+  }
+
+  private static void configureBedrockReranking(
+                                                VectorSearchBedrockRerankingConfiguration.Builder bedrockBuilder,
+                                                BedrockAgentsFilteringParameters.RerankingConfiguration config) {
+    bedrockBuilder.modelConfiguration(modelConfigBuilder -> {
+      modelConfigBuilder.modelArn(config.getModelArn());
+      if (config.getAdditionalModelRequestFields() != null && !config.getAdditionalModelRequestFields().isEmpty()) {
+        Map<String, Document> additionalFields = config.getAdditionalModelRequestFields().entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> Document.fromString(entry.getValue())));
+        modelConfigBuilder.additionalModelRequestFields(additionalFields);
+      }
+    });
+    if (config.getSelectionMode() != null) {
+      bedrockBuilder.metadataConfiguration(metadataConfigBuilder -> {
+        metadataConfigBuilder.selectionMode(config.getSelectionMode().name());
+        if (config.getSelectionMode() == BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE) {
+          metadataConfigBuilder.selectiveModeConfiguration(selectiveModeBuilder -> {
+            if (config.getFieldsToExclude() != null && !config.getFieldsToExclude().isEmpty()) {
+              List<FieldForReranking> fieldsToExclude = config.getFieldsToExclude().stream()
+                  .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                  .collect(Collectors.toList());
+              selectiveModeBuilder.fieldsToExclude(fieldsToExclude);
+            } else if (config.getFieldsToInclude() != null && !config.getFieldsToInclude().isEmpty()) {
+              List<FieldForReranking> fieldsToInclude = config.getFieldsToInclude().stream()
+                  .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                  .collect(Collectors.toList());
+              selectiveModeBuilder.fieldsToInclude(fieldsToInclude);
+            }
+          });
+        }
+      });
+    }
+    if (config.getNumberOfRerankedResults() != null) {
+      bedrockBuilder.numberOfRerankedResults(config.getNumberOfRerankedResults());
+    }
   }
 
   private static software.amazon.awssdk.services.bedrockagentruntime.model.SearchType convertToSdkSearchType(BedrockAgentsFilteringParameters.SearchType connectorSearchType) {
@@ -705,14 +715,19 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
             // The exception message already contains retry details if retries were attempted
             // Send error as SSE event (createErrorJson will use the exception's message which is already enhanced)
             JSONObject errorJson = createErrorJson(e);
-            String errorEvent = formatSSEEvent("error", errorJson.toString());
+            String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
             outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
-            outputStream.close();
             logger.error(errorEvent);
           } catch (IOException ioException) {
             // Log error but can't do much more
-            logger.error("Error writing error event: {}", ioException.getMessage());
+            logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+          }
+        } finally {
+          try {
+            outputStream.close();
+          } catch (IOException ioException) {
+            logger.debug("Error closing stream: {}", ioException.getMessage());
           }
         }
       });
@@ -721,7 +736,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
     } catch (IOException e) {
       // Return error as immediate SSE event
-      String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
+      String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(e).toString());
       logger.error(errorEvent);
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
     }
@@ -793,6 +808,35 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       throws ExecutionException, InterruptedException, IOException {
 
     long startTime = System.currentTimeMillis();
+    InvokeAgentRequest request = buildStreamingInvokeAgentRequest(agentAliasId, agentId, prompt, enableTrace,
+                                                                  latencyOptimized, effectiveSessionId,
+                                                                  excludePreviousThinkingSteps,
+                                                                  previousConversationTurnsToInclude,
+                                                                  knowledgeBaseConfigs, operationTimeout, operationTimeoutUnit);
+
+    InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
+        .onChunk(chunk -> handleStreamChunk(agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId,
+                                            userId, outputStream, chunksReceived, sessionStartSent, chunk))
+        .build();
+
+    InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
+        .subscriber(visitor)
+        .onComplete(() -> handleStreamComplete(effectiveSessionId, agentId, agentAliasId, startTime, requestId,
+                                               correlationId, userId, outputStream))
+        .build();
+
+    long effectiveTimeoutMs = (operationTimeout != null && operationTimeout > 0)
+        ? toDuration(operationTimeout, operationTimeoutUnit).toMillis()
+        : getConnection().getConnectionTimeoutMs();
+    getConnection().invokeAgent(request, handler, effectiveTimeoutMs).get();
+  }
+
+  private InvokeAgentRequest buildStreamingInvokeAgentRequest(String agentAliasId, String agentId, String prompt,
+                                                              boolean enableTrace, boolean latencyOptimized,
+                                                              String effectiveSessionId, boolean excludePreviousThinkingSteps,
+                                                              Integer previousConversationTurnsToInclude,
+                                                              List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
+                                                              Integer operationTimeout, TimeUnit operationTimeoutUnit) {
     InvokeAgentRequest.Builder requestBuilder = InvokeAgentRequest.builder()
         .agentId(agentId)
         .agentAliasId(agentAliasId)
@@ -804,90 +848,83 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
         .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
         .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps,
                                                                 previousConversationTurnsToInclude));
-
     if (operationTimeout != null && operationTimeout > 0) {
       Duration timeout = toDuration(operationTimeout, operationTimeoutUnit);
       requestBuilder.overrideConfiguration(
-                                           AwsRequestOverrideConfiguration.builder()
-                                               .apiCallTimeout(timeout)
-                                               .build());
+                                           AwsRequestOverrideConfiguration.builder().apiCallTimeout(timeout).build());
     }
-    InvokeAgentRequest request = requestBuilder.build();
+    return requestBuilder.build();
+  }
 
-    InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
-        .onChunk(chunk -> {
-          try {
-            // Mark that chunks have been received (for retry logic)
-            chunksReceived.set(true);
+  private void handleStreamChunk(String agentAliasId, String agentId, String prompt, String effectiveSessionId,
+                                 String requestId, String correlationId, String userId, PipedOutputStream outputStream,
+                                 AtomicBoolean chunksReceived, AtomicBoolean sessionStartSent, PayloadPart chunk) {
+    try {
+      chunksReceived.set(true);
+      if (sessionStartSent.compareAndSet(false, true)) {
+        writeSessionStartEvent(agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId, userId,
+                               outputStream);
+      }
+      JSONObject chunkData = createChunkJson(chunk);
+      String sseEvent = formatSSEEvent(CHUNK, chunkData.toString());
+      outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.debug(sseEvent);
+    } catch (IOException e) {
+      writeChunkErrorEvent(e, outputStream);
+    }
+  }
 
-            // Send session-start event before the first chunk
-            if (sessionStartSent.compareAndSet(false, true)) {
-              JSONObject startEvent =
-                  createSessionStartJson(agentAliasId, agentId, prompt, effectiveSessionId, Instant.now().toString(),
-                                         requestId, correlationId, userId);
-              String sseStart = formatSSEEvent("session-start", startEvent.toString());
-              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-              logger.info(sseStart);
-            }
+  private void writeSessionStartEvent(String agentAliasId, String agentId, String prompt, String effectiveSessionId,
+                                      String requestId, String correlationId, String userId,
+                                      PipedOutputStream outputStream)
+      throws IOException {
+    JSONObject startEvent = createSessionStartJson(agentAliasId, agentId, prompt, effectiveSessionId,
+                                                   Instant.now().toString(), requestId, correlationId, userId);
+    String sseStart = formatSSEEvent("session-start", startEvent.toString());
+    outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
+    outputStream.flush();
+    logger.info(sseStart);
+  }
 
-            JSONObject chunkData = createChunkJson(chunk);
-            String sseEvent = formatSSEEvent("chunk", chunkData.toString());
-            outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
-            logger.debug(sseEvent);
-          } catch (IOException e) {
-            try {
-              String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
-              outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-              logger.error(errorEvent);
-            } catch (IOException ioException) {
-              // Can't write error, stream is likely closed
-              logger.error("Error writing error event: {}", ioException.getMessage());
-            }
-          }
-        }).build();
+  private void writeChunkErrorEvent(IOException e, PipedOutputStream outputStream) {
+    try {
+      String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
+      outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.error(errorEvent);
+    } catch (IOException ioException) {
+      logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+    }
+  }
 
-    InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
-        .subscriber(visitor)
-        .onComplete(() -> {
-          try {
-            // Send completion event
-            long endTime = System.currentTimeMillis();
-            JSONObject completionData =
-                createCompletionJson(effectiveSessionId, agentId, agentAliasId, endTime - startTime, requestId, correlationId,
-                                     userId);
-            String completionEvent = formatSSEEvent("session-complete", completionData.toString());
-            outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
-            logger.info(completionEvent);
-          } catch (IOException e) {
-            try {
-              String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
-              outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
-              logger.error(errorEvent);
-            } catch (IOException ioException) {
-              // Can't write error, stream is likely closed
-              logger.error("Error writing error event: {}", ioException.getMessage());
-            }
-          } finally {
-            try {
-              outputStream.close();
-            } catch (IOException ioException) {
-              // Log error but can't do much more
-              logger.error("Error writing error event: {}", ioException.getMessage());
-            }
-          }
-        })
-        .build();
-    long effectiveTimeoutMs = (operationTimeout != null && operationTimeout > 0)
-        ? toDuration(operationTimeout, operationTimeoutUnit).toMillis()
-        : getConnection().getConnectionTimeoutMs();
-    CompletableFuture<Void> invocationFuture = getConnection().invokeAgent(request, handler, effectiveTimeoutMs);
-    invocationFuture.get();
-
+  private void handleStreamComplete(String effectiveSessionId, String agentId, String agentAliasId, long startTime,
+                                    String requestId, String correlationId, String userId,
+                                    PipedOutputStream outputStream) {
+    try {
+      long endTime = System.currentTimeMillis();
+      JSONObject completionData = createCompletionJson(effectiveSessionId, agentId, agentAliasId, endTime - startTime,
+                                                       requestId, correlationId, userId);
+      String completionEvent = formatSSEEvent("session-complete", completionData.toString());
+      outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
+      outputStream.flush();
+      logger.info(completionEvent);
+    } catch (IOException e) {
+      try {
+        String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
+        outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+        outputStream.flush();
+        logger.error(errorEvent);
+      } catch (IOException ioException) {
+        logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+      }
+    } finally {
+      try {
+        outputStream.close();
+      } catch (IOException ioException) {
+        logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+      }
+    }
   }
 
   private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration,
@@ -913,7 +950,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
   private static JSONObject createErrorJson(Throwable error) {
     JSONObject errorData = new JSONObject();
-    errorData.put("error", error.getMessage());
+    errorData.put(ERROR_KEY, error.getMessage());
     errorData.put("type", error.getClass().getSimpleName());
     errorData.put(TIMESTAMP, Instant.now().toString());
     return errorData;
@@ -931,7 +968,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       }
 
     } catch (Exception e) {
-      chunkData.put("error", "Error processing chunk: " + e.getMessage());
+      chunkData.put(ERROR_KEY, "Error processing chunk: " + e.getMessage());
     }
 
     return chunkData;

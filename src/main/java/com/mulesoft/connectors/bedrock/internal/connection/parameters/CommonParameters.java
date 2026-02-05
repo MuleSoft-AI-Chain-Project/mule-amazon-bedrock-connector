@@ -113,7 +113,10 @@ public class CommonParameters {
   @DisplayName("TLS Configuration")
   private TlsContextFactory tlsContext;
 
-  public CommonParameters() {}
+  public CommonParameters() {
+    // Default constructor intentionally empty.
+    // Required for framework/deserialization/reflection-based instantiation.
+  }
 
   public Integer getConnectionTimeout() {
     return Math.toIntExact(this.connectionTimeoutUnit.toMillis((long) this.connectionTimeout));
@@ -123,12 +126,28 @@ public class CommonParameters {
     this.connectionTimeout = connectionTimeout;
   }
 
+  public TimeUnit getConnectionTimeoutUnit() {
+    return this.connectionTimeoutUnit;
+  }
+
+  public void setConnectionTimeoutUnit(TimeUnit connectionTimeoutUnit) {
+    this.connectionTimeoutUnit = connectionTimeoutUnit;
+  }
+
   public Integer getSocketTimeout() {
     return Math.toIntExact(this.socketTimeoutUnit.toMillis((long) this.socketTimeout));
   }
 
   public void setSocketTimeout(Integer socketTimeout) {
     this.socketTimeout = socketTimeout;
+  }
+
+  public TimeUnit getSocketTimeoutUnit() {
+    return this.socketTimeoutUnit;
+  }
+
+  public void setSocketTimeoutUnit(TimeUnit socketTimeoutUnit) {
+    this.socketTimeoutUnit = socketTimeoutUnit;
   }
 
   public String getAccessKey() {

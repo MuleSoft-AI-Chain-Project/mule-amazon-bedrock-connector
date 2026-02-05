@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class BaseResponseFormatter implements ResponseFormatter {
 
-  protected static final Logger logger = LoggerFactory.getLogger(BaseResponseFormatter.class);
+  private static final Logger logger = LoggerFactory.getLogger(BaseResponseFormatter.class);
 
   /**
    * Creates a standardized usage JSON object.

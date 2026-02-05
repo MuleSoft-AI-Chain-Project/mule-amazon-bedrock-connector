@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.mulesoft.connectors.bedrock.api.params.BedrockImageParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.ImageService;
 import com.mulesoft.connectors.bedrock.internal.service.ImageServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
@@ -44,11 +44,11 @@ public class ImageOperation extends BedrockOperation<ImageService> {
   @Alias("IMAGE-generate")
   @Execution(ExecutionType.BLOCKING)
   @Summary("Generate images using Bedrock-supported models")
-  public InputStream generateImage(String textToImage, String avoidInImage, String fullPathOutput,
-                                   @Config BedrockConfiguration config,
+  public InputStream generateImage(@Config BedrockConfiguration config,
                                    @Connection BedrockConnection connection,
                                    @ParameterGroup(
-                                       name = "Additional properties") BedrockImageParameters awsBedrockParameters) {
+                                       name = "Additional properties") BedrockImageParameters awsBedrockParameters,
+                                   String textToImage, String avoidInImage, String fullPathOutput) {
     return newExecutionBuilder(config, connection)
         .execute(ImageService::invokeModel, BedrockModelFactory::createInputStream)
         .withParam(textToImage)

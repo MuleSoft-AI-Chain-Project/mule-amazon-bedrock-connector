@@ -355,5 +355,77 @@ class StreamingRetryUtilityTest {
       assertThat(msg).contains("failed after 2 attempt(s)");
       assertThat(msg).doesNotContain("out of");
     }
+
+    @Test
+    @DisplayName("appends both retry info and chunks note when attemptsMade > 1 and chunksReceived")
+    void attemptsGreaterThanOneAndChunksReceived() {
+      String msg = StreamingRetryUtility.createRetryErrorMessage("Original", 2, 1, true);
+      assertThat(msg).contains("Original");
+      assertThat(msg).contains("failed after 2 attempt(s)");
+      assertThat(msg).contains("Some chunks were received before failure");
+    }
+  }
+
+  @Nested
+  @DisplayName("executeWithRetry (non-streaming) interrupt")
+  class ExecuteWithRetryInterrupt {
+
+    @Test
+    @DisplayName("throws RuntimeException with InterruptedException cause when thread interrupted during sleep")
+    void interruptDuringSleep() throws Exception {
+      StreamingRetryUtility.RetryConfig config =
+          new StreamingRetryUtility.RetryConfig(2, 5000L, true);
+      SdkClientException retryable = mock(SdkClientException.class);
+      when(retryable.getMessage()).thenReturn("timeout");
+      AtomicBoolean interrupted = new AtomicBoolean(false);
+      Thread worker = new Thread(() -> {
+        try {
+          StreamingRetryUtility.executeWithRetry(() -> {
+            throw retryable;
+          }, config);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof InterruptedException) {
+            interrupted.set(true);
+          }
+          throw e;
+        }
+      });
+      worker.start();
+      Thread.sleep(50);
+      worker.interrupt();
+      worker.join(3000);
+      assertThat(interrupted.get()).isTrue();
+    }
+  }
+
+  @Nested
+  @DisplayName("executeWithRetry (streaming) interrupt")
+  class ExecuteWithRetryStreamingInterrupt {
+
+    @Test
+    @DisplayName("returns RetryResult with InterruptedException when thread interrupted during sleep")
+    void interruptDuringSleep() throws Exception {
+      StreamingRetryUtility.RetryConfig config =
+          new StreamingRetryUtility.RetryConfig(2, 5000L, true);
+      AtomicBoolean chunks = new AtomicBoolean(false);
+      AtomicBoolean interruptedResult = new AtomicBoolean(false);
+      Thread worker = new Thread(() -> {
+        StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
+                                                                                          () -> {
+                                                                                            throw new TimeoutException("timeout");
+                                                                                          },
+                                                                                          config,
+                                                                                          chunks);
+        if (result.getLastException() != null
+            && result.getLastException().getCause() instanceof InterruptedException) {
+          interruptedResult.set(true);
+        }
+      });
+      worker.start();
+      Thread.sleep(50);
+      worker.interrupt();
+      worker.join(3000);
+      assertThat(interruptedResult.get()).isTrue();
+    }
   }
 }

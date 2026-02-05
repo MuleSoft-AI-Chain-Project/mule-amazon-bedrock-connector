@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,7 +47,7 @@ class EmbeddingOperationTest {
     setField(params, "modelName", "amazon.titan-embed-text-v1");
 
     EmbeddingOperation ops = new EmbeddingOperation();
-    InputStream result = ops.generateEmbedding("Sample text", config, connection, params);
+    InputStream result = ops.generateEmbedding(config, connection, params, "Sample text");
 
     assertThat(result).isNotNull();
     String content = new Scanner(result, StandardCharsets.UTF_8.name()).useDelimiter("\\A").next();

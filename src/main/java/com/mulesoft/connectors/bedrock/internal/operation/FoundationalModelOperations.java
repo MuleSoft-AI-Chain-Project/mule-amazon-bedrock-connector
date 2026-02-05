@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParamsModelDetails;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.FoundationalService;
 import com.mulesoft.connectors.bedrock.internal.service.FoundationalServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;

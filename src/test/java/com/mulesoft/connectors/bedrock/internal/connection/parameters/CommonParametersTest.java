@@ -107,4 +107,26 @@ class CommonParametersTest {
     params.setTlsContext(null);
     assertThat(params.getTlsContext()).isNull();
   }
+
+  @Test
+  @DisplayName("connectionTimeoutUnit getter and setter")
+  void connectionTimeoutUnit() {
+    CommonParameters params = new CommonParameters();
+    assertThat(params.getConnectionTimeoutUnit()).isNull();
+    params.setConnectionTimeoutUnit(TimeUnit.MINUTES);
+    assertThat(params.getConnectionTimeoutUnit()).isEqualTo(TimeUnit.MINUTES);
+    params.setConnectionTimeout(2);
+    assertThat(params.getConnectionTimeout()).isEqualTo(120_000);
+  }
+
+  @Test
+  @DisplayName("socketTimeoutUnit getter and setter")
+  void socketTimeoutUnit() {
+    CommonParameters params = new CommonParameters();
+    assertThat(params.getSocketTimeoutUnit()).isNull();
+    params.setSocketTimeoutUnit(TimeUnit.MINUTES);
+    assertThat(params.getSocketTimeoutUnit()).isEqualTo(TimeUnit.MINUTES);
+    params.setSocketTimeout(1);
+    assertThat(params.getSocketTimeout()).isEqualTo(60_000);
+  }
 }

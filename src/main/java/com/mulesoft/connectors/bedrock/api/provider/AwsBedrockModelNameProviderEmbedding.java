@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.metadata.provider;
+package com.mulesoft.connectors.bedrock.api.provider;
 
 import java.util.Set;
 import org.mule.runtime.api.value.Value;

@@ -3,16 +3,12 @@ package com.mulesoft.connectors.bedrock.internal.helper.payload;
 import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Base class for payload generators providing common utility methods. Implements Template Method pattern for shared JSON building
  * logic.
  */
 public abstract class BasePayloadGenerator implements PayloadGenerator {
-
-  protected final Logger logger = LoggerFactory.getLogger(getClass());
 
   /**
    * Creates a JSON object with all common parameters (temperature, topP, topK, maxTokens).

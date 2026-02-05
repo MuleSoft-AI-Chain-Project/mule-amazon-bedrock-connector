@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,7 +48,7 @@ class SentimentOperationsTest {
     BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.3f, 50);
 
     SentimentOperations ops = new SentimentOperations();
-    InputStream result = ops.sentimentAnalysis(config, connection, "I love it!", params);
+    InputStream result = ops.sentimentAnalysis(config, connection, params, "I love it!");
 
     assertThat(result).isNotNull();
     String content = new Scanner(result, StandardCharsets.UTF_8.name()).useDelimiter("\\A").next();

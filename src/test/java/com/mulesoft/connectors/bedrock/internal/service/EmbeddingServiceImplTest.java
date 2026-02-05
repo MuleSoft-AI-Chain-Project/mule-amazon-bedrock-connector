@@ -115,6 +115,23 @@ class EmbeddingServiceImplTest {
   }
 
   @Test
+  @DisplayName("generateEmbeddings throws SdkClientException when connection throws")
+  void generateEmbeddingsThrowsWhenConnectionThrows() throws Exception {
+    BedrockConfiguration config = mock(BedrockConfiguration.class);
+    BedrockConnection connection = mock(BedrockConnection.class);
+    when(connection.getRegion()).thenReturn("us-east-1");
+    when(connection.invokeModel(any(InvokeModelRequest.class)))
+        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("timeout").build());
+
+    BedrockParametersEmbedding params = new BedrockParametersEmbedding();
+    setField(params, "modelName", "amazon.titan-embed-text-v1");
+    EmbeddingServiceImpl service = new EmbeddingServiceImpl(config, connection);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.generateEmbeddings("text", params))
+        .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class)
+        .hasMessageContaining("timeout");
+  }
+
+  @Test
   @DisplayName("generateEmbeddings with unsupported model uses fallback body")
   void generateEmbeddingsUnsupportedModel() throws Exception {
     BedrockConfiguration config = mock(BedrockConfiguration.class);

@@ -4,11 +4,15 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Response formatter for Mistral Pixtral models.
  */
 public class MistralPixtralResponseFormatter extends BaseResponseFormatter {
+
+  private static final Logger logger = LoggerFactory.getLogger(MistralPixtralResponseFormatter.class);
 
   @Override
   public String format(InvokeModelResponse response) {

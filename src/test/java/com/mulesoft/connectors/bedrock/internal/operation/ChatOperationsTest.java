@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,7 +50,7 @@ class ChatOperationsTest {
     BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
 
     ChatOperations ops = new ChatOperations();
-    InputStream result = ops.chatAnswerPrompt(config, connection, "Hi", params);
+    InputStream result = ops.chatAnswerPrompt(config, connection, params, "Hi");
 
     assertThat(result).isNotNull();
     String content = new Scanner(result, StandardCharsets.UTF_8.name()).useDelimiter("\\A").next();
@@ -69,7 +69,7 @@ class ChatOperationsTest {
     BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
 
     ChatOperations ops = new ChatOperations();
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> ops.chatAnswerPrompt(config, connection, "Hi", params))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> ops.chatAnswerPrompt(config, connection, params, "Hi"))
         .isInstanceOf(ModuleException.class);
   }
 
@@ -82,7 +82,7 @@ class ChatOperationsTest {
     BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.3f, 20);
 
     ChatOperations ops = new ChatOperations();
-    InputStream result = ops.chatAnswerPromptStreaming(config, connection, "Stream me", params);
+    InputStream result = ops.chatAnswerPromptStreaming(config, connection, params, "Stream me");
 
     assertThat(result).isNotNull();
   }

@@ -72,8 +72,9 @@ class RegionUtilsTest {
     void configuresWithoutCustomEndpoint() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-east-1");
-      RegionUtils.configureRegionProperty(BedrockRuntimeClient.builder(), params);
-      // no exception = success
+      var builder = BedrockRuntimeClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -82,8 +83,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(BedrockRuntimeClient.builder(), params);
-      // no exception = success
+      var builder = BedrockRuntimeClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -91,8 +93,9 @@ class RegionUtilsTest {
     void configuresBedrockClientBuilder() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-west-2");
-      RegionUtils.configureRegionProperty(BedrockClient.builder(), params);
-      // no exception = success
+      var builder = BedrockClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -101,8 +104,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("");
-      RegionUtils.configureRegionProperty(BedrockRuntimeClient.builder(), params);
-      // no exception = success (else branch: region only)
+      var builder = BedrockRuntimeClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -110,8 +114,9 @@ class RegionUtilsTest {
     void configuresBedrockAgentClientBuilder() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-east-1");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockagent.BedrockAgentClient.builder(), params);
+      var builder = software.amazon.awssdk.services.bedrockagent.BedrockAgentClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -119,9 +124,9 @@ class RegionUtilsTest {
     void configuresBedrockAgentRuntimeClientBuilder() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-east-1");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient.builder(),
-                                          params);
+      var builder = software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -129,8 +134,9 @@ class RegionUtilsTest {
     void configuresIamClientBuilder() {
       CommonParameters params = new CommonParameters();
       params.setRegion("us-east-1");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.iam.IamClient.builder(), params);
+      var builder = software.amazon.awssdk.services.iam.IamClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -139,7 +145,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(software.amazon.awssdk.services.bedrock.BedrockClient.builder(), params);
+      var builder = BedrockClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -148,8 +156,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockagent.BedrockAgentClient.builder(), params);
+      var builder = software.amazon.awssdk.services.bedrockagent.BedrockAgentClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -158,9 +167,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient.builder(),
-                                          params);
+      var builder = software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -169,7 +178,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(software.amazon.awssdk.services.iam.IamClient.builder(), params);
+      var builder = software.amazon.awssdk.services.iam.IamClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -178,10 +189,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient
-                                              .builder(),
-                                          params);
+      var builder = software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
 
     @Test
@@ -190,9 +200,9 @@ class RegionUtilsTest {
       CommonParameters params = mock(CommonParameters.class);
       when(params.getRegion()).thenReturn("us-east-1");
       when(params.getCustomServiceEndpoint()).thenReturn("https://custom.bedrock.example.com");
-      RegionUtils.configureRegionProperty(
-                                          software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient.builder(),
-                                          params);
+      var builder = software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient.builder();
+      RegionUtils.configureRegionProperty(builder, params);
+      assertThat(builder.build()).isNotNull();
     }
   }
 }

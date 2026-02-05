@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.bedrockagent.model.GetAgentRequest;
 import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsRequest;
 import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
@@ -226,5 +227,98 @@ class BedrockConnectionTest {
     when(mockBedrockClient.listFoundationModels(any(Consumer.class))).thenReturn(ListFoundationModelsResponse.builder().build());
     BedrockConnection conn = createConnection();
     conn.validate();
+  }
+
+  @Test
+  @DisplayName("validate throws ModuleException when SdkServiceException with 403")
+  void validateThrowsWhenSdkServiceException403() {
+    SdkServiceException e = mock(SdkServiceException.class);
+    when(e.statusCode()).thenReturn(403);
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class))).thenThrow(e);
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class).hasMessageContaining("Invalid credentials");
+  }
+
+  @Test
+  @DisplayName("validate throws ModuleException when SdkServiceException non-403 delegates to ErrorHandler")
+  void validateThrowsWhenSdkServiceExceptionNon403() {
+    SdkServiceException e = mock(SdkServiceException.class);
+    when(e.statusCode()).thenReturn(500);
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class))).thenThrow(e);
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws ModuleException when SdkClientException contains invalid credential")
+  void validateThrowsWhenSdkClientExceptionInvalidCredential() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(SdkClientException.builder().message("invalid credential supplied").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class).hasMessageContaining("Invalid credentials");
+  }
+
+  @Test
+  @DisplayName("validate throws when SdkClientException is other client error")
+  void validateThrowsWhenSdkClientExceptionOther() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(SdkClientException.builder().message("network unreachable").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws when BedrockException non-403")
+  void validateThrowsWhenBedrockExceptionNon403() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrock.model.BedrockException.builder().statusCode(500).build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class).hasMessageContaining("Bedrock service error");
+  }
+
+  @Test
+  @DisplayName("validate throws when AccessDeniedException")
+  void validateThrowsWhenAccessDeniedException() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrockagent.model.AccessDeniedException.builder().message("denied").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws when ValidationException")
+  void validateThrowsWhenValidationException() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrockagent.model.ValidationException.builder().message("invalid").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws when ResourceNotFoundException")
+  void validateThrowsWhenResourceNotFoundException() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrockagent.model.ResourceNotFoundException.builder().message("not found")
+            .build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws when ThrottlingException")
+  void validateThrowsWhenThrottlingException() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.services.bedrockagent.model.ThrottlingException.builder().message("throttled").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
+  }
+
+  @Test
+  @DisplayName("validate throws when SdkException")
+  void validateThrowsWhenSdkException() {
+    when(mockBedrockClient.listFoundationModels(any(Consumer.class)))
+        .thenThrow(software.amazon.awssdk.core.exception.SdkException.builder().message("sdk error").build());
+    BedrockConnection conn = createConnection();
+    assertThatThrownBy(conn::validate).isInstanceOf(ModuleException.class);
   }
 }

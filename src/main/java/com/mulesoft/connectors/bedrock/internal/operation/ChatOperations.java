@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.ChatService;
 import com.mulesoft.connectors.bedrock.internal.service.ChatServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
@@ -43,8 +43,8 @@ public class ChatOperations extends BedrockOperation<ChatService> {
   @Summary("Generate a text response from a foundation model")
   public InputStream chatAnswerPrompt(@Config BedrockConfiguration config,
                                       @Connection BedrockConnection connection,
-                                      String prompt,
-                                      @ParameterGroup(name = "Additional properties") BedrockParameters bedrockParameters) {
+                                      @ParameterGroup(name = "Additional properties") BedrockParameters bedrockParameters,
+                                      String prompt) {
 
     return newExecutionBuilder(config, connection)
         .execute(ChatService::answerPrompt, BedrockModelFactory::createInputStream)
@@ -71,9 +71,9 @@ public class ChatOperations extends BedrockOperation<ChatService> {
   @Summary("Streaming a text response from a foundation model")
   public InputStream chatAnswerPromptStreaming(@Config BedrockConfiguration config,
                                                @Connection BedrockConnection connection,
-                                               String prompt,
                                                @ParameterGroup(
-                                                   name = "Additional properties") BedrockParameters bedrockParameters) {
+                                                   name = "Additional properties") BedrockParameters bedrockParameters,
+                                               String prompt) {
 
     return newExecutionBuilder(config, connection)
         .execute(ChatService::answerPromptStreaming, BedrockModelFactory::identity)

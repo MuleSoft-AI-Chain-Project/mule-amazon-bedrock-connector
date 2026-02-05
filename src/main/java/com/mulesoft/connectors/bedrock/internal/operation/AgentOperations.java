@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.operations;
+package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
@@ -11,7 +11,7 @@ import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsSessionParameters
 import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import com.mulesoft.connectors.bedrock.internal.service.AgentService;
 import com.mulesoft.connectors.bedrock.internal.service.AgentServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
@@ -50,11 +50,11 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Execution(ExecutionType.BLOCKING)
   @Alias("AGENT-define-prompt-template")
   @Summary("Define or update the agents prompt template")
-  public InputStream definePromptTemplate(String template, String instructions, String dataset,
-                                          @Config BedrockConfiguration configuration,
+  public InputStream definePromptTemplate(@Config BedrockConfiguration configuration,
                                           @Connection BedrockConnection connection,
                                           @ParameterGroup(
-                                              name = "Additional properties") BedrockParameters bedrockParameters) {
+                                              name = "Additional properties") BedrockParameters bedrockParameters,
+                                          String template, String instructions, String dataset) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::definePromptTemplate, BedrockModelFactory::createInputStream)
         .withParam(template)
@@ -96,8 +96,8 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Alias("AGENT-get-by-id")
   @Execution(ExecutionType.BLOCKING)
   @Summary("Retrieve agent details by agent ID")
-  public InputStream getAgentById(String agentId, @Config BedrockConfiguration configuration,
-                                  @Connection BedrockConnection connection) {
+  public InputStream getAgentById(@Config BedrockConfiguration configuration,
+                                  @Connection BedrockConnection connection, String agentId) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::getAgentById, BedrockModelFactory::createInputStream)
         .withParam(agentId);
@@ -124,10 +124,7 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Alias("AGENT-chat")
   @Execution(ExecutionType.BLOCKING)
   @Summary("Invoke an agent for a chat-based interaction")
-  public InputStream chatWithAgent(String agentId, String agentAliasId,
-                                   String prompt,
-                                   boolean enableTrace, boolean latencyOptimized,
-                                   @Config BedrockConfiguration configuration,
+  public InputStream chatWithAgent(@Config BedrockConfiguration configuration,
                                    @Connection BedrockConnection connection,
                                    @ParameterGroup(
                                        name = "Session properties") BedrockAgentsSessionParameters bedrockAgentsSessionParameters,
@@ -138,7 +135,10 @@ public class AgentOperations extends BedrockOperation<AgentService> {
                                    @ParameterGroup(
                                        name = "Response") BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
                                    @ParameterGroup(
-                                       name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
+                                       name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters,
+                                   String agentId, String agentAliasId,
+                                   String prompt,
+                                   boolean enableTrace, boolean latencyOptimized) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::chatWithAgent, BedrockModelFactory::createInputStream)
         .withParam(agentId)
@@ -175,10 +175,7 @@ public class AgentOperations extends BedrockOperation<AgentService> {
   @Execution(ExecutionType.BLOCKING)
   @DisplayName("Agent chat streaming (SSE)")
   @Summary("Invoke an agent with streaming responses using Server-Sent Events")
-  public InputStream chatWithAgentSSEStream(String agentId, String agentAliasId,
-                                            String prompt,
-                                            boolean enableTrace, boolean latencyOptimized,
-                                            @Config BedrockConfiguration configuration,
+  public InputStream chatWithAgentSSEStream(@Config BedrockConfiguration configuration,
                                             @Connection BedrockConnection connection,
                                             @ParameterGroup(
                                                 name = "Session properties") BedrockAgentsSessionParameters bedrockAgentsSessionParameters,
@@ -189,7 +186,10 @@ public class AgentOperations extends BedrockOperation<AgentService> {
                                             @ParameterGroup(
                                                 name = "Response") BedrockAgentsResponseParameters bedrockAgentsResponseParameters,
                                             @ParameterGroup(
-                                                name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters) {
+                                                name = "Response Logging") BedrockAgentsResponseLoggingParameters bedrockAgentsResponseLoggingParameters,
+                                            String agentId, String agentAliasId,
+                                            String prompt,
+                                            boolean enableTrace, boolean latencyOptimized) {
     return newExecutionBuilder(configuration, connection)
         .execute(AgentService::chatWithAgentSSEStream)
         .withParam(agentId)

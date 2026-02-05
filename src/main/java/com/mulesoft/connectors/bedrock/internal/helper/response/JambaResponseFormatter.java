@@ -4,11 +4,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Response formatter for AI21 Jamba models.
  */
 public class JambaResponseFormatter extends BaseResponseFormatter {
+
+  private static final Logger logger = LoggerFactory.getLogger(JambaResponseFormatter.class);
+  private static final String USAGE_KEY = "usage";
 
   @Override
   public String format(InvokeModelResponse response) {
@@ -25,9 +30,9 @@ public class JambaResponseFormatter extends BaseResponseFormatter {
     String text = message.getString("content").trim();
     String stopReason = choice.optString("finish_reason", "stop");
 
-    int inputTokens = original.getJSONObject("usage").getInt("prompt_tokens");
-    int outputTokens = original.getJSONObject("usage").getInt("completion_tokens");
-    int totalTokens = original.getJSONObject("usage").getInt("total_tokens");
+    int inputTokens = original.getJSONObject(USAGE_KEY).getInt("prompt_tokens");
+    int outputTokens = original.getJSONObject(USAGE_KEY).getInt("completion_tokens");
+    int totalTokens = original.getJSONObject(USAGE_KEY).getInt("total_tokens");
     String guardrail = original.optString("amazon-bedrock-guardrailAction", "NONE");
 
     // Create new JSON format

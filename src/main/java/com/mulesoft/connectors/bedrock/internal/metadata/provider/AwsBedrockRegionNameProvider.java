@@ -10,7 +10,10 @@ import software.amazon.awssdk.regions.Region;
 
 public class AwsBedrockRegionNameProvider implements ValueProvider {
 
-  public AwsBedrockRegionNameProvider() {}
+  public AwsBedrockRegionNameProvider() {
+    // Default constructor intentionally empty.
+    // Required for framework/deserialization/reflection-based instantiation.
+  }
 
   @Override
   public Set<Value> resolve() throws ValueResolvingException {

@@ -1,11 +1,13 @@
 package com.mulesoft.connectors.bedrock.api.params;
 
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.AwsBedrockModelNameProviderImage;
+import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockModelNameProviderImage;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.values.OfValues;
+
+import java.util.Objects;
 
 public class BedrockImageParameters {
 
@@ -64,4 +66,17 @@ public class BedrockImageParameters {
     return seed;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof BedrockImageParameters that))
+      return false;
+    return Objects.equals(modelName, that.modelName) && Objects.equals(numOfImages, that.numOfImages)
+        && Objects.equals(height, that.height) && Objects.equals(width, that.width) && Objects.equals(cfgScale, that.cfgScale)
+        && Objects.equals(seed, that.seed);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(modelName, numOfImages, height, width, cfgScale, seed);
+  }
 }

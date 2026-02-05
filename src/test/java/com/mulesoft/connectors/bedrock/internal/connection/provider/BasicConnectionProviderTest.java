@@ -40,17 +40,24 @@ class BasicConnectionProviderTest {
   @DisplayName("start and stop do not throw when httpClient is null")
   void startAndStop() throws Exception {
     BasicConnectionProvider provider = new BasicConnectionProvider();
-    provider.setCommonParameters(new CommonParameters());
+    CommonParameters params = new CommonParameters();
+    provider.setCommonParameters(params);
     provider.start();
+    assertThat(provider.getCommonParameters()).isSameAs(params);
     provider.stop();
+    assertThat(provider.getCommonParameters()).isNotNull();
   }
 
   @Test
   @DisplayName("initialise does not throw when tls context is null")
   void initialiseWithNullTls() throws Exception {
     BasicConnectionProvider provider = new BasicConnectionProvider();
-    provider.setCommonParameters(new CommonParameters());
+    CommonParameters params = new CommonParameters();
+    params.setRegion("us-east-1");
+    provider.setCommonParameters(params);
     provider.initialise();
+    assertThat(provider.getCommonParameters()).isSameAs(params);
+    assertThat(provider.getCommonParameters().getRegion()).isEqualTo("us-east-1");
   }
 
   @Test

@@ -2,7 +2,10 @@ package com.mulesoft.connectors.bedrock.api.params;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 import org.mule.runtime.extension.api.annotation.param.Parameter;
+import org.mule.sdk.api.annotation.param.NullSafe;
 import org.mule.sdk.api.annotation.param.Optional;
 
 public class BedrockAgentsFilteringParameters {
@@ -39,17 +42,23 @@ public class BedrockAgentsFilteringParameters {
 
     @Parameter
     @Optional
+    @NullSafe
     private List<String> fieldsToExclude;
 
     @Parameter
     @Optional
+    @NullSafe
     private List<String> fieldsToInclude;
 
     @Parameter
     @Optional
+    @NullSafe
     private Map<String, String> additionalModelRequestFields;
 
-    public RerankingConfiguration() {}
+    public RerankingConfiguration() {
+      // Default constructor intentionally empty.
+      // Required for framework/deserialization/reflection-based instantiation.
+    }
 
     public String getRerankingType() {
       return rerankingType;
@@ -128,6 +137,7 @@ public class BedrockAgentsFilteringParameters {
 
     @Parameter
     @Optional
+    @NullSafe
     private Map<String, String> metadataFilters;
 
     @Parameter
@@ -143,17 +153,6 @@ public class BedrockAgentsFilteringParameters {
       this.overrideSearchType = overrideSearchType;
       this.retrievalMetadataFilterType = retrievalMetadataFilterType;
       this.metadataFilters = metadataFilters;
-    }
-
-    public KnowledgeBaseConfig(String knowledgeBaseId, Integer numberOfResults, SearchType overrideSearchType,
-                               RetrievalMetadataFilterType retrievalMetadataFilterType, Map<String, String> metadataFilters,
-                               RerankingConfiguration rerankingConfiguration) {
-      this.knowledgeBaseId = knowledgeBaseId;
-      this.numberOfResults = numberOfResults;
-      this.overrideSearchType = overrideSearchType;
-      this.retrievalMetadataFilterType = retrievalMetadataFilterType;
-      this.metadataFilters = metadataFilters;
-      this.rerankingConfiguration = rerankingConfiguration;
     }
 
     public String getKnowledgeBaseId() {
@@ -203,6 +202,7 @@ public class BedrockAgentsFilteringParameters {
 
   @Parameter
   @Optional
+  @NullSafe
   private Map<String, String> metadataFilters;
 
   public String getKnowledgeBaseId() {
@@ -223,5 +223,19 @@ public class BedrockAgentsFilteringParameters {
 
   public Map<String, String> getMetadataFilters() {
     return metadataFilters;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof BedrockAgentsFilteringParameters that))
+      return false;
+    return Objects.equals(knowledgeBaseId, that.knowledgeBaseId) && Objects.equals(numberOfResults, that.numberOfResults)
+        && overrideSearchType == that.overrideSearchType && retrievalMetadataFilterType == that.retrievalMetadataFilterType
+        && Objects.equals(metadataFilters, that.metadataFilters);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(knowledgeBaseId, numberOfResults, overrideSearchType, retrievalMetadataFilterType, metadataFilters);
   }
 }
