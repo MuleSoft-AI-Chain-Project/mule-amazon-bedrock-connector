@@ -472,6 +472,7 @@
                                         <exclude>**/connection/provider/**</exclude>
                                         <exclude>**/SdkHttpClientFactory.class</exclude>
                                         <exclude>**/StsClientHelper.class</exclude>
+                                        <exclude>**/ProxyParameterGroup.class</exclude>
                                     </excludes>
                                 </rule>
                             </rules>
@@ -494,6 +495,7 @@
                                 <exclude>**/connection/provider/**</exclude>
                                 <exclude>**/SdkHttpClientFactory.class</exclude>
                                 <exclude>**/StsClientHelper.class</exclude>
+                                <exclude>**/ProxyParameterGroup.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

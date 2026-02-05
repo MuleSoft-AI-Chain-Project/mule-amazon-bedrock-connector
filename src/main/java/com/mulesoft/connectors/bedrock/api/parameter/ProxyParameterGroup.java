@@ -12,6 +12,8 @@ import org.mule.sdk.api.annotation.semantics.connectivity.Port;
 import org.mule.sdk.api.annotation.semantics.security.Password;
 import org.mule.sdk.api.annotation.semantics.security.Username;
 
+import java.util.Objects;
+
 @ConfiguresProxy
 public class ProxyParameterGroup {
 
@@ -84,47 +86,38 @@ public class ProxyParameterGroup {
     return proxyHost;
   }
 
-  public void setProxyHost(String proxyHost) {
-    this.proxyHost = proxyHost;
-  }
-
   public Integer getProxyPort() {
     return proxyPort;
-  }
-
-  public void setProxyPort(Integer proxyPort) {
-    this.proxyPort = proxyPort;
   }
 
   public String getProxyUsername() {
     return proxyUsername;
   }
 
-  public void setProxyUsername(String proxyUsername) {
-    this.proxyUsername = proxyUsername;
-  }
-
   public String getProxyPassword() {
     return proxyPassword;
-  }
-
-  public void setProxyPassword(String proxyPassword) {
-    this.proxyPassword = proxyPassword;
   }
 
   public String getProxyDomain() {
     return proxyDomain;
   }
 
-  public void setProxyDomain(String proxyDomain) {
-    this.proxyDomain = proxyDomain;
-  }
-
   public String getProxyWorkstation() {
     return proxyWorkstation;
   }
 
-  public void setProxyWorkstation(String proxyWorkstation) {
-    this.proxyWorkstation = proxyWorkstation;
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof ProxyParameterGroup that))
+      return false;
+    return Objects.equals(proxyHost, that.proxyHost) && Objects.equals(proxyPort, that.proxyPort)
+        && Objects.equals(proxyUsername, that.proxyUsername) && Objects.equals(proxyPassword, that.proxyPassword)
+        && Objects.equals(proxyDomain, that.proxyDomain) && Objects.equals(proxyWorkstation, that.proxyWorkstation);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(proxyHost, proxyPort, proxyUsername, proxyPassword, proxyDomain, proxyWorkstation);
   }
 }

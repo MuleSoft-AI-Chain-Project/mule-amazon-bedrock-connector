@@ -52,18 +52,53 @@ Then, follow the MuleSoft [documentation](https://docs.mulesoft.com/exchange/to-
 
 ### Version 1.0.0
 
-**New Feature: IAM role based authentication**
 
-AWS IAM role–based authentication with an external ID allows a third party to assume an IAM role using STS AssumeRole, where the external ID is a shared secret that prevents the confused-deputy problem.
-The role trust policy requires this external ID, ensuring only the intended external account can assume the role securely.
+**Available Operations:**
+- Agent chat
+- Agent chat streaming
+- Agent define prompt template
+- Agent get by id
+- Agent list
+- Chat answer prompt
+- Chat answer prompt streaming
+- Embedding adhoc query
+- Embedding generate from text
+- Foundational model details
+- Foundational models list
+- Image generate
+- Sentiment analysis
 
-**Removed Operations:**
-- Agent create
-- Agent create alias
-- Agent delete agent aliases
-- Agent delete by id
-- Agent get alias by agent id
-- Agent get by name
-- Chat answer prompt memory
-- Custom model details
-- Custom model list
+**Connection:**
+
+Supports both Basic and IAM Role based authentication
+
+**HTTP SECURITY**
+
+The MuleSoft Inference Connector support [TLS for Mule Apps](https://docs.mulesoft.com/mule-runtime/latest/tls-configuration)
+
+**Requirements**
+- The supported version for Java SDK is Java 17.
+- Compilation of the connector has to be done with Java 17.
+- Minimum Mule Runtime version 4.9.4 is needed.
+
+**Formatting**
+
+The connector uses **formatter-maven-plugin** for formatting.
+To format files use following maven command :
+
+```
+mvn formatter:format
+
+```
+## Documentation
+- Check out the complete documentation in [mac-project.ai](https://mac-project.ai/docs/mulechain-vectors)
+- Learn from the [Getting Started YouTube Playlist](https://www.youtube.com/playlist?list=PLnuJGpEBF6ZAV1JfID1SRKN6OmGORvgv6)
+
+----
+
+## Stay tuned!
+
+- 🌐 **Website**: [mac-project.ai](https://mac-project.ai)
+- 📺 **YouTube**: [@MuleSoft-MAC-Project](https://www.youtube.com/@MuleSoft-MAC-Project)
+- 💼 **LinkedIn**: [MAC Project Group](https://lnkd.in/gW3eZrbF)
+
