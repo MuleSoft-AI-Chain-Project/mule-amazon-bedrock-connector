@@ -16,7 +16,7 @@
     <munit:config name="BedrockOperations-test.xml" />
 
     <!-- Chat: answer prompt -->
-    <munit:test name="chat-answer-prompt-success">
+    <munit:test name="chat-answer-prompt-success-amazon">
         <munit:execution>
             <ms-bedrock:chat-answer-prompt config-ref="config-role"
                                           prompt="What is the capital of France?"
@@ -26,6 +26,41 @@
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
         </munit:validation>
     </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-openAI">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="openai.gpt-oss-120b-1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-Meta">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="meta.llama3-70b-instruct-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-Google">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="google.gemma-3-27b-it"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+
 
     <!-- Chat: streaming answer prompt -->
     <munit:test name="chat-answer-prompt-streaming-success">

@@ -3,8 +3,8 @@ package com.mulesoft.connectors.bedrock.internal.support;
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
 
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsSessionParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 
 /**

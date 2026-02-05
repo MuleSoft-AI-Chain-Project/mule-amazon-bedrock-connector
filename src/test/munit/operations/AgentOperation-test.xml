@@ -12,12 +12,13 @@
   http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
 
     <munit:config name="AgentOperations-test.xml" />
-    <!-- Agent: list agents -->
+    <configuration-properties file="automation-credentials.properties" />
+
     <munit:test name="agent-chat-success">
         <munit:execution>
             <ms-bedrock:agent-chat config-ref="config-role"
-                                   agentId="NCIK7YBSXH"
-                                   agentAliasId="QS6DVRQTSR"
+                                   agentId="${config.agentId}"
+                                   agentAliasId="${config.agentAliasId}"
                                    prompt="what is the capital of delhi?"/>
         </munit:execution>
         <munit:validation>
@@ -28,8 +29,8 @@
     <munit:test name="agent-chat-sse-success">
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse config-ref="config-role"
-                                   agentId="NCIK7YBSXH"
-                                   agentAliasId="QS6DVRQTSR"
+                                                 agentId="${config.agentId}"
+                                                 agentAliasId="${config.agentAliasId}"
                                    prompt="what is the capital of delhi?"/>
         </munit:execution>
         <munit:validation>

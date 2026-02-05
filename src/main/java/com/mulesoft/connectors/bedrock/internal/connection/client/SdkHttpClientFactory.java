@@ -12,7 +12,7 @@ import java.time.Duration;
 import javax.net.ssl.TrustManagerFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.ProxyParameterGroup;
+import com.mulesoft.connectors.bedrock.api.parameter.ProxyParameterGroup;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,7 +115,7 @@ public class SdkHttpClientFactory {
     NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder();
     proxyConfiguration(httpClientBuilder);
     tlsConfiguration(httpClientBuilder, commonParameters);
-    long timeoutMs = readTimeoutMsOverride != null ? readTimeoutMsOverride : commonParameters.getConnectionTimeout();
+    long timeoutMs = readTimeoutMsOverride != null ? readTimeoutMsOverride : (long) commonParameters.getConnectionTimeout();
     httpClientBuilder.connectionTimeout(Duration.ofMillis(timeoutMs));
     httpClientBuilder.readTimeout(Duration.ofMillis(timeoutMs));
     return httpClientBuilder.build();

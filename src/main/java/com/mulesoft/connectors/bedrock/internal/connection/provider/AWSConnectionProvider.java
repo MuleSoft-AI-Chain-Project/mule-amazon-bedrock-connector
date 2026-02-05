@@ -6,7 +6,7 @@ import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import org.mule.connectors.commons.template.connection.ConnectorConnectionProvider;
 import com.mulesoft.connectors.bedrock.internal.connection.client.SdkHttpClientFactory;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.ProxyParameterGroup;
+import com.mulesoft.connectors.bedrock.api.parameter.ProxyParameterGroup;
 import org.mule.runtime.api.connection.CachedConnectionProvider;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.exception.MuleException;

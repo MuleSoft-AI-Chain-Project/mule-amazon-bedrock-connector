@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.connection.parameters;
+package com.mulesoft.connectors.bedrock.api.parameter;
 
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;

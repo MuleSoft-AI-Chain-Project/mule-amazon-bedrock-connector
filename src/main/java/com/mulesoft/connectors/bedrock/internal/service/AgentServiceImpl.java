@@ -22,11 +22,11 @@ import java.util.stream.Collectors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.concurrent.TimeUnit;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsFilteringParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsMultipleFilteringParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseLoggingParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsSessionParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
@@ -183,18 +183,18 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
     // Create retry configuration from response parameters
     StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getMaxRetries()
-                                                                                              : 3,
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getRetryBackoffMs()
-                                                                                              : 1000L,
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getEnableRetry()
-                                                                                              : false);
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getMaxRetries() != null
+                                                                                                  ? bedrockAgentsResponseParameters
+                                                                                                      .getMaxRetries()
+                                                                                                  : 3,
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getRetryBackoffMs() != null
+                                                                                                  ? bedrockAgentsResponseParameters
+                                                                                                      .getRetryBackoffMs()
+                                                                                                  : 1000L,
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getEnableRetry());
 
     // Execute with retry logic for non-streaming operation
     return StreamingRetryUtility.executeWithRetry(() -> {
@@ -636,18 +636,18 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
     // Create retry configuration from response parameters
     StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getMaxRetries()
-                                                                                              : 3,
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getRetryBackoffMs()
-                                                                                              : 1000L,
-                                                                                          bedrockAgentsResponseParameters != null
-                                                                                              ? bedrockAgentsResponseParameters
-                                                                                                  .getEnableRetry()
-                                                                                              : false);
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getMaxRetries() != null
+                                                                                                  ? bedrockAgentsResponseParameters
+                                                                                                      .getMaxRetries()
+                                                                                                  : 3,
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getRetryBackoffMs() != null
+                                                                                                  ? bedrockAgentsResponseParameters
+                                                                                                      .getRetryBackoffMs()
+                                                                                                  : 1000L,
+                                                                                          bedrockAgentsResponseParameters
+                                                                                              .getEnableRetry());
 
     String requestId = bedrockAgentsResponseLoggingParameters != null
         ? bedrockAgentsResponseLoggingParameters.getRequestId()
@@ -707,6 +707,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                          userId,
                                          operationTimeout, operationTimeoutUnit);
         } catch (Exception e) {
+          if (e instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+          }
           try {
             // Send session-start event before error if not already sent (for consistency)
             if (sessionStartSent.compareAndSet(false, true)) {

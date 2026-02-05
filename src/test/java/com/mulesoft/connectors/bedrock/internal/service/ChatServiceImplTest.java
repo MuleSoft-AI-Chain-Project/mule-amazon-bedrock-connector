@@ -356,7 +356,8 @@ class ChatServiceImplTest {
     java.lang.reflect.Method m = ChatServiceImpl.class.getDeclaredMethod("closeQuietly", java.io.PipedOutputStream.class);
     m.setAccessible(true);
     // Should not throw when passing null
-    m.invoke(service, (java.io.PipedOutputStream) null);
+    Object result = m.invoke(service, (java.io.PipedOutputStream) null);
+    assertThat(result).isNull(); // void method returns null
   }
 
   @Test
@@ -730,11 +731,13 @@ class ChatServiceImplTest {
     m.setAccessible(true);
 
     // Test with null - should not throw
-    m.invoke(service, (Object) null);
+    Object result1 = m.invoke(service, (Object) null);
+    assertThat(result1).isNull();
 
     // Test with already closed stream - should not throw
     java.io.PipedOutputStream os = new java.io.PipedOutputStream();
     os.close();
-    m.invoke(service, os);
+    Object result2 = m.invoke(service, os);
+    assertThat(result2).isNull();
   }
 }

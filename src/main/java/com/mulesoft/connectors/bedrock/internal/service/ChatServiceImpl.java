@@ -212,6 +212,9 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
         try {
           streamConverseResponse(prompt, bedrockParameters, finalOut, sessionStartSent);
         } catch (Exception e) {
+          if (e instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+          }
           try {
             if (sessionStartSent.compareAndSet(false, true)) {
               String sseStart = formatSSEEvent(SESSION_START,

@@ -10,17 +10,17 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseLoggingParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
 import software.amazon.awssdk.core.document.Document;
 
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsFilteringParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsMultipleFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import java.util.concurrent.TimeUnit;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsSessionParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
@@ -1611,7 +1611,8 @@ class AgentServiceImplTest {
     m.setAccessible(true);
 
     // Should not throw when passing null
-    m.invoke(service, (java.io.PipedOutputStream) null);
+    Object result = m.invoke(service, (java.io.PipedOutputStream) null);
+    assertThat(result).isNull(); // void method returns null
   }
 
   @Test
@@ -1628,7 +1629,8 @@ class AgentServiceImplTest {
     java.io.PipedInputStream is = new java.io.PipedInputStream(os);
 
     // Should not throw
-    m.invoke(service, os);
+    Object result = m.invoke(service, os);
+    assertThat(result).isNull(); // void method returns null
     is.close();
   }
 

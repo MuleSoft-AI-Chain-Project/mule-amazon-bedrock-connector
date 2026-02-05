@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.internal.parameter;
+package com.mulesoft.connectors.bedrock.api.parameter;
 
 import java.util.List;
 import java.util.Map;

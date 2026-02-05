@@ -3,6 +3,8 @@ package com.mulesoft.connectors.bedrock.internal.parameter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Field;
+
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

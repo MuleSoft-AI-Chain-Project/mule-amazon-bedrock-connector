@@ -12,11 +12,7 @@ http://www.mulesoft.org/schema/mule/mtf http://www.mulesoft.org/schema/mule/mtf/
 
     <munit:config name="Connectivity-test.xml" />
 
-   <!-- <munit:test name="valid-credentials">
-        <munit:validation >
-            <mtf:test-connectivity config-ref="config" />
-        </munit:validation>
-    </munit:test> -->
+
 
     <munit:test name="valid-credentials-role">
         <munit:validation >
@@ -30,10 +26,6 @@ http://www.mulesoft.org/schema/mule/mtf http://www.mulesoft.org/schema/mule/mtf/
         </munit:validation>
     </munit:test>
 
-<!--    <munit:test name="invalid-credentials-role" expectedErrorType="ms-bedrock:UNAUTHORIZED">
-        <munit:validation >
-            <mtf:test-connectivity config-ref="config-role-invalid" />
-        </munit:validation>
-    </munit:test>-->
+
 
 </mule>
