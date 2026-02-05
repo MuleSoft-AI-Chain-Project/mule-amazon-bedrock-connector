@@ -1,6 +1,6 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
-import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockModelNameProviderImage;
+import com.mulesoft.connectors.bedrock.internal.metadata.provider.AwsBedrockModelNameProviderImage;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;

@@ -10,7 +10,7 @@ import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import com.mulesoft.connectors.bedrock.api.params.BedrockImageParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockImageParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import software.amazon.awssdk.core.SdkBytes;

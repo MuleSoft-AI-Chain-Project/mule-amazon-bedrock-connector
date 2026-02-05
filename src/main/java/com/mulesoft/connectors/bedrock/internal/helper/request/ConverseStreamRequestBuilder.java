@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.helper.request;
 
 import java.util.List;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.ModelIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParamsModelDetails;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.support.AutomationCredentials;

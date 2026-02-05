@@ -2,7 +2,6 @@ package com.mulesoft.connectors.bedrock.internal.metadata.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockModelNameProviderEmbedding;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

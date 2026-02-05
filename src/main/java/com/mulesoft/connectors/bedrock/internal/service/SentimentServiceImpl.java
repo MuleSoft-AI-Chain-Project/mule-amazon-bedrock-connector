@@ -1,6 +1,6 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;

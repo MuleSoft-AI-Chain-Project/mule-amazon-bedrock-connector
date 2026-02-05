@@ -1,6 +1,6 @@
 package com.mulesoft.connectors.bedrock.internal.helper.payload;
 
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 
 /**
  * Strategy interface for generating model-specific payloads. Each model type implements this interface to provide its specific

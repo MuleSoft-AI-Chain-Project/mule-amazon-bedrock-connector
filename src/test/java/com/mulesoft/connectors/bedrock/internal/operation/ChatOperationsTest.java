@@ -12,7 +12,7 @@ import java.util.Scanner;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;

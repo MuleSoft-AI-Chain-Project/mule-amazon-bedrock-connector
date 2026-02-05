@@ -5,8 +5,8 @@ import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICAT
 import java.io.IOException;
 import java.io.InputStream;
 import org.apache.tika.exception.TikaException;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbedding;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbeddingDocument;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbedding;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbeddingDocument;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;

@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
 import org.mule.connectors.commons.template.service.ConnectorService;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParamsModelDetails;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
 
 public interface FoundationalService extends ConnectorService {
 

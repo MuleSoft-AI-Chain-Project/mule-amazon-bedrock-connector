@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;

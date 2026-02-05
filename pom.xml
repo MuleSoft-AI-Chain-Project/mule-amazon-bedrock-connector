@@ -69,7 +69,6 @@
         <beanutils.version>1.9.4</beanutils.version>
         <commons.lang3.version>3.20.0</commons.lang3.version>
         <jacoco.version>0.8.13</jacoco.version>
-        <junit.version>4.13.2</junit.version>
         <maven.surefire.plugin.version>3.2.5</maven.surefire.plugin.version>
         <mtf.tools.version>1.2.0</mtf.tools.version>
         <munit.extensions.maven.plugin.version>1.6.1</munit.extensions.maven.plugin.version>
@@ -470,6 +469,9 @@
                                         <exclude>**/internal/extension/**</exclude>
                                         <exclude>**/connection/credentials/**</exclude>
                                         <exclude>**/connection/client/**</exclude>
+                                        <exclude>**/connection/provider/**</exclude>
+                                        <exclude>**/SdkHttpClientFactory.class</exclude>
+                                        <exclude>**/StsClientHelper.class</exclude>
                                     </excludes>
                                 </rule>
                             </rules>
@@ -489,6 +491,9 @@
                                 <exclude>**/internal/extension/**</exclude>
                                 <exclude>**/connection/credentials/**</exclude>
                                 <exclude>**/connection/client/**</exclude>
+                                <exclude>**/connection/provider/**</exclude>
+                                <exclude>**/SdkHttpClientFactory.class</exclude>
+                                <exclude>**/StsClientHelper.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

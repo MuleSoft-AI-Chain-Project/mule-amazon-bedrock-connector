@@ -1,6 +1,7 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
-import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockModelNameProviderEmbedding;
+import com.mulesoft.connectors.bedrock.internal.metadata.provider.AwsBedrockDocumentSplitProvider;
+import com.mulesoft.connectors.bedrock.internal.metadata.provider.AwsBedrockModelNameProviderEmbedding;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
@@ -9,7 +10,7 @@ import org.mule.runtime.extension.api.annotation.values.OfValues;
 
 import java.util.Objects;
 
-public class BedrockParametersEmbedding {
+public class BedrockParametersEmbeddingDocument {
 
   @Parameter
   @Expression(ExpressionSupport.SUPPORTED)
@@ -40,15 +41,26 @@ public class BedrockParametersEmbedding {
     return normalize;
   }
 
+  @Parameter
+  @Expression(ExpressionSupport.SUPPORTED)
+  @OfValues(AwsBedrockDocumentSplitProvider.class)
+  @Optional(defaultValue = "FULL")
+  private String optionType;
+
+  public String getOptionType() {
+    return optionType;
+  }
+
   @Override
   public boolean equals(Object o) {
-    if (!(o instanceof BedrockParametersEmbedding that))
+    if (!(o instanceof BedrockParametersEmbeddingDocument that))
       return false;
-    return normalize == that.normalize && Objects.equals(modelName, that.modelName) && Objects.equals(dimension, that.dimension);
+    return normalize == that.normalize && Objects.equals(modelName, that.modelName) && Objects.equals(dimension, that.dimension)
+        && Objects.equals(optionType, that.optionType);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(modelName, dimension, normalize);
+    return Objects.hash(modelName, dimension, normalize, optionType);
   }
 }

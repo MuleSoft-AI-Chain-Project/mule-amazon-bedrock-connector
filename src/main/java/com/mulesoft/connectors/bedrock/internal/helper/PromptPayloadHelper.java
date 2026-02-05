@@ -2,7 +2,7 @@ package com.mulesoft.connectors.bedrock.internal.helper;
 
 import java.util.HashMap;
 import java.util.Map;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.helper.payload.PayloadGenerator;
 import com.mulesoft.connectors.bedrock.internal.helper.payload.PayloadGeneratorFactory;
 import com.mulesoft.connectors.bedrock.internal.helper.response.ResponseFormatterFactory;

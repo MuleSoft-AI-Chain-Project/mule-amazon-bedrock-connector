@@ -428,4 +428,103 @@ class StreamingRetryUtilityTest {
       assertThat(interruptedResult.get()).isTrue();
     }
   }
+
+  @Nested
+  @DisplayName("isRetryableException additional cases")
+  class IsRetryableExceptionAdditionalCases {
+
+    @Test
+    @DisplayName("returns false for plain RuntimeException with no cause")
+    void runtimeExceptionNoCause() {
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new RuntimeException("no cause")))
+          .isFalse();
+    }
+
+    @Test
+    @DisplayName("unwraps ExecutionException with SdkClientException cause")
+    void executionExceptionWithSdkClientCause() {
+      SdkClientException sdkEx = mock(SdkClientException.class);
+      when(sdkEx.getMessage()).thenReturn("timeout");
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new ExecutionException(sdkEx)))
+          .isTrue();
+    }
+
+    @Test
+    @DisplayName("returns false for generic Exception that is not TimeoutException or SdkClientException")
+    void genericExceptionNotRetryable() {
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new Exception("generic exception")))
+          .isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"network", "connect timeout"})
+    @DisplayName("returns true for SdkClientException with network-related messages")
+    void sdkClientExceptionNetworkMessages(String message) {
+      SdkClientException e = mock(SdkClientException.class);
+      when(e.getMessage()).thenReturn(message);
+      assertThat(StreamingRetryUtility.isRetryableException(e)).isTrue();
+    }
+  }
+
+  @Nested
+  @DisplayName("executeWithRetry edge cases")
+  class ExecuteWithRetryEdgeCases {
+
+    @Test
+    @DisplayName("non-streaming: wraps exception with cause when checking fails")
+    void nonStreamingWrapsWithCause() {
+      StreamingRetryUtility.RetryConfig config =
+          new StreamingRetryUtility.RetryConfig(1, 1L, true);
+      RuntimeException withCause = new RuntimeException("wrapper", new IllegalStateException("cause"));
+      assertThatThrownBy(() -> StreamingRetryUtility.executeWithRetry(() -> {
+        throw withCause;
+      }, config)).isInstanceOf(RuntimeException.class)
+          .hasMessageContaining("wrapper");
+    }
+
+    @Test
+    @DisplayName("streaming: exhausts all retries and returns failure")
+    void streamingExhaustsRetries() {
+      StreamingRetryUtility.RetryConfig config =
+          new StreamingRetryUtility.RetryConfig(2, 1L, true);
+      AtomicBoolean chunks = new AtomicBoolean(false);
+      int[] attempts = {0};
+      SdkClientException retryable = mock(SdkClientException.class);
+      when(retryable.getMessage()).thenReturn("timeout");
+      StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
+                                                                                        () -> {
+                                                                                          attempts[0]++;
+                                                                                          throw retryable;
+                                                                                        },
+                                                                                        config,
+                                                                                        chunks);
+      assertThat(result.isSuccess()).isFalse();
+      assertThat(result.getAttemptsMade()).isEqualTo(3); // 1 + 2 retries
+    }
+
+    @Test
+    @DisplayName("streaming: resets chunksReceived flag on retry")
+    void streamingResetsChunksFlag() {
+      StreamingRetryUtility.RetryConfig config =
+          new StreamingRetryUtility.RetryConfig(2, 1L, true);
+      AtomicBoolean chunks = new AtomicBoolean(false);
+      int[] attempts = {0};
+      SdkClientException retryable = mock(SdkClientException.class);
+      when(retryable.getMessage()).thenReturn("timeout");
+      StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
+                                                                                        () -> {
+                                                                                          if (attempts[0]++ < 1) {
+                                                                                            throw retryable;
+                                                                                          }
+                                                                                          chunks.set(true);
+                                                                                        },
+                                                                                        config,
+                                                                                        chunks);
+      assertThat(result.isSuccess()).isTrue();
+      assertThat(result.isChunksReceived()).isTrue();
+    }
+  }
 }

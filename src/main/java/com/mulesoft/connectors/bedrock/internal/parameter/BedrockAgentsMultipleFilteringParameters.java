@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
 
 import java.util.List;
@@ -7,6 +7,7 @@ import java.util.Objects;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.sdk.api.annotation.param.NullSafe;
 import org.mule.sdk.api.annotation.param.Optional;
+import org.mule.sdk.api.annotation.param.display.Placement;
 
 /**
  * Parameter group for passing multiple knowledge-base configurations (per-KB settings).
@@ -16,6 +17,7 @@ public class BedrockAgentsMultipleFilteringParameters {
   @Parameter
   @Optional
   @NullSafe
+  @Placement
   private List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBases;
 
   public BedrockAgentsMultipleFilteringParameters() {

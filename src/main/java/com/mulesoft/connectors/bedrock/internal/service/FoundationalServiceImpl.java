@@ -3,7 +3,7 @@ package com.mulesoft.connectors.bedrock.internal.service;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParamsModelDetails;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import org.slf4j.Logger;

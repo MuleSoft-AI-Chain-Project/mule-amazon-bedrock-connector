@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
 import java.util.List;
 import java.util.Map;
@@ -7,6 +7,7 @@ import java.util.Objects;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.sdk.api.annotation.param.NullSafe;
 import org.mule.sdk.api.annotation.param.Optional;
+import org.mule.sdk.api.annotation.param.display.Placement;
 
 public class BedrockAgentsFilteringParameters {
 
@@ -26,33 +27,40 @@ public class BedrockAgentsFilteringParameters {
 
     @Parameter
     @Optional
+    @Placement
     private String rerankingType;
 
     @Parameter
     @Optional
+    @Placement
     private String modelArn;
 
     @Parameter
     @Optional
+    @Placement
     private Integer numberOfRerankedResults;
 
     @Parameter
     @Optional
+    @Placement
     private RerankingSelectionMode selectionMode;
 
     @Parameter
     @Optional
     @NullSafe
+    @Placement
     private List<String> fieldsToExclude;
 
     @Parameter
     @Optional
     @NullSafe
+    @Placement
     private List<String> fieldsToInclude;
 
     @Parameter
     @Optional
     @NullSafe
+    @Placement
     private Map<String, String> additionalModelRequestFields;
 
     public RerankingConfiguration() {
@@ -121,27 +129,33 @@ public class BedrockAgentsFilteringParameters {
 
     @Parameter
     @Optional
+    @Placement
     private String knowledgeBaseId;
 
     @Parameter
     @Optional
+    @Placement
     private Integer numberOfResults;
 
     @Parameter
     @Optional
+    @Placement
     private SearchType overrideSearchType;
 
     @Parameter
     @Optional
+    @Placement
     private RetrievalMetadataFilterType retrievalMetadataFilterType;
 
     @Parameter
     @Optional
     @NullSafe
+    @Placement
     private Map<String, String> metadataFilters;
 
     @Parameter
     @Optional
+    @Placement
     private RerankingConfiguration rerankingConfiguration;
 
     public KnowledgeBaseConfig() {}
@@ -186,23 +200,28 @@ public class BedrockAgentsFilteringParameters {
 
   @Parameter
   @Optional
+  @Placement
   private String knowledgeBaseId;
 
   @Parameter
   @Optional
+  @Placement
   private Integer numberOfResults;
 
   @Parameter
   @Optional
+  @Placement
   private SearchType overrideSearchType;
 
   @Parameter
   @Optional
+  @Placement
   private RetrievalMetadataFilterType retrievalMetadataFilterType;
 
   @Parameter
   @Optional
   @NullSafe
+  @Placement
   private Map<String, String> metadataFilters;
 
   public String getKnowledgeBaseId() {

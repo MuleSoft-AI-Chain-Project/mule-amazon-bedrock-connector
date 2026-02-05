@@ -1,4 +1,4 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;

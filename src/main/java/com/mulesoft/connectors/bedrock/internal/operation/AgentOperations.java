@@ -3,12 +3,12 @@ package com.mulesoft.connectors.bedrock.internal.operation;
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
 import java.io.InputStream;
-import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsFilteringParameters;
-import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsMultipleFilteringParameters;
-import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseLoggingParameters;
-import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.api.params.BedrockAgentsSessionParameters;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsFilteringParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsMultipleFilteringParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseLoggingParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsResponseParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockAgentsSessionParameters;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;

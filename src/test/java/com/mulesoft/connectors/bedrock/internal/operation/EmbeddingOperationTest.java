@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.api.params.BedrockParametersEmbedding;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbedding;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import software.amazon.awssdk.core.SdkBytes;

@@ -1,7 +1,8 @@
-package com.mulesoft.connectors.bedrock.api.params;
+package com.mulesoft.connectors.bedrock.internal.parameter;
 
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.sdk.api.annotation.param.Optional;
+import org.mule.sdk.api.annotation.param.display.Placement;
 
 import java.util.Objects;
 
@@ -9,14 +10,17 @@ public class BedrockAgentsSessionParameters {
 
   @Parameter
   @Optional
+  @Placement
   private String sessionId;
 
   @Parameter
   @Optional
+  @Placement
   private boolean excludePreviousThinkingSteps;
 
   @Parameter
   @Optional
+  @Placement
   private Integer previousConversationTurnsToInclude;
 
   public String getSessionId() {
