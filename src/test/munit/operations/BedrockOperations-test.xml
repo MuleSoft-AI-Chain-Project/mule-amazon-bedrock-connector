@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ms-bedrock="http://www.mulesoft.org/schema/mule/ms-bedrock"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+  http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+  http://www.mulesoft.org/schema/mule/ms-bedrock http://www.mulesoft.org/schema/mule/ms-bedrock/current/mule-ms-bedrock.xsd
+  http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+  http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="BedrockOperations-test.xml" />
+
+    <!-- Chat: answer prompt -->
+    <munit:test name="chat-answer-prompt-success-amazon">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                          prompt="What is the capital of France?"
+                                          modelName="amazon.nova-lite-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-openAI">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="openai.gpt-oss-120b-1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-Meta">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="meta.llama3-70b-instruct-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="chat-answer-prompt-success-Google">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt config-ref="config-role"
+                                           prompt="What is the capital of France?"
+                                           modelName="google.gemma-3-27b-it"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+
+
+    <!-- Chat: streaming answer prompt -->
+    <munit:test name="chat-answer-prompt-streaming-success">
+        <munit:execution>
+            <ms-bedrock:chat-answer-prompt-streaming config-ref="config-role"
+                                                    prompt="Say hello in one word."
+                                                    modelName="amazon.nova-lite-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- Foundational: list models -->
+    <munit:test name="foundational-models-list-success">
+        <munit:execution>
+            <ms-bedrock:foundational-models-list config-ref="config-role"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- Foundational: model details -->
+    <munit:test name="foundational-model-details-success">
+        <munit:execution>
+            <ms-bedrock:foundational-model-details config-ref="config-role"
+                                                    modelName="amazon.nova-lite-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- Embedding: generate from text -->
+    <munit:test name="embedding-generate-from-text-success">
+        <munit:execution>
+            <ms-bedrock:embedding-generate-from-text config-ref="config-role"
+                                                      prompt="Sample text for embedding."
+                                                      modelName="amazon.titan-embed-text-v1"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- Sentiment: analyze -->
+    <munit:test name="sentiment-analyze-success">
+        <munit:execution>
+            <ms-bedrock:sentiment-analyze config-ref="config-role"
+                                          TextToAnalyze="I am very happy with this product!"
+                                          modelName="amazon.nova-lite-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+   
+
+    <!-- Agent: define prompt template -->
+    <munit:test name="agent-define-prompt-template-success">
+        <munit:execution>
+            <ms-bedrock:agent-define-prompt-template config-ref="config-role"
+                                                     template="Instructions: {{instructions}}. Data: {{dataset}}."
+                                                     instructions="Answer briefly."
+                                                     dataset="Sample data"
+                                                     modelName="amazon.nova-lite-v1:0"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- Agent: list agents -->
+    <munit:test name="agent-list-success">
+        <munit:execution>
+            <ms-bedrock:agent-list config-ref="config-role"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+</mule>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:ms-bedrock="http://www.mulesoft.org/schema/mule/ms-bedrock" xmlns="http://www.mulesoft.org/schema/mule/core"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ms-bedrock http://www.mulesoft.org/schema/mule/ms-bedrock/current/mule-ms-bedrock.xsd">
+
+    <configuration-properties file="automation-credentials.properties" />
+
+    <ms-bedrock:config name="config">
+        <ms-bedrock:basic-connection accessKey="${config.accessKey}"
+                                   secretKey="${config.secretKey}"
+                                  region="${config.region}"
+                                  sessionToken="${config.security.token}"/>
+    </ms-bedrock:config>
+
+    <ms-bedrock:config name="config-invalid">
+        <ms-bedrock:basic-connection accessKey="AOOOOOOOOOinvalidAccessKey"
+                                   secretKey="AOOOOOOOOOinvalidAccessKey"
+                                  region="${config.region}"
+                                  sessionToken="${config.security.token}"/>
+    </ms-bedrock:config>
+
+    <ms-bedrock:config name="config-role">
+        <ms-bedrock:role-connection accessKey="${role-config.accessKey}" secretKey="${role-config.secretKey}"
+                                 roleARN="${role-config.roleARN}"
+                                 region="${config.region}"/>
+    </ms-bedrock:config>
+
+    <ms-bedrock:config name="config-role-invalid">
+        <ms-bedrock:role-connection accessKey="${role-config.accessKey}" secretKey="${role-config.secretKey}"
+                                 roleARN="roleARN"
+                                 region="${config.region}"/>
+    </ms-bedrock:config>
+
+    <ms-bedrock:config name="config-role-with-externalId">
+        <ms-bedrock:role-connection accessKey="${role-config.accessKey}" secretKey="${role-config.secretKey}"
+                                  roleARN="${role-config-external.roleARN}"
+                                  externalId="${role-config-external.externalId}"
+                                 region="${config.region}"/>
+    </ms-bedrock:config>
+
+    <ms-bedrock:config name="config-role-with-invalid-externalId">
+        <ms-bedrock:role-connection accessKey="${role-config.accessKey}" secretKey="${role-config.secretKey}"
+                                  roleARN="${role-config-external.roleARN}"
+                                  externalId="${role-config-external.invalidExternalId}"
+                                 region="${config.region}"/>
+    </ms-bedrock:config>
+
+</mule>
