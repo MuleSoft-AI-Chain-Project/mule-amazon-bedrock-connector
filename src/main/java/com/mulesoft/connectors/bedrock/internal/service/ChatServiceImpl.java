@@ -201,15 +201,16 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
    * task that blocks on future.get(), SSE events (session-start, chunk, session-complete, error).
    */
   private InputStream invokeConverseSSEStream(String prompt, BedrockParameters bedrockParameters) {
+    PipedOutputStream outputStream = null;
     try {
-      PipedOutputStream outputStream = new PipedOutputStream();
+      outputStream = new PipedOutputStream();
       PipedInputStream inputStream = new PipedInputStream(outputStream);
 
       AtomicBoolean sessionStartSent = new AtomicBoolean(false);
-
+      final PipedOutputStream finalOut = outputStream;
       CompletableFuture.runAsync(() -> {
         try {
-          streamConverseResponse(prompt, bedrockParameters, outputStream, sessionStartSent);
+          streamConverseResponse(prompt, bedrockParameters, finalOut, sessionStartSent);
         } catch (Exception e) {
           try {
             if (sessionStartSent.compareAndSet(false, true)) {
@@ -217,23 +218,25 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
                                                createSessionStartJson(prompt, bedrockParameters.getModelName(),
                                                                       Instant.now().toString())
                                                    .toString());
-              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
+              finalOut.write(sseStart.getBytes(StandardCharsets.UTF_8));
+              finalOut.flush();
               logger.info(sseStart);
             }
             JSONObject errorJson = createErrorJson(e);
             String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
-            outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
+            finalOut.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+            finalOut.flush();
             logger.error(errorEvent);
           } catch (IOException ioException) {
             logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
           }
         } finally {
           try {
-            outputStream.close();
+            finalOut.close();
           } catch (IOException ioException) {
             logger.debug("Error closing stream: {}", ioException.getMessage());
+          } finally {
+            closeQuietly(finalOut);
           }
         }
       });
@@ -243,7 +246,19 @@ public class ChatServiceImpl extends BedrockServiceImpl implements ChatService {
     } catch (IOException e) {
       String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(e).toString());
       logger.error(errorEvent);
+      if (outputStream != null) {
+        closeQuietly(outputStream);
+      }
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+
+  private void closeQuietly(PipedOutputStream os) {
+    try {
+      if (os != null)
+        os.close();
+    } catch (IOException e) {
+      logger.debug("Error closing stream", e);
     }
   }
 

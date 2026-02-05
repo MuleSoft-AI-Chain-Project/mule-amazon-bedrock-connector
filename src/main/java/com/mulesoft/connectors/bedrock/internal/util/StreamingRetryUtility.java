@@ -246,6 +246,9 @@ public class StreamingRetryUtility {
   }
 
   private static String getExceptionMessage(Throwable t) {
+    if (t == null) {
+      return "Unknown exception";
+    }
     return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
   }
 

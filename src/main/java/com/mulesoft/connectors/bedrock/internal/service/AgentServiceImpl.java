@@ -571,29 +571,36 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
         modelConfigBuilder.additionalModelRequestFields(additionalFields);
       }
     });
-    if (config.getSelectionMode() != null) {
-      bedrockBuilder.metadataConfiguration(metadataConfigBuilder -> {
-        metadataConfigBuilder.selectionMode(config.getSelectionMode().name());
-        if (config.getSelectionMode() == BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE) {
-          metadataConfigBuilder.selectiveModeConfiguration(selectiveModeBuilder -> {
-            if (config.getFieldsToExclude() != null && !config.getFieldsToExclude().isEmpty()) {
-              List<FieldForReranking> fieldsToExclude = config.getFieldsToExclude().stream()
-                  .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
-                  .collect(Collectors.toList());
-              selectiveModeBuilder.fieldsToExclude(fieldsToExclude);
-            } else if (config.getFieldsToInclude() != null && !config.getFieldsToInclude().isEmpty()) {
-              List<FieldForReranking> fieldsToInclude = config.getFieldsToInclude().stream()
-                  .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
-                  .collect(Collectors.toList());
-              selectiveModeBuilder.fieldsToInclude(fieldsToInclude);
-            }
-          });
-        }
-      });
-    }
+    applyMetadataRerankingConfiguration(bedrockBuilder, config);
     if (config.getNumberOfRerankedResults() != null) {
       bedrockBuilder.numberOfRerankedResults(config.getNumberOfRerankedResults());
     }
+  }
+
+  private static void applyMetadataRerankingConfiguration(
+                                                          VectorSearchBedrockRerankingConfiguration.Builder bedrockBuilder,
+                                                          BedrockAgentsFilteringParameters.RerankingConfiguration config) {
+    if (config.getSelectionMode() == null) {
+      return;
+    }
+    bedrockBuilder.metadataConfiguration(metadataConfigBuilder -> {
+      metadataConfigBuilder.selectionMode(config.getSelectionMode().name());
+      if (config.getSelectionMode() == BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE) {
+        metadataConfigBuilder.selectiveModeConfiguration(selectiveModeBuilder -> {
+          if (config.getFieldsToExclude() != null && !config.getFieldsToExclude().isEmpty()) {
+            List<FieldForReranking> fieldsToExclude = config.getFieldsToExclude().stream()
+                .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                .collect(Collectors.toList());
+            selectiveModeBuilder.fieldsToExclude(fieldsToExclude);
+          } else if (config.getFieldsToInclude() != null && !config.getFieldsToInclude().isEmpty()) {
+            List<FieldForReranking> fieldsToInclude = config.getFieldsToInclude().stream()
+                .map(fieldName -> FieldForReranking.builder().fieldName(fieldName).build())
+                .collect(Collectors.toList());
+            selectiveModeBuilder.fieldsToInclude(fieldsToInclude);
+          }
+        });
+      }
+    });
   }
 
   private static software.amazon.awssdk.services.bedrockagentruntime.model.SearchType convertToSdkSearchType(BedrockAgentsFilteringParameters.SearchType connectorSearchType) {
@@ -678,24 +685,25 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                            StreamingRetryUtility.RetryConfig retryConfig,
                                            String requestId, String correlationId, String userId,
                                            Integer operationTimeout, TimeUnit operationTimeoutUnit) {
+    PipedOutputStream outputStream = null;
 
     try {
       // Create piped streams for real-time streaming
-      PipedOutputStream outputStream = new PipedOutputStream();
+      outputStream = new PipedOutputStream();
       PipedInputStream inputStream = new PipedInputStream(outputStream);
 
       // Track if chunks have been received (for retry logic)
       AtomicBoolean chunksReceived = new AtomicBoolean(false);
       // Track if session-start has been sent (for consistency - always send before error if not already sent)
       AtomicBoolean sessionStartSent = new AtomicBoolean(false);
-
+      final PipedOutputStream finalOut = outputStream;
       // Start the streaming process asynchronously
       CompletableFuture.runAsync(() -> {
         try {
           streamBedrockResponseWithRetry(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                                          excludePreviousThinkingSteps, previousConversationTurnsToInclude,
                                          knowledgeBaseConfigs,
-                                         outputStream, retryConfig, chunksReceived, sessionStartSent, requestId, correlationId,
+                                         finalOut, retryConfig, chunksReceived, sessionStartSent, requestId, correlationId,
                                          userId,
                                          operationTimeout, operationTimeoutUnit);
         } catch (Exception e) {
@@ -706,8 +714,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                   createSessionStartJson(agentAliasId, agentId, prompt, effectiveSessionId, Instant.now().toString(),
                                          requestId, correlationId, userId);
               String sseStart = formatSSEEvent("session-start", startEvent.toString());
-              outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              outputStream.flush();
+              finalOut.write(sseStart.getBytes(StandardCharsets.UTF_8));
+              finalOut.flush();
               logger.info(sseStart);
             }
 
@@ -716,19 +724,15 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
             // Send error as SSE event (createErrorJson will use the exception's message which is already enhanced)
             JSONObject errorJson = createErrorJson(e);
             String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
-            outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-            outputStream.flush();
+            finalOut.write(errorEvent.getBytes(StandardCharsets.UTF_8));
+            finalOut.flush();
             logger.error(errorEvent);
           } catch (IOException ioException) {
             // Log error but can't do much more
             logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
           }
         } finally {
-          try {
-            outputStream.close();
-          } catch (IOException ioException) {
-            logger.debug("Error closing stream: {}", ioException.getMessage());
-          }
+          closeQuietly(finalOut);
         }
       });
 
@@ -738,7 +742,19 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       // Return error as immediate SSE event
       String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(e).toString());
       logger.error(errorEvent);
+      if (outputStream != null) {
+        closeQuietly(outputStream);
+      }
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+
+  private void closeQuietly(PipedOutputStream os) {
+    try {
+      if (os != null)
+        os.close();
+    } catch (IOException e) {
+      logger.debug("Error closing stream", e);
     }
   }
 

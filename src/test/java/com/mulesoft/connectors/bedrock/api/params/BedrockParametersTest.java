@@ -57,13 +57,13 @@ class BedrockParametersTest {
   }
 
   @Test
-  @DisplayName("BedrockAgentsResponseParameters getMaxRetries getRetryBackoffMs return defaults when null")
+  @DisplayName("BedrockAgentsResponseParameters getMaxRetries getRetryBackoffMs return null when fields are null")
   void responseParamsNullRetryDefaults() throws Exception {
     BedrockAgentsResponseParameters p = new BedrockAgentsResponseParameters();
     IntegrationTestParamHelper.setField(p, "maxRetries", null);
     IntegrationTestParamHelper.setField(p, "retryBackoffMs", null);
-    assertThat(p.getMaxRetries()).isEqualTo(3);
-    assertThat(p.getRetryBackoffMs()).isEqualTo(1000L);
+    assertThat(p.getMaxRetries()).isNull();
+    assertThat(p.getRetryBackoffMs()).isNull();
   }
 
   @Test

@@ -516,7 +516,7 @@ class AgentServiceImplTest {
     }
     String content = new String(buf, 0, total, java.nio.charset.StandardCharsets.UTF_8);
     assertThat(content).contains("event:");
-    assertThat(content).contains("error").as("stream should contain error event when invoke fails");
+    assertThat(content).as("stream should contain error event when invoke fails").contains("error");
   }
 
   @Test

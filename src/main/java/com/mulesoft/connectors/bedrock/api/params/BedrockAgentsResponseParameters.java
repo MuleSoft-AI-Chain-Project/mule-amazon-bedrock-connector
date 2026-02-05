@@ -63,11 +63,11 @@ public class BedrockAgentsResponseParameters {
   }
 
   public Integer getMaxRetries() {
-    return maxRetries != null ? maxRetries : 3;
+    return maxRetries;
   }
 
   public Long getRetryBackoffMs() {
-    return retryBackoffMs != null ? retryBackoffMs : 1000L;
+    return retryBackoffMs;
   }
 
   @Override

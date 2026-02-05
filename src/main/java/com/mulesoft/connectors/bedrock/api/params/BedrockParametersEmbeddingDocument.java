@@ -1,6 +1,6 @@
 package com.mulesoft.connectors.bedrock.api.params;
 
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.AwsBedrockDocumentSplitProvider;
+import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockDocumentSplitProvider;
 import com.mulesoft.connectors.bedrock.api.provider.AwsBedrockModelNameProviderEmbedding;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
