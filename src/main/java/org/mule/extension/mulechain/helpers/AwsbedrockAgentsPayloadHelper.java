@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -1043,6 +1044,8 @@ public class AwsbedrockAgentsPayloadHelper {
     AtomicInteger chunkCount = new AtomicInteger(0);
     AtomicLong lastChunkTime = new AtomicLong(startTime);
     AtomicLong timeToFirstChunk = new AtomicLong(-1); // -1 means not yet received
+    // Track if client disconnected - used to stop processing new chunks and release thread
+    AtomicBoolean clientDisconnected = new AtomicBoolean(false);
 
     // Start a writer thread that drains the queue and writes to the output stream
     // This runs on STREAMING_EXECUTOR, not on Netty's event loop
@@ -1077,9 +1080,23 @@ public class AwsbedrockAgentsPayloadHelper {
                               requestId);
       } catch (IOException e) {
         // Client disconnected - this is expected behavior
+        // Set flag to stop processing new chunks from Netty callbacks
+        clientDisconnected.set(true);
         streamingLogger
-            .debug("Client disconnected during streaming - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}",
+            .debug("Client disconnected during streaming - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}. Stopping chunk processing.",
                    agentId, sessionId, requestId, correlationId, e.getMessage());
+        // Drain remaining queue items to prevent memory leak, but don't write them
+        int drained = 0;
+        while (!writeQueue.isEmpty()) {
+          String drainedEvent = writeQueue.poll();
+          if (drainedEvent != null && !END_OF_STREAM_SENTINEL.equals(drainedEvent)) {
+            drained++;
+          }
+        }
+        if (drained > 0) {
+          streamingLogger.debug("Drained {} queued events after client disconnect - agentId: {}, sessionId: {}, requestId: {}",
+                               drained, agentId, sessionId, requestId);
+        }
       } finally {
         try {
           outputStream.close();
@@ -1111,6 +1128,12 @@ public class AwsbedrockAgentsPayloadHelper {
         .onChunk(chunk -> {
           // IMPORTANT: This callback runs on Netty's event loop thread.
           // We must NOT block here, so we queue the data for the writer thread.
+          // Skip processing if client already disconnected - prevents queue growth
+          if (clientDisconnected.get()) {
+            streamingLogger.debug("Skipping chunk - client disconnected - agentId: {}, sessionId: {}, requestId: {}",
+                                  agentId, sessionId, requestId);
+            return;
+          }
           try {
             // Mark that chunks have been received (for retry logic)
             boolean isFirstChunk = !chunksReceived.get();
@@ -1192,6 +1215,14 @@ public class AwsbedrockAgentsPayloadHelper {
         .onComplete(() -> {
           // IMPORTANT: This callback runs on Netty's event loop thread.
           // We must NOT block here, so we queue the data for the writer thread.
+          // Skip completion event if client already disconnected
+          if (clientDisconnected.get()) {
+            streamingLogger.debug("Skipping completion event - client disconnected - agentId: {}, sessionId: {}, requestId: {}",
+                                  agentId, sessionId, requestId);
+            // Still signal end of stream to allow writer thread to exit cleanly
+            writeQueue.offer(END_OF_STREAM_SENTINEL);
+            return;
+          }
           try {
             // Send completion event
             long endTime = System.currentTimeMillis();
@@ -1250,8 +1281,37 @@ public class AwsbedrockAgentsPayloadHelper {
                             agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
 
     // Wait for both the Bedrock invocation and the writer to complete
+    // Use a polling loop to detect client disconnect while waiting
+    // This prevents thread exhaustion when clients disconnect frequently
     try {
-      invocationFuture.get(); // Wait for Bedrock to finish
+      while (!invocationFuture.isDone()) {
+        // Check if client disconnected during streaming
+        if (clientDisconnected.get()) {
+          streamingLogger.debug("Client disconnected during Bedrock invocation - agentId: {}, sessionId: {}, requestId: {}",
+                                agentId, sessionId, requestId);
+          // Wait briefly for writer thread to finish cleanup (should be quick)
+          try {
+            writerFuture.get(2, TimeUnit.SECONDS);
+          } catch (java.util.concurrent.TimeoutException te) {
+            streamingLogger.debug("Writer thread cleanup timeout - agentId: {}, sessionId: {}, requestId: {}",
+                                  agentId, sessionId, requestId);
+          }
+          performanceLogger.debug("Early exit due to client disconnect - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
+                                 agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
+          // Don't wait for Bedrock invocation - let it complete in background
+          // This releases the thread immediately for other requests
+          return;
+        }
+        
+        // Wait with short timeout before checking again (500ms polling interval)
+        try {
+          invocationFuture.get(500, TimeUnit.MILLISECONDS);
+          break; // Completed successfully
+        } catch (java.util.concurrent.TimeoutException te) {
+          // Expected - continue polling
+        }
+      }
+      
       performanceLogger.debug("Bedrock API invocation completed - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
                               agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
       writerFuture.get(); // Wait for writer to finish draining the queue
