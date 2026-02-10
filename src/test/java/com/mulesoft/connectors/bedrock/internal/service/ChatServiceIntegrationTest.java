@@ -2,6 +2,12 @@ package com.mulesoft.connectors.bedrock.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.support.AutomationCredentials;
+import com.mulesoft.connectors.bedrock.internal.support.BedrockConnectionTestHelper;
+import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
@@ -10,12 +16,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.support.AutomationCredentials;
-import com.mulesoft.connectors.bedrock.internal.support.BedrockConnectionTestHelper;
-import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
 
 @Tag("integration")
 @DisplayName("ChatService integration (real AWS)")

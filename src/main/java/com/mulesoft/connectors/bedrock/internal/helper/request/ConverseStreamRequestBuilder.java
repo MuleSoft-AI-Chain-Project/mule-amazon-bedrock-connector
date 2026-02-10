@@ -1,8 +1,8 @@
 package com.mulesoft.connectors.bedrock.internal.helper.request;
 
-import java.util.List;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.ModelIdentifier;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;

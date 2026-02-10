@@ -1,12 +1,12 @@
 package com.mulesoft.connectors.bedrock.internal.operation;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import org.mule.connectors.atlantic.commons.builder.execution.ExecutionBuilder;
 import org.mule.connectors.atlantic.commons.builder.lambda.function.BiFunction;
 import org.mule.connectors.commons.template.operation.ConnectorOperations;
 import org.mule.connectors.commons.template.service.ConnectorService;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;

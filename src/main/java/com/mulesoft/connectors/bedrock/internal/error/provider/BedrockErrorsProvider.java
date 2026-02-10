@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.error.provider;
 
-import java.util.Set;
 import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
+import java.util.Set;
 import org.mule.runtime.extension.api.annotation.error.ErrorTypeProvider;
 import org.mule.runtime.extension.api.error.ErrorTypeDefinition;
 

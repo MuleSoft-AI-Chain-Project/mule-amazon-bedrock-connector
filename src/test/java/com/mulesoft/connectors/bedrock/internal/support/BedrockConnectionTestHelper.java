@@ -1,10 +1,10 @@
 package com.mulesoft.connectors.bedrock.internal.support;
 
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
+import com.mulesoft.connectors.bedrock.internal.connection.provider.BasicConnectionProvider;
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
-import com.mulesoft.connectors.bedrock.internal.connection.provider.BasicConnectionProvider;
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import org.mule.runtime.api.connection.ConnectionException;
 
 /**

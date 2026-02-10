@@ -2,14 +2,14 @@ package com.mulesoft.connectors.bedrock.internal.operation;
 
 import static org.mule.runtime.extension.api.annotation.param.MediaType.APPLICATION_JSON;
 
-import java.io.InputStream;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.service.ChatService;
 import com.mulesoft.connectors.bedrock.internal.service.ChatServiceImpl;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockModelFactory;
+import java.io.InputStream;
 import org.mule.runtime.api.meta.model.operation.ExecutionType;
 import org.mule.runtime.extension.api.annotation.Alias;
 import org.mule.runtime.extension.api.annotation.error.Throws;

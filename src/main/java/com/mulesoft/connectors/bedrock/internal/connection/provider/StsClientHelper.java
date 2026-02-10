@@ -1,10 +1,10 @@
 package com.mulesoft.connectors.bedrock.internal.connection.provider;
 
-import java.net.URI;
-import org.apache.commons.lang3.StringUtils;
 import com.mulesoft.connectors.bedrock.internal.connection.client.SdkHttpClientFactory;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import com.mulesoft.connectors.bedrock.internal.util.RegionUtils;
+import java.net.URI;
+import org.apache.commons.lang3.StringUtils;
 import org.mule.runtime.api.connection.ConnectionException;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;

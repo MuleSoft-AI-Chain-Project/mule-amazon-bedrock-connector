@@ -1,5 +1,6 @@
 package com.mulesoft.connectors.bedrock.api.parameter;
 
+import java.util.Objects;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.DisplayName;
@@ -11,8 +12,6 @@ import org.mule.sdk.api.annotation.semantics.connectivity.Host;
 import org.mule.sdk.api.annotation.semantics.connectivity.Port;
 import org.mule.sdk.api.annotation.semantics.security.Password;
 import org.mule.sdk.api.annotation.semantics.security.Username;
-
-import java.util.Objects;
 
 @ConfiguresProxy
 public class ProxyParameterGroup {

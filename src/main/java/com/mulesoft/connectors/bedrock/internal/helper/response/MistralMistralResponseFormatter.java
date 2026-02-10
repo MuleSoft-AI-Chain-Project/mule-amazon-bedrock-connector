@@ -1,11 +1,11 @@
 package com.mulesoft.connectors.bedrock.internal.helper.response;
 
+import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
 /**
  * Response formatter for Mistral Mistral models.

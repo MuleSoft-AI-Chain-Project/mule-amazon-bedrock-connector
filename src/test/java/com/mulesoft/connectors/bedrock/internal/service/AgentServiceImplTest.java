@@ -6,26 +6,24 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
-
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
-import software.amazon.awssdk.core.document.Document;
-
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
-import org.mule.runtime.extension.api.exception.ModuleException;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import java.util.concurrent.TimeUnit;
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
+import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.services.bedrockagent.model.Agent;
 import software.amazon.awssdk.services.bedrockagent.model.AgentStatus;
 import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;

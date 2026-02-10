@@ -1,10 +1,10 @@
 package com.mulesoft.connectors.bedrock.internal.helper.payload;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import com.mulesoft.connectors.bedrock.internal.util.ModelIdentifier;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class OpenAIGPTPayloadGenerator extends BasePayloadGenerator {
 

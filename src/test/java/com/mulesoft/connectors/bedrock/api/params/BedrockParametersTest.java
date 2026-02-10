@@ -2,8 +2,6 @@ package com.mulesoft.connectors.bedrock.api.params;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.concurrent.TimeUnit;
-
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
@@ -15,6 +13,7 @@ import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbed
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbeddingDocument;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

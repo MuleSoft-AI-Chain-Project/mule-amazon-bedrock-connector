@@ -2,10 +2,9 @@ package com.mulesoft.connectors.bedrock.internal.parameter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
-
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

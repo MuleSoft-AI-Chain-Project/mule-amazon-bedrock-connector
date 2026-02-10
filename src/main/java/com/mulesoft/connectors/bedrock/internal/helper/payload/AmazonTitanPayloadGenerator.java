@@ -1,9 +1,9 @@
 package com.mulesoft.connectors.bedrock.internal.helper.payload;
 
-import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import com.mulesoft.connectors.bedrock.internal.util.ModelIdentifier;
+import org.json.JSONObject;
 
 /**
  * Payload generator for Amazon Titan text models.

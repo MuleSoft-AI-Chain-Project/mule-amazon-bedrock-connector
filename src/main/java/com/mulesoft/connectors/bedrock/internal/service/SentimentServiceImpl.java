@@ -1,10 +1,10 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import com.mulesoft.connectors.bedrock.internal.helper.PromptPayloadHelper;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;

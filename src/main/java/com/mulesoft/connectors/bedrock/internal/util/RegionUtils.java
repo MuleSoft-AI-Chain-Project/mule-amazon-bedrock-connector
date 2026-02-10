@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.util;
 
-import java.net.URI;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
+import java.net.URI;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClientBuilder;
 import software.amazon.awssdk.services.bedrockagent.BedrockAgentClientBuilder;

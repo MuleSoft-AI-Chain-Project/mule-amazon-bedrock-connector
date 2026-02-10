@@ -2,10 +2,10 @@ package com.mulesoft.connectors.bedrock.internal.metadata.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import com.mulesoft.connectors.bedrock.internal.error.provider.BedrockErrorsProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 
 @DisplayName("BedrockErrorsProvider")
 class BedrockErrorsProviderTest {

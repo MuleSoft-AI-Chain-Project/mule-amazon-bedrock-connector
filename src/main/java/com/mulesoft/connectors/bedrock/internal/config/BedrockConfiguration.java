@@ -1,6 +1,5 @@
 package com.mulesoft.connectors.bedrock.internal.config;
 
-import org.mule.connectors.commons.template.config.ConnectorConfig;
 import com.mulesoft.connectors.bedrock.internal.connection.provider.AssumeRoleConnectionProvider;
 import com.mulesoft.connectors.bedrock.internal.connection.provider.BasicConnectionProvider;
 import com.mulesoft.connectors.bedrock.internal.operation.AgentOperations;
@@ -9,6 +8,7 @@ import com.mulesoft.connectors.bedrock.internal.operation.EmbeddingOperation;
 import com.mulesoft.connectors.bedrock.internal.operation.FoundationalModelOperations;
 import com.mulesoft.connectors.bedrock.internal.operation.ImageOperation;
 import com.mulesoft.connectors.bedrock.internal.operation.SentimentOperations;
+import org.mule.connectors.commons.template.config.ConnectorConfig;
 import org.mule.runtime.extension.api.annotation.Configuration;
 import org.mule.runtime.extension.api.annotation.Operations;
 import org.mule.runtime.extension.api.annotation.connectivity.ConnectionProviders;
