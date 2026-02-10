@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
+import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
-import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 
 @DisplayName("MistralPayloadGenerator")
 class MistralPayloadGeneratorTest {

@@ -1,10 +1,9 @@
 package com.mulesoft.connectors.bedrock.api.parameter;
 
+import java.util.Objects;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.sdk.api.annotation.param.Optional;
 import org.mule.sdk.api.annotation.param.display.Placement;
-
-import java.util.Objects;
 
 public class BedrockAgentsSessionParameters {
 

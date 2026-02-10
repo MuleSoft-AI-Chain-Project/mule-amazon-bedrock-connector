@@ -1,8 +1,8 @@
 package com.mulesoft.connectors.bedrock.internal.helper.payload;
 
-import org.json.JSONObject;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
+import org.json.JSONObject;
 
 /**
  * Base class for payload generators providing common utility methods. Implements Template Method pattern for shared JSON building

@@ -2,17 +2,17 @@ package com.mulesoft.connectors.bedrock.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
+import com.mulesoft.connectors.bedrock.internal.support.AutomationCredentials;
+import com.mulesoft.connectors.bedrock.internal.support.BedrockConnectionTestHelper;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.support.AutomationCredentials;
-import com.mulesoft.connectors.bedrock.internal.support.BedrockConnectionTestHelper;
 
 @Tag("integration")
 @DisplayName("FoundationalService integration (real AWS)")

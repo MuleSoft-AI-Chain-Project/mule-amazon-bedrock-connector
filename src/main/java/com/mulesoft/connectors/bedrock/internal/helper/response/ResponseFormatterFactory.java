@@ -1,9 +1,9 @@
 package com.mulesoft.connectors.bedrock.internal.helper.response;
 
-import java.util.HashMap;
-import java.util.Map;
 import com.mulesoft.connectors.bedrock.internal.util.BedrockConstants;
 import com.mulesoft.connectors.bedrock.internal.util.ModelIdentifier;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Factory class for creating appropriate ResponseFormatter instances. Uses Strategy pattern to select the correct formatter based

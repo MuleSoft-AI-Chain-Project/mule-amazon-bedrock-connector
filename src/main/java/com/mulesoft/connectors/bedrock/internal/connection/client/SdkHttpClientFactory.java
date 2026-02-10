@@ -1,5 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.connection.client;
 
+import com.mulesoft.connectors.bedrock.api.parameter.ProxyParameterGroup;
+import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -11,8 +13,6 @@ import java.security.cert.CertificateException;
 import java.time.Duration;
 import javax.net.ssl.TrustManagerFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
-import com.mulesoft.connectors.bedrock.api.parameter.ProxyParameterGroup;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,12 +1,12 @@
 package com.mulesoft.connectors.bedrock.internal.connection;
 
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
+import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongFunction;
 import java.util.function.Supplier;
 import org.mule.connectors.commons.template.connection.ConnectorConnection;
-import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
-import com.mulesoft.connectors.bedrock.internal.error.ErrorHandler;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;

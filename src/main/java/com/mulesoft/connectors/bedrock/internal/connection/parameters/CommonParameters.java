@@ -1,7 +1,6 @@
 package com.mulesoft.connectors.bedrock.internal.connection.parameters;
 
 import java.util.concurrent.TimeUnit;
-
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.mule.runtime.extension.api.annotation.Expression;

@@ -5,14 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockImageParameters;
 import java.io.File;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockImageParameters;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;

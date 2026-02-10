@@ -1,11 +1,11 @@
 package com.mulesoft.connectors.bedrock.internal.connection.credentials;
 
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import org.mule.runtime.extension.api.exception.ModuleException;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;

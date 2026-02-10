@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrock.BedrockClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;

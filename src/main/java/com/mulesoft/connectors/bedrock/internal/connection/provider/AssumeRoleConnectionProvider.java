@@ -1,7 +1,7 @@
 package com.mulesoft.connectors.bedrock.internal.connection.provider;
 
-import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
 import com.mulesoft.connectors.bedrock.internal.error.exception.AWSConnectionException;
 import com.mulesoft.connectors.bedrock.internal.util.RegionUtils;
 import org.mule.runtime.api.connection.ConnectionException;

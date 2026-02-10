@@ -1,13 +1,13 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
-import java.io.InputStream;
-import org.mule.connectors.commons.template.service.ConnectorService;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
 import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
+import java.io.InputStream;
+import org.mule.connectors.commons.template.service.ConnectorService;
 
 public interface AgentService extends ConnectorService {
 

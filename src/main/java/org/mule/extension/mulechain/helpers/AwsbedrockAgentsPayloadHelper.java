@@ -1095,7 +1095,7 @@ public class AwsbedrockAgentsPayloadHelper {
         }
         if (drained > 0) {
           streamingLogger.debug("Drained {} queued events after client disconnect - agentId: {}, sessionId: {}, requestId: {}",
-                               drained, agentId, sessionId, requestId);
+                                drained, agentId, sessionId, requestId);
         }
       } finally {
         try {
@@ -1296,13 +1296,14 @@ public class AwsbedrockAgentsPayloadHelper {
             streamingLogger.debug("Writer thread cleanup timeout - agentId: {}, sessionId: {}, requestId: {}",
                                   agentId, sessionId, requestId);
           }
-          performanceLogger.debug("Early exit due to client disconnect - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
-                                 agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
+          performanceLogger
+              .debug("Early exit due to client disconnect - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
+                     agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
           // Don't wait for Bedrock invocation - let it complete in background
           // This releases the thread immediately for other requests
           return;
         }
-        
+
         // Wait with short timeout before checking again (500ms polling interval)
         try {
           invocationFuture.get(500, TimeUnit.MILLISECONDS);
@@ -1311,7 +1312,7 @@ public class AwsbedrockAgentsPayloadHelper {
           // Expected - continue polling
         }
       }
-      
+
       performanceLogger.debug("Bedrock API invocation completed - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
                               agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
       writerFuture.get(); // Wait for writer to finish draining the queue

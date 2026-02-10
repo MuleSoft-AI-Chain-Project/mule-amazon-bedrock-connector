@@ -5,12 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParamsModelDetails;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import software.amazon.awssdk.services.bedrock.model.FoundationModelDetails;
 import software.amazon.awssdk.services.bedrock.model.FoundationModelLifecycle;
 import software.amazon.awssdk.services.bedrock.model.FoundationModelSummary;

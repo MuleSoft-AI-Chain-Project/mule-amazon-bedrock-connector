@@ -1,10 +1,9 @@
 package com.mulesoft.connectors.bedrock.internal.connection.provider;
 
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import com.mulesoft.connectors.bedrock.internal.connection.credentials.AssumeRoleCredentialsProvider;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
+import java.util.concurrent.atomic.AtomicReference;
+import org.mule.connectors.commons.template.connection.ConnectorConnection;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;

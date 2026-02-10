@@ -1,5 +1,10 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
+import com.mulesoft.connectors.bedrock.internal.metadata.provider.ModelProvider;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockImageParameters;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -10,12 +15,7 @@ import java.util.function.Function;
 import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockImageParameters;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.error.BedrockErrorType;
 import org.mule.runtime.extension.api.exception.ModuleException;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
-import com.mulesoft.connectors.bedrock.internal.metadata.provider.ModelProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.SdkBytes;

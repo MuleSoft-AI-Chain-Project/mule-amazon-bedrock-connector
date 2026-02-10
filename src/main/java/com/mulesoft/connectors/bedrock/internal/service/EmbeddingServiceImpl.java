@@ -1,5 +1,9 @@
 package com.mulesoft.connectors.bedrock.internal.service;
 
+import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
+import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbedding;
+import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbeddingDocument;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -14,10 +18,6 @@ import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbedding;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParametersEmbeddingDocument;
-import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
-import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;

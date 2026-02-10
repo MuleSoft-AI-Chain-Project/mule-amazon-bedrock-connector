@@ -3,10 +3,10 @@ package com.mulesoft.connectors.bedrock.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 @DisplayName("BedrockServiceImpl")
 class BedrockServiceImplTest {

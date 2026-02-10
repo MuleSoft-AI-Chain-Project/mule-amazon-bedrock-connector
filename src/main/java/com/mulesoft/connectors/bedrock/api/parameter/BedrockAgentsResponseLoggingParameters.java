@@ -1,13 +1,12 @@
 package com.mulesoft.connectors.bedrock.api.parameter;
 
+import java.util.Objects;
 import org.mule.runtime.api.meta.ExpressionSupport;
 import org.mule.runtime.extension.api.annotation.Expression;
 import org.mule.runtime.extension.api.annotation.param.Optional;
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.runtime.extension.api.annotation.param.display.Placement;
 import org.mule.runtime.extension.api.annotation.param.display.Summary;
-
-import java.util.Objects;
 
 /**
  * Parameter group for response logging fields. This group appears as a "Response Logging" section within the "Response" tab in

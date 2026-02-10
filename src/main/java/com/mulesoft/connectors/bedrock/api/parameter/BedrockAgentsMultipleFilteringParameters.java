@@ -3,7 +3,6 @@ package com.mulesoft.connectors.bedrock.api.parameter;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.mule.runtime.extension.api.annotation.param.Parameter;
 import org.mule.sdk.api.annotation.param.NullSafe;
 import org.mule.sdk.api.annotation.param.Optional;
