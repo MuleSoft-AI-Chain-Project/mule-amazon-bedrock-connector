@@ -1,0 +1,40 @@
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ms-bedrock="http://www.mulesoft.org/schema/mule/ms-bedrock"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+  http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+  http://www.mulesoft.org/schema/mule/ms-bedrock http://www.mulesoft.org/schema/mule/ms-bedrock/current/mule-ms-bedrock.xsd
+  http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+  http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="AgentOperations-test.xml" />
+    <configuration-properties file="automation-credentials.properties" />
+
+    <munit:test name="agent-chat-success">
+        <munit:execution>
+            <ms-bedrock:agent-chat config-ref="config-role"
+                                   agentId="${config.agentId}"
+                                   agentAliasId="${config.agentAliasId}"
+                                   prompt="what is the capital of delhi?"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="agent-chat-sse-success">
+        <munit:execution>
+            <ms-bedrock:agent-chat-streaming-sse config-ref="config-role"
+                                                 agentId="${config.agentId}"
+                                                 agentAliasId="${config.agentAliasId}"
+                                   prompt="what is the capital of delhi?"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+</mule>
