@@ -329,8 +329,9 @@ public class StreamingRetryUtility {
         // Reset chunksReceived for each attempt (except first)
         if (attempt > 0) {
           chunksReceived.set(false);
-          logger.debug("Retry attempt {} starting - agentId: {}, sessionId: {}, requestId: {}, attemptNumber: {}, totalAttempts: {}",
-                       attemptsMade, agentId, sessionId, requestId, attempt, config.getMaxRetries() + 1);
+          logger
+              .debug("Retry attempt {} starting - agentId: {}, sessionId: {}, requestId: {}, attemptNumber: {}, totalAttempts: {}",
+                     attemptsMade, agentId, sessionId, requestId, attempt, config.getMaxRetries() + 1);
         } else {
           logger.debug("Initial attempt starting - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
         }
@@ -340,8 +341,9 @@ public class StreamingRetryUtility {
 
         // Success - exit retry loop
         long attemptDuration = System.currentTimeMillis() - attemptStartTime;
-        logger.debug("Operation succeeded on attempt {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
-                     attemptsMade, agentId, sessionId, requestId, attemptDuration, System.currentTimeMillis() - retryStartTime);
+        logger
+            .debug("Operation succeeded on attempt {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
+                   attemptsMade, agentId, sessionId, requestId, attemptDuration, System.currentTimeMillis() - retryStartTime);
         return new RetryResult(true, null, attemptsMade, chunksReceived.get());
 
       } catch (Exception e) {
@@ -364,15 +366,18 @@ public class StreamingRetryUtility {
             reason = "max retries (" + config.getMaxRetries() + ") exceeded";
           }
 
-          logger.warn("Cannot retry streaming operation (attempt {}): {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
-                      attemptsMade, reason, agentId, sessionId, requestId, attemptDuration, System.currentTimeMillis() - retryStartTime);
+          logger
+              .warn("Cannot retry streaming operation (attempt {}): {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
+                    attemptsMade, reason, agentId, sessionId, requestId, attemptDuration,
+                    System.currentTimeMillis() - retryStartTime);
           return new RetryResult(false, e, attemptsMade, chunksWereReceived);
         }
 
         // Calculate exponential backoff
         long backoffMs = calculateExponentialBackoff(attempt, config.getBaseBackoffMs());
-        logger.warn("Retryable error on attempt {}: {}. Retrying in {}ms - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}",
-                    attemptsMade, e.getMessage(), backoffMs, agentId, sessionId, requestId, attemptDuration);
+        logger
+            .warn("Retryable error on attempt {}: {}. Retrying in {}ms - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}",
+                  attemptsMade, e.getMessage(), backoffMs, agentId, sessionId, requestId, attemptDuration);
         logger.debug("Waiting {}ms before retry attempt {} - agentId: {}, sessionId: {}, requestId: {}",
                      backoffMs, attemptsMade + 1, agentId, sessionId, requestId);
 

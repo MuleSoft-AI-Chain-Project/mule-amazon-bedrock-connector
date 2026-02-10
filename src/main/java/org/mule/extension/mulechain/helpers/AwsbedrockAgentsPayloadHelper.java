@@ -867,9 +867,10 @@ public class AwsbedrockAgentsPayloadHelper {
                                                  StreamingRetryUtility.RetryConfig retryConfig,
                                                  String requestId, String correlationId, String userId) {
     long requestStartTime = System.currentTimeMillis();
-    streamingLogger.debug("SSE streaming request received - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, correlationId: {}, promptLength: {}",
-                          agentId, agentAlias, sessionId, requestId, correlationId, prompt != null ? prompt.length() : 0);
-    
+    streamingLogger
+        .debug("SSE streaming request received - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, correlationId: {}, promptLength: {}",
+               agentId, agentAlias, sessionId, requestId, correlationId, prompt != null ? prompt.length() : 0);
+
     try {
       // Create piped streams for real-time streaming
       // Use a larger buffer (64KB) to reduce blocking when clients consume slowly
@@ -884,22 +885,26 @@ public class AwsbedrockAgentsPayloadHelper {
 
       // Start the streaming process asynchronously
       CompletableFuture.runAsync(() -> {
-        streamingLogger.debug("Starting async streaming operation - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
+        streamingLogger.debug("Starting async streaming operation - agentId: {}, sessionId: {}, requestId: {}", agentId,
+                              sessionId, requestId);
         try {
           streamBedrockResponseWithRetry(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
                                          excludePreviousThinkingSteps, previousConversationTurnsToInclude,
                                          knowledgeBaseConfigs, bedrockAgentRuntimeAsyncClient, outputStream,
                                          retryConfig, chunksReceived, sessionStartSent, requestId, correlationId, userId);
-          performanceLogger.debug("Async streaming operation completed successfully - agentId: {}, sessionId: {}, requestId: {}, totalElapsedMs: {}",
-                                  agentId, sessionId, requestId, System.currentTimeMillis() - requestStartTime);
+          performanceLogger
+              .debug("Async streaming operation completed successfully - agentId: {}, sessionId: {}, requestId: {}, totalElapsedMs: {}",
+                     agentId, sessionId, requestId, System.currentTimeMillis() - requestStartTime);
         } catch (Exception e) {
-          streamingLogger.debug("Async streaming operation failed - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
-                                agentId, sessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
+          streamingLogger
+              .debug("Async streaming operation failed - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
+                     agentId, sessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
           try {
             // Send session-start event before error if not already sent (for consistency)
             if (sessionStartSent.compareAndSet(false, true)) {
               JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString(),
-                                                             requestId, correlationId, userId);
+                                                             requestId, correlationId, userId, -1); // -1 indicates no chunks
+                                                                                                    // received
               String sseStart = formatSSEEvent("session-start", startEvent.toString());
               outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
               outputStream.flush();
@@ -918,20 +923,23 @@ public class AwsbedrockAgentsPayloadHelper {
           } catch (IOException ioException) {
             // Client disconnected - this is expected behavior, not an error
             // Use debug level since "Pipe closed" is normal when clients disconnect early
-            streamingLogger.debug("Client disconnected while writing error event - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}",
-                                  agentId, sessionId, requestId, correlationId, ioException.getMessage());
+            streamingLogger
+                .debug("Client disconnected while writing error event - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}",
+                       agentId, sessionId, requestId, correlationId, ioException.getMessage());
           }
         }
       });
 
-      streamingLogger.debug("SSE streaming request initialized, returning InputStream - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
-                            agentId, sessionId, requestId, System.currentTimeMillis() - requestStartTime);
+      streamingLogger
+          .debug("SSE streaming request initialized, returning InputStream - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
+                 agentId, sessionId, requestId, System.currentTimeMillis() - requestStartTime);
       return inputStream;
 
     } catch (IOException e) {
       // Return error as immediate SSE event
-      streamingLogger.debug("Failed to initialize SSE streaming - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
-                            agentId, sessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
+      streamingLogger
+          .debug("Failed to initialize SSE streaming - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
+                 agentId, sessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
       String errorEvent = formatSSEEvent("error", createErrorJson(e).toString());
       logger.error(errorEvent);
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
@@ -954,8 +962,9 @@ public class AwsbedrockAgentsPayloadHelper {
                                                      String requestId, String correlationId, String userId)
       throws ExecutionException, InterruptedException, IOException {
     long retryStartTime = System.currentTimeMillis();
-    streamingLogger.debug("Starting Bedrock streaming with retry - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, retryEnabled: {}, maxRetries: {}",
-                          agentId, agentAlias, sessionId, requestId, retryConfig.isEnabled(), retryConfig.getMaxRetries());
+    streamingLogger
+        .debug("Starting Bedrock streaming with retry - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, retryEnabled: {}, maxRetries: {}",
+               agentId, agentAlias, sessionId, requestId, retryConfig.isEnabled(), retryConfig.getMaxRetries());
 
     StreamingRetryUtility.StreamingOperation operation = () -> {
       streamBedrockResponse(agentAlias, agentId, prompt, enableTrace, latencyOptimized, sessionId,
@@ -965,10 +974,13 @@ public class AwsbedrockAgentsPayloadHelper {
     };
 
     StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
-                                                                                      operation, retryConfig, chunksReceived, agentId, sessionId, requestId);
-    
-    performanceLogger.debug("Bedrock streaming retry completed - agentId: {}, sessionId: {}, requestId: {}, success: {}, attemptsMade: {}, elapsedMs: {}",
-                           agentId, sessionId, requestId, result.isSuccess(), result.getAttemptsMade(), System.currentTimeMillis() - retryStartTime);
+                                                                                      operation, retryConfig, chunksReceived,
+                                                                                      agentId, sessionId, requestId);
+
+    performanceLogger
+        .debug("Bedrock streaming operation completed - agentId: {}, sessionId: {}, requestId: {}, success: {}, attemptsMade: {}, elapsedMs: {}",
+               agentId, sessionId, requestId, result.isSuccess(), result.getAttemptsMade(),
+               System.currentTimeMillis() - retryStartTime);
 
     if (!result.isSuccess()) {
       // Create enhanced error message with retry information
@@ -1015,8 +1027,9 @@ public class AwsbedrockAgentsPayloadHelper {
                                             String requestId, String correlationId, String userId)
       throws ExecutionException, InterruptedException, IOException {
     long startTime = System.currentTimeMillis();
-    streamingLogger.debug("Building Bedrock streaming request - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, enableTrace: {}, latencyOptimized: {}",
-                          agentId, agentAlias, sessionId, requestId, enableTrace, latencyOptimized);
+    streamingLogger
+        .debug("Building Bedrock streaming request - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, enableTrace: {}, latencyOptimized: {}",
+               agentId, agentAlias, sessionId, requestId, enableTrace, latencyOptimized);
 
     // Use a queue to decouple Netty event loop from blocking pipe writes
     // CRITICAL: The onChunk/onComplete callbacks run on Netty's event loop thread.
@@ -1025,7 +1038,7 @@ public class AwsbedrockAgentsPayloadHelper {
     // This queue allows the Netty callbacks to return immediately while a separate thread
     // handles the potentially-blocking writes to the pipe.
     BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
-    
+
     // Track chunk timing and count
     AtomicInteger chunkCount = new AtomicInteger(0);
     AtomicLong lastChunkTime = new AtomicLong(startTime);
@@ -1040,29 +1053,38 @@ public class AwsbedrockAgentsPayloadHelper {
           int queueSizeBefore = writeQueue.size();
           String event = writeQueue.take(); // Blocks until an event is available
           int queueSizeAfter = writeQueue.size();
-          
-          streamingLogger.debug("Writer thread consumed event from queue - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
-          
+
+          // Only log if queue size indicates concerning backpressure (queueSizeBefore > 25)
+          if (queueSizeBefore > 25) {
+            streamingLogger
+                .debug("Writer thread consumed event from queue - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                       agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+          }
+
           if (END_OF_STREAM_SENTINEL.equals(event)) {
-            streamingLogger.debug("Writer thread received end-of-stream signal - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
+            streamingLogger.debug("Writer thread received end-of-stream signal - agentId: {}, sessionId: {}, requestId: {}",
+                                  agentId, sessionId, requestId);
             break; // End of stream
           }
           outputStream.write(event.getBytes(StandardCharsets.UTF_8));
           outputStream.flush();
         }
-        streamingLogger.debug("Writer thread completed normally - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
+        streamingLogger.debug("Writer thread completed normally - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId,
+                              requestId);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        streamingLogger.debug("Writer thread interrupted - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
+        streamingLogger.debug("Writer thread interrupted - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId,
+                              requestId);
       } catch (IOException e) {
         // Client disconnected - this is expected behavior
-        streamingLogger.debug("Client disconnected during streaming - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}",
-                              agentId, sessionId, requestId, correlationId, e.getMessage());
+        streamingLogger
+            .debug("Client disconnected during streaming - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, error: {}",
+                   agentId, sessionId, requestId, correlationId, e.getMessage());
       } finally {
         try {
           outputStream.close();
-          streamingLogger.debug("Writer thread closed output stream - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
+          streamingLogger.debug("Writer thread closed output stream - agentId: {}, sessionId: {}, requestId: {}", agentId,
+                                sessionId, requestId);
         } catch (IOException e) {
           streamingLogger.debug("Could not close output stream: {}", e.getMessage());
         }
@@ -1080,9 +1102,10 @@ public class AwsbedrockAgentsPayloadHelper {
         .bedrockModelConfigurations(buildModelConfigurations(latencyOptimized))
         .promptCreationConfigurations(buildPromptConfigurations(excludePreviousThinkingSteps, previousConversationTurnsToInclude))
         .build();
-    
-    streamingLogger.debug("Bedrock streaming request built, invoking Bedrock API - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}",
-                          agentId, agentAlias, sessionId, requestId);
+
+    streamingLogger
+        .debug("Bedrock streaming request built, invoking Bedrock API - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}",
+               agentId, agentAlias, sessionId, requestId);
 
     InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
         .onChunk(chunk -> {
@@ -1092,7 +1115,7 @@ public class AwsbedrockAgentsPayloadHelper {
             // Mark that chunks have been received (for retry logic)
             boolean isFirstChunk = !chunksReceived.get();
             chunksReceived.set(true);
-            
+
             // Track chunk timing
             long currentTime = System.currentTimeMillis();
             int currentChunkCount = chunkCount.incrementAndGet();
@@ -1102,19 +1125,24 @@ public class AwsbedrockAgentsPayloadHelper {
             if (sessionStartSent.compareAndSet(false, true)) {
               long firstChunkTime = currentTime - startTime;
               timeToFirstChunk.set(firstChunkTime); // Store for completion summary
-              performanceLogger.debug("First chunk received, sending session-start event - agentId: {}, sessionId: {}, requestId: {}, timeToFirstChunkMs: {}",
-                                      agentId, sessionId, requestId, firstChunkTime);
+              performanceLogger
+                  .debug("First chunk received, sending session-start event - agentId: {}, sessionId: {}, requestId: {}, timeToFirstChunkMs: {}",
+                         agentId, sessionId, requestId, firstChunkTime);
               JSONObject startEvent = createSessionStartJson(agentAlias, agentId, prompt, sessionId, Instant.now().toString(),
-                                                             requestId, correlationId, userId);
+                                                             requestId, correlationId, userId, firstChunkTime);
               String sseStart = formatSSEEvent("session-start", startEvent.toString());
               int queueSizeBefore = writeQueue.size();
               boolean queued = writeQueue.offer(sseStart); // Non-blocking add to queue
               int queueSizeAfter = writeQueue.size();
-              streamingLogger.debug("Queued session-start event - agentId: {}, sessionId: {}, requestId: {}, queued: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                    agentId, sessionId, requestId, queued, queueSizeBefore, queueSizeAfter);
+              // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+              if (queueSizeAfter > 25) {
+                streamingLogger
+                    .debug("Queued session-start event - agentId: {}, sessionId: {}, requestId: {}, queued: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                           agentId, sessionId, requestId, queued, queueSizeBefore, queueSizeAfter);
+              }
               logger.info(sseStart);
             }
-            
+
             if (isFirstChunk) {
               // Use the stored timeToFirstChunk value for consistency (measured when chunk first arrived)
               long storedTimeToFirstChunk = timeToFirstChunk.get() >= 0 ? timeToFirstChunk.get() : (currentTime - startTime);
@@ -1122,25 +1150,38 @@ public class AwsbedrockAgentsPayloadHelper {
                                       agentId, sessionId, requestId, storedTimeToFirstChunk);
             } else if (timeSinceLastChunk > 1000) {
               // Log if gap between chunks is > 1 second (might indicate slow streaming)
-              performanceLogger.debug("Chunk timing - agentId: {}, sessionId: {}, requestId: {}, chunkNumber: {}, timeSinceLastChunkMs: {}",
-                                      agentId, sessionId, requestId, currentChunkCount, timeSinceLastChunk);
+              performanceLogger
+                  .debug("Chunk timing - agentId: {}, sessionId: {}, requestId: {}, chunkNumber: {}, timeSinceLastChunkMs: {}",
+                         agentId, sessionId, requestId, currentChunkCount, timeSinceLastChunk);
             }
 
             JSONObject chunkData = createChunkJson(chunk);
             String sseEvent = formatSSEEvent("chunk", chunkData.toString());
+
+            // Log the formatted SSE chunk event at DEBUG level
+            logger.debug(sseEvent);
+
             int queueSizeBefore = writeQueue.size();
             boolean queued = writeQueue.offer(sseEvent); // Non-blocking add to queue
             int queueSizeAfter = writeQueue.size();
-            streamingLogger.debug("Queued chunk event - agentId: {}, sessionId: {}, requestId: {}, queued: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                  agentId, sessionId, requestId, queued, queueSizeBefore, queueSizeAfter);
+            // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+            if (queueSizeAfter > 25) {
+              streamingLogger
+                  .debug("Queued chunk event - agentId: {}, sessionId: {}, requestId: {}, queued: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                         agentId, sessionId, requestId, queued, queueSizeBefore, queueSizeAfter);
+            }
           } catch (Exception e) {
             // Log but don't block - queue an error event
             String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
             int queueSizeBefore = writeQueue.size();
             writeQueue.offer(errorEvent);
             int queueSizeAfter = writeQueue.size();
-            streamingLogger.debug("Queued chunk-error event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                  agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+            if (queueSizeAfter > 25) {
+              streamingLogger
+                  .debug("Queued chunk-error event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                         agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            }
             logger.error("Error processing chunk: {}", e.getMessage());
           }
         })
@@ -1157,16 +1198,23 @@ public class AwsbedrockAgentsPayloadHelper {
             long totalDuration = endTime - startTime;
             int finalChunkCount = chunkCount.get();
             long timeToFirstChunkMs = timeToFirstChunk.get();
-            performanceLogger.debug("Bedrock streaming completed - agentId: {}, sessionId: {}, requestId: {}, totalDurationMs: {}, timeToFirstChunkMs: {}, totalChunks: {}, chunksReceived: {}",
-                                     agentId, sessionId, requestId, totalDuration, timeToFirstChunkMs >= 0 ? timeToFirstChunkMs : -1, finalChunkCount, chunksReceived.get());
+            performanceLogger
+                .debug("Bedrock streaming completed - agentId: {}, sessionId: {}, requestId: {}, totalDurationMs: {}, timeToFirstChunkMs: {}, totalChunks: {}, chunksReceived: {}",
+                       agentId, sessionId, requestId, totalDuration, timeToFirstChunkMs >= 0 ? timeToFirstChunkMs : -1,
+                       finalChunkCount, chunksReceived.get());
             JSONObject completionData =
-                createCompletionJson(sessionId, agentId, agentAlias, totalDuration, requestId, correlationId, userId);
+                createCompletionJson(sessionId, agentId, agentAlias, totalDuration, requestId, correlationId, userId,
+                                     timeToFirstChunkMs >= 0 ? timeToFirstChunkMs : -1, finalChunkCount);
             String completionEvent = formatSSEEvent("session-complete", completionData.toString());
             int queueSizeBefore = writeQueue.size();
             writeQueue.offer(completionEvent); // Non-blocking add to queue
             int queueSizeAfter = writeQueue.size();
-            streamingLogger.debug("Queued completion event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                  agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+            if (queueSizeAfter > 25) {
+              streamingLogger
+                  .debug("Queued completion event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                         agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            }
             logger.info(completionEvent);
           } catch (Exception e) {
             streamingLogger.debug("Error creating completion event - agentId: {}, sessionId: {}, requestId: {}, error: {}",
@@ -1175,16 +1223,24 @@ public class AwsbedrockAgentsPayloadHelper {
             int queueSizeBefore = writeQueue.size();
             writeQueue.offer(errorEvent);
             int queueSizeAfter = writeQueue.size();
-            streamingLogger.debug("Queued completion-error event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                  agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+            if (queueSizeAfter > 25) {
+              streamingLogger
+                  .debug("Queued completion-error event - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                         agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            }
             logger.error("Error creating completion event: {}", e.getMessage());
           } finally {
             // Signal end of stream to the writer thread
             int queueSizeBefore = writeQueue.size();
             writeQueue.offer(END_OF_STREAM_SENTINEL);
             int queueSizeAfter = writeQueue.size();
-            streamingLogger.debug("Queued end-of-stream signal - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                                  agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            // Only log if queue size indicates concerning backpressure (queueSizeAfter > 25)
+            if (queueSizeAfter > 25) {
+              streamingLogger
+                  .debug("Queued end-of-stream signal - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                         agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+            }
           }
         })
         .build();
@@ -1197,20 +1253,24 @@ public class AwsbedrockAgentsPayloadHelper {
     try {
       invocationFuture.get(); // Wait for Bedrock to finish
       performanceLogger.debug("Bedrock API invocation completed - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
-                               agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
-      writerFuture.get(); // Wait for writer to finish draining the queue
-      performanceLogger.debug("Writer thread finished, streaming complete - agentId: {}, sessionId: {}, requestId: {}, totalElapsedMs: {}",
                               agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
+      writerFuture.get(); // Wait for writer to finish draining the queue
+      performanceLogger
+          .debug("Writer thread finished, streaming complete - agentId: {}, sessionId: {}, requestId: {}, totalElapsedMs: {}",
+                 agentId, sessionId, requestId, System.currentTimeMillis() - startTime);
     } catch (Exception e) {
       // Log Bedrock SDK errors
-      streamingLogger.debug("Bedrock SDK error - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, errorType: {}, error: {}, elapsedMs: {}",
-                            agentId, sessionId, requestId, correlationId, e.getClass().getSimpleName(), e.getMessage(), System.currentTimeMillis() - startTime);
+      streamingLogger
+          .debug("Bedrock SDK error - agentId: {}, sessionId: {}, requestId: {}, correlationId: {}, errorType: {}, error: {}, elapsedMs: {}",
+                 agentId, sessionId, requestId, correlationId, e.getClass().getSimpleName(), e.getMessage(),
+                 System.currentTimeMillis() - startTime);
       // Signal end of stream in case of error
       int queueSizeBefore = writeQueue.size();
       writeQueue.offer(END_OF_STREAM_SENTINEL);
       int queueSizeAfter = writeQueue.size();
-      streamingLogger.debug("Queued end-of-stream signal due to error - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
-                            agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
+      streamingLogger
+          .debug("Queued end-of-stream signal due to error - agentId: {}, sessionId: {}, requestId: {}, queueSizeBefore: {}, queueSizeAfter: {}",
+                 agentId, sessionId, requestId, queueSizeBefore, queueSizeAfter);
       writerFuture.get(); // Still wait for writer to finish
       throw e;
     }
@@ -1236,7 +1296,7 @@ public class AwsbedrockAgentsPayloadHelper {
 
   private static JSONObject createSessionStartJson(String agentAlias, String agentId, String prompt,
                                                    String sessionId, String timestamp, String requestId, String correlationId,
-                                                   String userId) {
+                                                   String userId, long timeToFirstChunkMs) {
     JSONObject startData = new JSONObject();
     startData.put(SESSION_ID, sessionId);
     startData.put(AGENT_ID, agentId);
@@ -1244,6 +1304,7 @@ public class AwsbedrockAgentsPayloadHelper {
     startData.put(PROMPT, prompt);
     startData.put(PROCESSED_AT, timestamp);
     startData.put("status", "started");
+    startData.put("timeToFirstChunkMs", timeToFirstChunkMs);
     if (requestId != null && !requestId.isEmpty()) {
       startData.put("requestId", requestId);
     }
@@ -1257,13 +1318,16 @@ public class AwsbedrockAgentsPayloadHelper {
   }
 
   private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration,
-                                                 String requestId, String correlationId, String userId) {
+                                                 String requestId, String correlationId, String userId,
+                                                 long timeToFirstChunkMs, int totalChunks) {
     JSONObject completionData = new JSONObject();
     completionData.put(SESSION_ID, sessionId);
     completionData.put(AGENT_ID, agentId);
     completionData.put(AGENT_ALIAS, agentAlias);
     completionData.put("status", "completed");
     completionData.put("total_duration_ms", duration);
+    completionData.put("timeToFirstChunkMs", timeToFirstChunkMs);
+    completionData.put("totalChunks", totalChunks);
     completionData.put(TIMESTAMP, Instant.now().toString());
     if (requestId != null && !requestId.isEmpty()) {
       completionData.put("requestId", requestId);
