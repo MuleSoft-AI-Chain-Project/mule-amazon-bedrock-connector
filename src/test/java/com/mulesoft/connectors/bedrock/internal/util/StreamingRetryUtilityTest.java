@@ -249,7 +249,9 @@ class StreamingRetryUtilityTest {
       StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
                                                                                         () -> chunks.set(true),
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isTrue();
       assertThat(result.getAttemptsMade()).isEqualTo(1);
     }
@@ -265,7 +267,9 @@ class StreamingRetryUtilityTest {
                                                                                           throw new RuntimeException("fail");
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isFalse();
       assertThat(result.getLastException()).hasMessage("fail");
     }
@@ -281,7 +285,9 @@ class StreamingRetryUtilityTest {
                                                                                           throw new TimeoutException("timeout");
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isFalse();
       assertThat(result.isChunksReceived()).isTrue();
     }
@@ -297,7 +303,9 @@ class StreamingRetryUtilityTest {
                                                                                           throw new RuntimeException("bad request");
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isFalse();
     }
 
@@ -315,7 +323,9 @@ class StreamingRetryUtilityTest {
                                                                                           }
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isTrue();
       assertThat(result.getAttemptsMade()).isEqualTo(2);
     }
@@ -415,7 +425,9 @@ class StreamingRetryUtilityTest {
                                                                                             throw new TimeoutException("timeout");
                                                                                           },
                                                                                           config,
-                                                                                          chunks);
+                                                                                          chunks,
+                                                                                          "testAgent", "testSession",
+                                                                                          "testRequest");
         if (result.getLastException() != null
             && result.getLastException().getCause() instanceof InterruptedException) {
           interruptedResult.set(true);
@@ -500,7 +512,9 @@ class StreamingRetryUtilityTest {
                                                                                           throw retryable;
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isFalse();
       assertThat(result.getAttemptsMade()).isEqualTo(3); // 1 + 2 retries
     }
@@ -522,7 +536,9 @@ class StreamingRetryUtilityTest {
                                                                                           chunks.set(true);
                                                                                         },
                                                                                         config,
-                                                                                        chunks);
+                                                                                        chunks,
+                                                                                        "testAgent", "testSession",
+                                                                                        "testRequest");
       assertThat(result.isSuccess()).isTrue();
       assertThat(result.isChunksReceived()).isTrue();
     }
