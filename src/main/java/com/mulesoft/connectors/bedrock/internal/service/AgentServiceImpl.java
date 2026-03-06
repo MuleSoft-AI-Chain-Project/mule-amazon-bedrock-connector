@@ -778,7 +778,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       logger.debug("Starting writer thread - agentId: {}, sessionId: {}, requestId: {}", agentId, effectiveSessionId, requestId);
       CompletableFuture<Void> writerFuture = CompletableFuture.runAsync(() -> {
         logger.debug("Writer thread STARTED and waiting for events - agentId: {}, sessionId: {}, requestId: {}", agentId,
-                    effectiveSessionId, requestId);
+                     effectiveSessionId, requestId);
         try {
           while (true) {
             int queueSizeBefore = writeQueue.size();
