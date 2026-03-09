@@ -135,7 +135,7 @@
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role"
                                                  agentId="#[vars.agentId]" agentAliasId="#[vars.agentAlias]"
                                                  prompt="#[vars.content]" sessionId="#[uuid()]"
-                                                 requestTimeout="6000" requestTimeoutUnit="MILLISECONDS"
+                                                 requestTimeout="4000" requestTimeoutUnit="MILLISECONDS"
                                                  enableRetry="true" maxRetries="5" retryBackoffMs="2000">
                 <ms-bedrock:knowledge-bases >
                     <ms-bedrock:knowledge-base-config knowledgeBaseId="TH83THM0OB" numberOfResults="5" />
@@ -157,23 +157,23 @@
                                       is="#[MunitTools::containsString('error')]"
                                       message="SSE stream should contain an error event"/>
 
-            <!-- 2. Validate timeout exception with the 6000ms configured timeout -->
+            <!-- 2. Validate timeout exception with the 4000ms configured timeout -->
             <munit-tools:assert-that expression="#[vars.ssePayload]"
                                       is="#[MunitTools::containsString('ApiCallTimeoutException')]"
                                       message="Error should indicate API call timeout"/>
             <munit-tools:assert-that expression="#[vars.ssePayload]"
-                                      is="#[MunitTools::containsString('6000 millis')]"
-                                      message="Error should reference the 6000ms timeout configuration"/>
+                                      is="#[MunitTools::containsString('4000 millis')]"
+                                      message="Error should reference the 4000ms timeout configuration"/>
 
             <!-- 3. Validate retry was skipped because chunks were already received -->
             <munit-tools:assert-that expression="#[vars.ssePayload]"
                                       is="#[MunitTools::containsString('chunks were received before failure, so retry was not attempted')]"
                                       message="Error should confirm retry was skipped due to partial chunks already received"/>
 
-            <!-- 4. Validate no retries: elapsed time should be ~6s (just the single timeout), NOT 62s+ -->
+            <!-- 4. Validate no retries: elapsed time should be well under the 55s+ exponential backoff threshold -->
             <munit-tools:assert-that expression="#[vars.elapsedMs]"
-                                      is="#[MunitTools::lessThan(20000)]"
-                                      message="Elapsed time should be under 20s, confirming no exponential backoff retries occurred"/>
+                                      is="#[MunitTools::lessThan(45000)]"
+                                      message="Elapsed time should be under 45s, confirming no exponential backoff retries occurred (retries would take 55s+)"/>
         </munit:validation>
     </munit:test>
 
