@@ -71,4 +71,110 @@
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
         </munit:validation>
     </munit:test>
+
+    <munit:test name="agent-chat-sse-with-multiple-kb-retry">
+        <munit:behavior>
+            <set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
+            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <!-- Record start time to validate exponential backoff duration -->
+            <set-variable variableName="startTimeMs" value="#[now() as Number {unit: 'milliseconds'}]"/>
+        </munit:behavior>
+        <munit:execution>
+            <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role"
+                                                 agentId="#[vars.agentId]" agentAliasId="#[vars.agentAlias]"
+                                                 prompt="#[vars.content]" sessionId="#[uuid()]"
+                                                 requestTimeout="100" requestTimeoutUnit="MILLISECONDS"
+                                                 enableRetry="true" maxRetries="5" retryBackoffMs="2000">
+                <ms-bedrock:knowledge-bases >
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TH83THM0OB" numberOfResults="5" />
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TGJ2IEDX2Q" numberOfResults="5" />
+                </ms-bedrock:knowledge-bases>
+            </ms-bedrock:agent-chat-streaming-sse>
+        </munit:execution>
+        <munit:validation>
+            <!-- Read the SSE payload once and serialize to JSON string -->
+            <set-variable variableName="ssePayload" value="#[output application/java --- write(payload, 'application/json')]"/>
+            <!-- Compute elapsed time for exponential backoff validation -->
+            <set-variable variableName="elapsedMs" value="#[now() as Number {unit: 'milliseconds'} - vars.startTimeMs]"/>
+
+            <!-- 1. Validate SSE error event is present -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::notNullValue()]"
+                                      message="SSE payload should not be null"/>
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('error')]"
+                                      message="SSE stream should contain an error event after retries exhausted"/>
+
+            <!-- 2. Validate timeout exception type -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('ApiCallTimeoutException')]"
+                                      message="Error should indicate API call timeout"/>
+
+            <!-- 3. Validate retry count: 6 attempts = 1 initial + 5 retries (maxRetries=5) -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('failed after 6 attempt(s) out of 6 total connector attempts')]"
+                                      message="Error should confirm all 6 attempts (1 initial + 5 retries) were made"/>
+
+            <!-- 4. Validate exponential backoff: total backoff = 2s+4s+8s+16s+32s = 62s minimum -->
+            <munit-tools:assert-that expression="#[vars.elapsedMs]"
+                                      is="#[MunitTools::greaterThanOrEqualTo(55000)]"
+                                      message="Elapsed time should be >= 55s, confirming exponential backoff (2s+4s+8s+16s+32s = 62s)"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="agent-chat-sse-with-no-retry-with-partial-chunks">
+        <munit:behavior>
+            <set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
+            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <!-- Record start time to validate no-retry completes quickly -->
+            <set-variable variableName="startTimeMs" value="#[now() as Number {unit: 'milliseconds'}]"/>
+        </munit:behavior>
+        <munit:execution>
+            <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role"
+                                                 agentId="#[vars.agentId]" agentAliasId="#[vars.agentAlias]"
+                                                 prompt="#[vars.content]" sessionId="#[uuid()]"
+                                                 requestTimeout="6000" requestTimeoutUnit="MILLISECONDS"
+                                                 enableRetry="true" maxRetries="5" retryBackoffMs="2000">
+                <ms-bedrock:knowledge-bases >
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TH83THM0OB" numberOfResults="5" />
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TGJ2IEDX2Q" numberOfResults="5" />
+                </ms-bedrock:knowledge-bases>
+            </ms-bedrock:agent-chat-streaming-sse>
+        </munit:execution>
+        <munit:validation>
+            <!-- Read the SSE payload once and serialize to JSON string -->
+            <set-variable variableName="ssePayload" value="#[output application/java --- write(payload, 'application/json')]"/>
+            <!-- Compute elapsed time to confirm no retries occurred -->
+            <set-variable variableName="elapsedMs" value="#[now() as Number {unit: 'milliseconds'} - vars.startTimeMs]"/>
+
+            <!-- 1. Validate SSE error event is present -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::notNullValue()]"
+                                      message="SSE payload should not be null"/>
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('error')]"
+                                      message="SSE stream should contain an error event"/>
+
+            <!-- 2. Validate timeout exception with the 6000ms configured timeout -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('ApiCallTimeoutException')]"
+                                      message="Error should indicate API call timeout"/>
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('6000 millis')]"
+                                      message="Error should reference the 6000ms timeout configuration"/>
+
+            <!-- 3. Validate retry was skipped because chunks were already received -->
+            <munit-tools:assert-that expression="#[vars.ssePayload]"
+                                      is="#[MunitTools::containsString('chunks were received before failure, so retry was not attempted')]"
+                                      message="Error should confirm retry was skipped due to partial chunks already received"/>
+
+            <!-- 4. Validate no retries: elapsed time should be ~6s (just the single timeout), NOT 62s+ -->
+            <munit-tools:assert-that expression="#[vars.elapsedMs]"
+                                      is="#[MunitTools::lessThan(20000)]"
+                                      message="Elapsed time should be under 20s, confirming no exponential backoff retries occurred"/>
+        </munit:validation>
+    </munit:test>
+
 </mule>

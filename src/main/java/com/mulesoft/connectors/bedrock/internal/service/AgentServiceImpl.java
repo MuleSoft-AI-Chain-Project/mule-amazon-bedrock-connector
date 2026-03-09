@@ -948,8 +948,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   /**
-   * Wrapper method that adds retry logic around streamBedrockResponse. Only retries if no chunks have been received yet. MODIFIED
-   * BY CLAUDE: Added writeQueue and clientDisconnected parameters to pass through to streamBedrockResponse
+   * Wrapper method that adds retry logic around streamBedrockResponse. Only retries if no chunks have been received yet. Added
+   * writeQueue and clientDisconnected parameters to pass through to streamBedrockResponse
    */
   private void streamBedrockResponseWithRetry(String agentAliasId, String agentId, String prompt,
                                               boolean enableTrace, boolean latencyOptimized,
