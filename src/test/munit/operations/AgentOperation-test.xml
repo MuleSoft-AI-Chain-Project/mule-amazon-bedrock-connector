@@ -37,4 +37,38 @@
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
         </munit:validation>
     </munit:test>
+
+    <munit:test name="agent-chat-sse-with-multiple-kb-success">
+        <munit:behavior>
+            <set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
+            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+        </munit:behavior>
+        <munit:execution>
+            <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role" agentId="#[vars.agentId]" agentAliasId="#[vars.agentAlias]" prompt="#[vars.content]" sessionId="#[uuid()]">
+                <ms-bedrock:knowledge-bases >
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TH83THM0OB" numberOfResults="5" />
+                    <ms-bedrock:knowledge-base-config knowledgeBaseId="TGJ2IEDX2Q" numberOfResults="5" />
+                </ms-bedrock:knowledge-bases>
+            </ms-bedrock:agent-chat-streaming-sse>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="agent-chat-sse-with-single-kb-success">
+        <munit:behavior>
+            <set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
+            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="TGJ2IEDX2Q" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="KBId"/>
+        </munit:behavior>
+        <munit:execution>
+            <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role" agentId="#[vars.agentId]" agentAliasId="#[vars.agentAlias]" prompt="#[vars.content]" sessionId="#[uuid()]" knowledgeBaseId="#[vars.KBId]" numberOfResults="5"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
 </mule>
