@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
 
 /**
  * Utility class for handling retries in streaming operations. Implements exponential backoff and retryable exception detection.
@@ -78,8 +79,10 @@ public class StreamingRetryUtility {
   }
 
   /**
-   * Determines if a throwable is retryable for operations. Only retries on timeout and network-related errors. Handles both
-   * Exception and RuntimeException (including CompletionException).
+   * Determines if a throwable is retryable for operations. Retries on: - Server-side errors (HTTP 5XX) and throttling (HTTP 429)
+   * via SdkServiceException - Timeout and network-related errors via SdkClientException - TimeoutException Handles wrapper
+   * exceptions (CompletionException, ExecutionException, RuntimeException) by unwrapping to the root cause. Does NOT retry on
+   * client errors (HTTP 4XX except 429) such as ValidationException, AccessDeniedException, ResourceNotFoundException.
    *
    * @param throwable The throwable to check
    * @return true if the throwable is retryable, false otherwise
@@ -90,6 +93,9 @@ public class StreamingRetryUtility {
     }
     if (throwable instanceof CompletionException) {
       return isRetryableCompletionException((CompletionException) throwable);
+    }
+    if (throwable instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) throwable);
     }
     if (throwable instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) throwable);
@@ -122,6 +128,9 @@ public class StreamingRetryUtility {
     if (cause instanceof TimeoutException) {
       return true;
     }
+    if (cause instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) cause);
+    }
     if (cause instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) cause);
     }
@@ -136,6 +145,9 @@ public class StreamingRetryUtility {
   private static boolean isRetryableGenericException(Exception exception) {
     if (exception instanceof TimeoutException) {
       return true;
+    }
+    if (exception instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) exception);
     }
     if (exception instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) exception);
@@ -171,6 +183,25 @@ public class StreamingRetryUtility {
         lowerMessage.contains("failed to connect") ||
         lowerMessage.contains("connection refused") ||
         lowerMessage.contains("connection reset");
+  }
+
+  /**
+   * Checks if an SdkServiceException is retryable based on its HTTP status code. Only server-side errors (5XX) and throttling
+   * (429) are retryable. Client errors (4XX except 429) such as ValidationException (400), AccessDeniedException (403), and
+   * ResourceNotFoundException (404) are NOT retryable as they indicate request-level problems that will not resolve on retry.
+   *
+   * @param exception The SdkServiceException to check
+   * @return true if retryable (5XX or 429), false otherwise
+   */
+  private static boolean isRetryableSdkServiceException(SdkServiceException exception) {
+    int statusCode = exception.statusCode();
+    boolean retryable = statusCode >= 500 || statusCode == 429;
+    if (retryable) {
+      logger.debug("SdkServiceException with status {} is retryable: {}", statusCode, exception.getMessage());
+    } else {
+      logger.debug("SdkServiceException with status {} is not retryable (client error): {}", statusCode, exception.getMessage());
+    }
+    return retryable;
   }
 
   /**

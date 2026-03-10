@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
 
 @DisplayName("StreamingRetryUtility")
 class StreamingRetryUtilityTest {
@@ -147,6 +148,86 @@ class StreamingRetryUtilityTest {
       SdkClientException e = mock(SdkClientException.class);
       when(e.getMessage()).thenReturn(message);
       assertThat(StreamingRetryUtility.isRetryableException(e)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {500, 502, 503, 504})
+    @DisplayName("returns true for SdkServiceException with 5XX status codes")
+    void sdkServiceException5xxRetryable(int statusCode) {
+      SdkServiceException e = SdkServiceException.builder()
+          .message("server error")
+          .statusCode(statusCode)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(e)).isTrue();
+    }
+
+    @Test
+    @DisplayName("returns true for SdkServiceException with 429 throttling")
+    void sdkServiceException429Retryable() {
+      SdkServiceException e = SdkServiceException.builder()
+          .message("Too Many Requests")
+          .statusCode(429)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(e)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 404, 409, 422})
+    @DisplayName("returns false for SdkServiceException with 4XX status codes (except 429)")
+    void sdkServiceException4xxNotRetryable(int statusCode) {
+      SdkServiceException e = SdkServiceException.builder()
+          .message("client error")
+          .statusCode(statusCode)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(e)).isFalse();
+    }
+
+    @Test
+    @DisplayName("unwraps CompletionException with SdkServiceException 500 cause")
+    void completionExceptionWithSdkServiceException500() {
+      SdkServiceException cause = SdkServiceException.builder()
+          .message("Internal Server Error")
+          .statusCode(500)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new CompletionException(cause)))
+          .isTrue();
+    }
+
+    @Test
+    @DisplayName("unwraps CompletionException with SdkServiceException 400 cause - not retryable")
+    void completionExceptionWithSdkServiceException400() {
+      SdkServiceException cause = SdkServiceException.builder()
+          .message("Bad Request")
+          .statusCode(400)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new CompletionException(cause)))
+          .isFalse();
+    }
+
+    @Test
+    @DisplayName("unwraps ExecutionException with SdkServiceException 503 cause")
+    void executionExceptionWithSdkServiceException503() {
+      SdkServiceException cause = SdkServiceException.builder()
+          .message("Service Unavailable")
+          .statusCode(503)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new ExecutionException(cause)))
+          .isTrue();
+    }
+
+    @Test
+    @DisplayName("unwraps ExecutionException with SdkServiceException 403 cause - not retryable")
+    void executionExceptionWithSdkServiceException403() {
+      SdkServiceException cause = SdkServiceException.builder()
+          .message("Access Denied")
+          .statusCode(403)
+          .build();
+      assertThat(StreamingRetryUtility.isRetryableException(
+                                                            new ExecutionException(cause)))
+          .isFalse();
     }
   }
 
