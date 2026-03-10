@@ -848,7 +848,10 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
             // Sentinel is critical — drain one item if needed to ensure it fits
             if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
               writeQueue.poll();
-              writeQueue.offer(END_OF_STREAM_SENTINEL);
+              if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+                logger.error("Failed to queue end-of-stream sentinel after drain - agentId: {}, sessionId: {}, requestId: {}",
+                             agentId, effectiveSessionId, requestId);
+              }
             }
           }
         } finally {
@@ -1007,7 +1010,10 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                      agentId, effectiveSessionId, requestId);
         if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
           writeQueue.poll();
-          writeQueue.offer(END_OF_STREAM_SENTINEL);
+          if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+            logger.error("Failed to queue end-of-stream sentinel after drain - agentId: {}, sessionId: {}, requestId: {}",
+                         agentId, effectiveSessionId, requestId);
+          }
         }
         return;
       }
@@ -1119,7 +1125,10 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                    agentId, effectiveSessionId, requestId);
       if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
         writeQueue.poll();
-        writeQueue.offer(END_OF_STREAM_SENTINEL);
+        if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+          logger.error("Failed to queue end-of-stream sentinel after drain - agentId: {}, sessionId: {}, requestId: {}",
+                       agentId, effectiveSessionId, requestId);
+        }
       }
       return;
     }
@@ -1149,7 +1158,10 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       // If queue is full, drain one item to make room for the sentinel.
       if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
         writeQueue.poll(); // drop oldest event to make room
-        writeQueue.offer(END_OF_STREAM_SENTINEL);
+        if (!writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+          logger.error("Failed to queue end-of-stream sentinel after drain - agentId: {}, sessionId: {}, requestId: {}",
+                       agentId, effectiveSessionId, requestId);
+        }
         logger
             .warn("Queue was full, dropped one event to queue end-of-stream sentinel - agentId: {}, sessionId: {}, requestId: {}",
                   agentId, effectiveSessionId, requestId);
