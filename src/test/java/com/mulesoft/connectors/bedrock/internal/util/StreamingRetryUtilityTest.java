@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -559,6 +560,23 @@ class StreamingRetryUtilityTest {
       SdkClientException e = mock(SdkClientException.class);
       when(e.getMessage()).thenReturn(message);
       assertThat(StreamingRetryUtility.isRetryableException(e)).isTrue();
+    }
+  }
+
+  @Nested
+  @DisplayName("isRetryableGenericException via reflection")
+  class IsRetryableGenericException {
+
+    @Test
+    @DisplayName("returns true for SdkServiceException 500 passed directly (L150)")
+    void sdkServiceException500_retryable() throws Exception {
+      SdkServiceException e = SdkServiceException.builder()
+          .message("Internal Server Error")
+          .statusCode(500)
+          .build();
+      Method m = StreamingRetryUtility.class.getDeclaredMethod("isRetryableGenericException", Exception.class);
+      m.setAccessible(true);
+      assertThat((boolean) m.invoke(null, e)).isTrue();
     }
   }
 
