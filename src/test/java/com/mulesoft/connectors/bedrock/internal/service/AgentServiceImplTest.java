@@ -435,6 +435,217 @@ class AgentServiceImplTest {
     }
   }
 
+  // ==================== handleStreamChunk - queue full paths ====================
+
+  @Nested
+  @DisplayName("handleStreamChunk - queue full")
+  class HandleStreamChunkQueueFull {
+
+    @Test
+    @DisplayName("drops chunk when queue is full (L1079-1080)")
+    void queueFull_dropsChunkEvent() throws Exception {
+      // Use a queue with capacity 1, pre-fill it so offer() returns false
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(1);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(100);
+
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("dropped chunk"))
+          .build();
+
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
+
+      // Queue still has only the original event — chunk was dropped
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+      // But chunk count was still incremented
+      assertThat(chunkCount.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("drops session-start when queue is full on first chunk (L1096)")
+    void queueFull_dropsSessionStartEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(false);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+      AtomicInteger chunkCount = new AtomicInteger(0);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(-1);
+
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("first chunk"))
+          .build();
+
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
+
+      // session-start couldn't be queued, chunk also couldn't be queued
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(sessionStartSent.get()).isTrue();
+      assertThat(chunksReceived.get()).isTrue();
+    }
+  }
+
+  // ==================== writeChunkErrorEvent - queue full ====================
+
+  @Nested
+  @DisplayName("writeChunkErrorEvent - queue full")
+  class WriteChunkErrorEventQueueFull {
+
+    @Test
+    @DisplayName("drops chunk-error event when queue is full (L1104)")
+    void queueFull_dropsChunkErrorEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeChunkErrorEvent",
+                                                          IOException.class, BlockingQueue.class);
+      m.setAccessible(true);
+      m.invoke(service, new IOException("test error"), writeQueue);
+
+      // Queue still has only the original event — error was dropped
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+    }
+  }
+
+  // ==================== handleStreamComplete - queue full paths ====================
+
+  @Nested
+  @DisplayName("handleStreamComplete - queue full")
+  class HandleStreamCompleteQueueFull {
+
+    @Test
+    @DisplayName("drops completion event when queue is full (L1136)")
+    void queueFull_dropsCompletionEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(2);
+      writeQueue.offer("event-1");
+      writeQueue.offer("event-2");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Completion event was dropped, but sentinel was force-queued (drains one item to make room)
+      // Original: [event-1, event-2] -> completion dropped -> sentinel: poll event-1, offer sentinel
+      // Result: [event-2, __END_OF_STREAM__]
+      assertThat(writeQueue.size()).isEqualTo(2);
+      String first = writeQueue.poll();
+      String second = writeQueue.poll();
+      assertThat(second).isEqualTo("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("forces sentinel when queue is full by draining one item (L1151-1154)")
+    void queueFull_forcesSentinel() throws Exception {
+      // Queue capacity 1, pre-fill it
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("blocking-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Sentinel must be present — it was force-queued after draining
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("queues completion-error and sentinel when completion JSON creation fails (L1140-1144)")
+    void completionJsonException_queuesErrorAndSentinel() throws Exception {
+      // Use a queue with plenty of space — we want the error path, not queue-full path
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(100);
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      // null chunkCount will cause NPE in createCompletionJson
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 null, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Should have completion-error + sentinel
+      assertThat(writeQueue.size()).isGreaterThanOrEqualTo(1);
+      String allEvents = drainQueue(writeQueue);
+      assertThat(allEvents).contains("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("forces sentinel when queue full during client disconnect (L1121)")
+    void clientDisconnected_queueFull_forcesSentinel() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("blocking-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Sentinel was force-queued (drained blocking-event)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+  }
+
+  // ==================== writeSessionStartEvent - queue full ====================
+
+  @Nested
+  @DisplayName("writeSessionStartEvent - queue full")
+  class WriteSessionStartEventQueueFull {
+
+    @Test
+    @DisplayName("drops session-start event when queue is full (L1096)")
+    void queueFull_dropsSessionStartEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeSessionStartEvent",
+                                                          String.class, String.class, String.class, String.class,
+                                                          String.class, String.class, String.class,
+                                                          long.class, BlockingQueue.class);
+      m.setAccessible(true);
+      m.invoke(service, "alias", "agentId", "prompt", "session1",
+               "req1", "corr1", "user1", 100L, writeQueue);
+
+      // Queue still has only the original event — session-start was dropped
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+    }
+  }
+
   // ==================== buildKnowledgeBaseConfigs ====================
 
   @Nested
