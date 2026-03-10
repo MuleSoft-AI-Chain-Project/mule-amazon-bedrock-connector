@@ -2,14 +2,21 @@ package com.mulesoft.connectors.bedrock.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 import java.io.IOException;
 import java.io.PipedOutputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,10 +34,15 @@ import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilter
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
+import com.mulesoft.connectors.bedrock.internal.util.StreamingRetryUtility;
+import org.mule.runtime.extension.api.exception.ModuleException;
 
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
+import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
 import software.amazon.awssdk.services.bedrockagentruntime.model.PayloadPart;
+import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference;
 
 /**
  * Unit tests for AgentServiceImpl async streaming error paths, writer thread edge cases, and private helper methods that are
@@ -719,7 +731,264 @@ class AgentServiceImplTest {
     }
   }
 
+  // ==================== buildRetrievedReferenceJson ====================
+
+  @Nested
+  @DisplayName("buildRetrievedReferenceJson")
+  class BuildRetrievedReferenceJson {
+
+    @Test
+    @DisplayName("builds JSON with content, location, and metadata (L411-421)")
+    void fullReference_buildsCompleteJson() throws Exception {
+      RetrievedReference ref = mock(RetrievedReference.class, RETURNS_DEEP_STUBS);
+      when(ref.content().text()).thenReturn("reference text");
+      when(ref.location().toString()).thenReturn("s3://bucket/key");
+      Map<String, software.amazon.awssdk.core.document.Document> metadata = new HashMap<>();
+      metadata.put("source", software.amazon.awssdk.core.document.Document.fromString("test-doc"));
+      when(ref.metadata()).thenReturn(metadata);
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildRetrievedReferenceJson",
+                                                          RetrievedReference.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(service, ref);
+
+      assertThat(result.getString("content")).isEqualTo("reference text");
+      assertThat(result.getString("location")).isEqualTo("s3://bucket/key");
+      assertThat(result.has("metadata")).isTrue();
+    }
+  }
+
+  // ==================== buildVectorSearchConfiguration - reranking ====================
+
+  @Nested
+  @DisplayName("buildVectorSearchConfiguration - reranking")
+  class RerankingConfig {
+
+    @Test
+    @DisplayName("configures reranking with additionalModelRequestFields (L622-624) and null selectionMode (L637)")
+    void rerankingWithAdditionalFields_nullSelectionMode() throws Exception {
+      BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
+          new BedrockAgentsFilteringParameters.RerankingConfiguration();
+      reranking.setModelArn("arn:aws:bedrock:us-east-1:123:inference-profile/test");
+      reranking.setRerankingType("BEDROCK");
+      Map<String, String> additionalFields = new HashMap<>();
+      additionalFields.put("topK", "5");
+      reranking.setAdditionalModelRequestFields(additionalFields);
+      // selectionMode is null -> covers L637 (early return in applyMetadataRerankingConfiguration)
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildVectorSearchConfiguration",
+                                                          Integer.class,
+                                                          BedrockAgentsFilteringParameters.SearchType.class,
+                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class,
+                                                          Map.class,
+                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
+      m.setAccessible(true);
+      Object result = m.invoke(null, null, null, null, null, reranking);
+
+      assertThat(result).isNotNull();
+    }
+  }
+
+  // ==================== closeQuietly - IOException ====================
+
+  @Nested
+  @DisplayName("closeQuietly - IOException")
+  class CloseQuietlyIOException {
+
+    @Test
+    @DisplayName("catches IOException from close and logs without propagating (L885-886)")
+    void closeThrowsIOException_doesNotPropagate() throws Exception {
+      PipedOutputStream mockOs = mock(PipedOutputStream.class);
+      doThrow(new IOException("close failed")).when(mockOs).close();
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", PipedOutputStream.class);
+      m.setAccessible(true);
+      // Should not throw - IOException is caught and logged
+      Object result = m.invoke(service, mockOs);
+      assertThat(result).isNull();
+    }
+  }
+
+  // ==================== handleStreamComplete - completion error with queue full ====================
+
+  @Nested
+  @DisplayName("handleStreamComplete - completion error with queue full")
+  class CompletionErrorQueueFull {
+
+    @Test
+    @DisplayName("drops completion-error event when queue is full (L1144)")
+    void completionError_queueFull_dropsErrorEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      // null chunkCount triggers NPE in createCompletionJson -> enters catch block
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 null, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Completion-error dropped (queue full, L1144), sentinel force-queued (drains existing)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+  }
+
+  // ==================== streamBedrockResponse - client disconnect paths ====================
+
+  @Nested
+  @DisplayName("streamBedrockResponse - client disconnect")
+  class StreamBedrockResponseClientDisconnect {
+
+    @Test
+    @DisplayName("logs when Bedrock completes but client already disconnected (L993)")
+    void completedFuture_clientDisconnected() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenReturn(CompletableFuture.completedFuture(null));
+
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      invokeStreamBedrockResponse(writeQueue, clientDisconnected);
+      // Method returns normally; L993 (debug log for client disconnected) was hit
+    }
+
+    @Test
+    @DisplayName("suppresses error and force-queues sentinel when client disconnected (L1006-1012)")
+    void failedFuture_clientDisconnected_queuesSentinel() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenReturn(CompletableFuture.failedFuture(new RuntimeException("bedrock error")));
+
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event"); // fill queue to trigger L1008-1010 (force sentinel)
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      invokeStreamBedrockResponse(writeQueue, clientDisconnected);
+
+      // Error suppressed, sentinel force-queued (drained existing)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+  }
+
+  // ==================== streamBedrockResponseWithRetry - exception re-throw paths ====================
+
+  @Nested
+  @DisplayName("streamBedrockResponseWithRetry - exception paths")
+  class StreamBedrockResponseWithRetryExceptions {
+
+    @Test
+    @DisplayName("re-throws IOException with enhanced message (L935-936)")
+    void ioException_rethrown() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenAnswer(invocation -> {
+            throw new IOException("network error");
+          });
+
+      try {
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected IOException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(IOException.class);
+        assertThat(e.getCause().getMessage()).contains("network error");
+      }
+    }
+
+    @Test
+    @DisplayName("re-throws InterruptedException with enhanced message (L931-934)")
+    void interruptedException_rethrown() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenAnswer(invocation -> {
+            throw new InterruptedException("interrupted");
+          });
+
+      try {
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected InterruptedException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+        assertThat(e.getCause().getMessage()).contains("interrupted");
+      }
+    }
+
+    @Test
+    @DisplayName("wraps RuntimeException in ModuleException with null message handling (L920, L939)")
+    void runtimeException_wrappedInModuleException() throws Exception {
+      // RuntimeException with no message -> getMessage() returns null -> covers L920 (ternary false branch)
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenThrow(new RuntimeException());
+
+      try {
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+      }
+    }
+  }
+
   // ==================== Helpers ====================
+
+  private void invokeStreamBedrockResponse(BlockingQueue<String> writeQueue,
+                                           AtomicBoolean clientDisconnected)
+      throws Exception {
+    Method m = AgentServiceImpl.class.getDeclaredMethod("streamBedrockResponse",
+                                                        String.class, String.class, String.class,
+                                                        boolean.class, boolean.class,
+                                                        String.class, boolean.class, Integer.class,
+                                                        java.util.List.class,
+                                                        PipedOutputStream.class, AtomicBoolean.class,
+                                                        AtomicBoolean.class, String.class,
+                                                        String.class, String.class,
+                                                        Integer.class, TimeUnit.class,
+                                                        BlockingQueue.class, AtomicBoolean.class);
+    m.setAccessible(true);
+    m.invoke(service,
+             "alias", "agentId", "prompt",
+             false, false,
+             "session1", false, (Integer) null,
+             null,
+             (PipedOutputStream) null, new AtomicBoolean(false),
+             new AtomicBoolean(false), "req1",
+             "corr1", "user1",
+             (Integer) null, (TimeUnit) null,
+             writeQueue, clientDisconnected);
+  }
+
+  private void invokeStreamBedrockResponseWithRetry() throws Exception {
+    StreamingRetryUtility.RetryConfig retryConfig =
+        new StreamingRetryUtility.RetryConfig(0, 1000L, true);
+
+    Method m = AgentServiceImpl.class.getDeclaredMethod("streamBedrockResponseWithRetry",
+                                                        String.class, String.class, String.class,
+                                                        boolean.class, boolean.class,
+                                                        String.class, boolean.class, Integer.class,
+                                                        java.util.List.class,
+                                                        PipedOutputStream.class, StreamingRetryUtility.RetryConfig.class,
+                                                        AtomicBoolean.class, AtomicBoolean.class,
+                                                        String.class, String.class, String.class,
+                                                        Integer.class, TimeUnit.class,
+                                                        BlockingQueue.class, AtomicBoolean.class);
+    m.setAccessible(true);
+    m.invoke(service,
+             "alias", "agentId", "prompt",
+             false, false,
+             "session1", false, (Integer) null,
+             null,
+             (PipedOutputStream) null, retryConfig,
+             new AtomicBoolean(false), new AtomicBoolean(false),
+             "req1", "corr1", "user1",
+             (Integer) null, (TimeUnit) null,
+             new LinkedBlockingQueue<>(), new AtomicBoolean(false));
+  }
 
   private void invokeHandleStreamChunk(
                                        String agentAliasId, String agentId, String prompt, String effectiveSessionId,

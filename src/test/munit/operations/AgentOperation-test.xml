@@ -509,6 +509,9 @@
                             <ms-bedrock:fields-to-include >
                                 <ms-bedrock:fields-to-include-item value="maternity" />
                             </ms-bedrock:fields-to-include>
+                            <ms-bedrock:additional-model-request-fields >
+                                <ms-bedrock:additional-model-request-field key="type" value="onboarding" />
+                            </ms-bedrock:additional-model-request-fields>
                         </ms-bedrock:reranking-configuration>
                     </ms-bedrock:knowledge-base-config>
                     <ms-bedrock:knowledge-base-config knowledgeBaseId="TGJ2IEDX2Q" numberOfResults="5" />
