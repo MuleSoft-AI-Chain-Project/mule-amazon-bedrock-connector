@@ -49,7 +49,7 @@ public class BedrockConfiguration implements ConnectorConfig, Disposable {
   @Inject
   SchedulerConfig schedulerConfig;
 
-  private volatile Scheduler streamingScheduler;
+  private Scheduler streamingScheduler;
 
   public SchedulerService getSchedulerService() {
     return schedulerService;
@@ -60,33 +60,25 @@ public class BedrockConfiguration implements ConnectorConfig, Disposable {
   }
 
   /**
-   * Returns a shared, bounded IO scheduler for streaming operations. Lazily initialized on first access; thread-safe via
-   * double-checked locking.
+   * Returns a shared, bounded IO scheduler for streaming operations. Lazily initialized on first access; fully synchronized for
+   * thread safety.
    */
-  public Scheduler getStreamingScheduler() {
-    Scheduler local = streamingScheduler;
-    if (local == null) {
-      synchronized (this) {
-        local = streamingScheduler;
-        if (local == null) {
-          local = schedulerService.ioScheduler(
-                                               SchedulerConfig.config()
-                                                   .withMaxConcurrentTasks(STREAMING_MAX_POOL_SIZE)
-                                                   .withName("bedrock-streaming"));
-          streamingScheduler = local;
-          logger.debug("Created bedrock-streaming IO scheduler with maxConcurrentTasks={}", STREAMING_MAX_POOL_SIZE);
-        }
-      }
+  public synchronized Scheduler getStreamingScheduler() {
+    if (streamingScheduler == null) {
+      streamingScheduler = schedulerService.ioScheduler(
+                                                        SchedulerConfig.config()
+                                                            .withMaxConcurrentTasks(STREAMING_MAX_POOL_SIZE)
+                                                            .withName("bedrock-streaming"));
+      logger.debug("Created bedrock-streaming IO scheduler with maxConcurrentTasks={}", STREAMING_MAX_POOL_SIZE);
     }
-    return local;
+    return streamingScheduler;
   }
 
   @Override
-  public void dispose() {
-    Scheduler local = streamingScheduler;
-    if (local != null) {
+  public synchronized void dispose() {
+    if (streamingScheduler != null) {
       logger.debug("Stopping bedrock-streaming scheduler");
-      local.stop();
+      streamingScheduler.stop();
       streamingScheduler = null;
     }
   }
