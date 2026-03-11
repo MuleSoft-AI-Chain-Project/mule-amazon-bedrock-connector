@@ -17,7 +17,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -997,6 +1000,71 @@ class AgentServiceImplTest {
                                  new AtomicInteger(5), new AtomicLong(150),
                                  new AtomicBoolean(true), mockQueue, clientDisconnected);
       // L1162 logger.error hit: mock queue always returns false for offer in finally block
+    }
+  }
+
+  // ==================== runAsyncWithCallerRunsOnRejection ====================
+
+  @Nested
+  @DisplayName("runAsyncWithCallerRunsOnRejection")
+  class RunAsyncWithCallerRunsOnRejection {
+
+    @Test
+    @DisplayName("submits task to executor when capacity is available")
+    void happyPath_submitsToExecutor() throws Exception {
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      try {
+        AtomicBoolean taskRan = new AtomicBoolean(false);
+        CompletableFuture<Void> future = invokeRunAsync(() -> taskRan.set(true), executor);
+        future.get(5, TimeUnit.SECONDS);
+
+        assertThat(taskRan.get()).isTrue();
+        assertThat(future).isCompleted();
+      } finally {
+        executor.shutdownNow();
+      }
+    }
+
+    @Test
+    @DisplayName("runs task on caller thread when executor rejects (backpressure)")
+    void rejection_runsOnCallerThread() throws Exception {
+      ExecutorService executor = mock(ExecutorService.class);
+      // Make CompletableFuture.runAsync throw RejectedExecutionException
+      doThrow(new RejectedExecutionException("pool full")).when(executor).execute(any(Runnable.class));
+
+      Thread callerThread = Thread.currentThread();
+      AtomicBoolean taskRan = new AtomicBoolean(false);
+      AtomicBoolean ranOnCallerThread = new AtomicBoolean(false);
+
+      CompletableFuture<Void> future = invokeRunAsync(() -> {
+        taskRan.set(true);
+        ranOnCallerThread.set(Thread.currentThread() == callerThread);
+      }, executor);
+
+      assertThat(taskRan.get()).isTrue();
+      assertThat(ranOnCallerThread.get()).isTrue();
+      assertThat(future).isCompleted();
+    }
+
+    @Test
+    @DisplayName("completes future exceptionally when rejected task throws")
+    void rejection_taskThrows_completesExceptionally() throws Exception {
+      ExecutorService executor = mock(ExecutorService.class);
+      doThrow(new RejectedExecutionException("pool full")).when(executor).execute(any(Runnable.class));
+
+      RuntimeException taskException = new RuntimeException("task failed");
+      CompletableFuture<Void> future = invokeRunAsync(() -> {
+        throw taskException;
+      }, executor);
+
+      assertThat(future).isCompletedExceptionally();
+    }
+
+    private CompletableFuture<Void> invokeRunAsync(Runnable task, ExecutorService executor) throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("runAsyncWithCallerRunsOnRejection",
+                                                          Runnable.class, ExecutorService.class);
+      m.setAccessible(true);
+      return (CompletableFuture<Void>) m.invoke(null, task, executor);
     }
   }
 

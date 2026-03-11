@@ -18,8 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -109,51 +108,6 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   private static final String END_OF_STREAM_SENTINEL = "__END_OF_STREAM__";
 
   private static final AtomicInteger eventCounter = new AtomicInteger(0);
-
-  /**
-   * Maximum number of threads in the streaming pool. Each SSE streaming request uses up to 2 threads (one for the outer async
-   * orchestration, one for the queue-draining writer). This cap prevents runaway thread creation under high concurrency while
-   * still allowing substantial parallelism. Excess tasks are rejected with {@link ThreadPoolExecutor.CallerRunsPolicy} so that
-   * backpressure is applied to the calling thread instead of silently dropping work.
-   */
-  private static final int STREAMING_MAX_POOL_SIZE = 200;
-
-  /**
-   * Dedicated, bounded thread pool for streaming operations with retry support.
-   *
-   * IMPORTANT: We use a dedicated pool instead of ForkJoinPool.commonPool() because: 1. Retry logic can block threads for
-   * extended periods (multiple attempts + backoff delays) 2. ForkJoinPool.commonPool() has limited threads (~CPU cores - 1) 3. If
-   * all ForkJoinPool threads are blocked in retry loops, new requests cannot start 4. This causes thread starvation, leading to
-   * connection pool timeouts for new requests
-   *
-   * The pool is bounded to {@link #STREAMING_MAX_POOL_SIZE} threads to prevent OS thread exhaustion. Idle threads are reaped
-   * after 60 seconds. All threads are daemon threads so they do not prevent JVM shutdown. A
-   * {@link ThreadPoolExecutor.CallerRunsPolicy} rejection policy applies backpressure by running excess tasks on the submitting
-   * thread rather than throwing or silently discarding.
-   *
-   * NOTE: No JVM shutdown hook is used. Daemon threads are automatically terminated on JVM exit, and avoiding a shutdown hook
-   * prevents classloader leaks during Mule application redeployment (a shutdown hook holds a strong reference chain: hook thread
-   * -> executor -> class -> classloader, preventing GC of the old classloader on redeploy).
-   */
-  private static final ExecutorService STREAMING_EXECUTOR = createStreamingExecutor();
-
-  private static ExecutorService createStreamingExecutor() {
-    AtomicInteger threadCounter = new AtomicInteger(0);
-    return new ThreadPoolExecutor(
-                                  0, // core pool size: no permanent threads, scale to zero when idle
-                                  STREAMING_MAX_POOL_SIZE,
-                                  60L, TimeUnit.SECONDS, // idle threads reaped after 60s
-                                  new SynchronousQueue<>(), // direct hand-off: forces new thread creation up to max
-                                  r -> {
-                                    Thread t =
-                                        new Thread(r, "bedrock-streaming-" + threadCounter.incrementAndGet());
-                                    t.setDaemon(true); // Don't prevent JVM shutdown
-                                    return t;
-                                  },
-                                  new ThreadPoolExecutor.CallerRunsPolicy() // backpressure: caller executes the task if pool is
-                                                                            // full
-    );
-  }
 
   public AgentServiceImpl(BedrockConfiguration config, BedrockConnection bedrockConnection) {
     super(config, bedrockConnection);
@@ -762,7 +716,12 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
       final PipedOutputStream finalOut = outputStream;
 
-      CompletableFuture<Void> writerFuture = CompletableFuture.runAsync(() -> {
+      // Use Mule's managed IO scheduler for streaming operations instead of a manual ThreadPoolExecutor.
+      // The IO scheduler is designed for blocking I/O tasks and is lifecycle-managed by the Mule runtime,
+      // ensuring graceful shutdown on undeploy (no daemon thread abrupt termination, no classloader leaks).
+      ExecutorService streamingScheduler = getConfig().getStreamingScheduler();
+
+      Runnable writerTask = () -> {
         logger.debug("Writer thread started - agentId: {}, sessionId: {}, requestId: {}", agentId,
                      effectiveSessionId, requestId);
         try {
@@ -801,11 +760,12 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
             logger.debug("Could not close output stream: {}", e.getMessage());
           }
         }
-      }, STREAMING_EXECUTOR);
+      };
+      CompletableFuture<Void> writerFuture = runAsyncWithCallerRunsOnRejection(writerTask, streamingScheduler);
 
-      // Start the streaming process asynchronously on the bounded STREAMING_EXECUTOR
+      // Start the streaming process asynchronously on the Mule IO scheduler
       // (NOT on ForkJoinPool.commonPool() which has ~CPU-cores threads and would starve under blocking retries)
-      CompletableFuture.runAsync(() -> {
+      Runnable producerTask = () -> {
         try {
           streamBedrockResponseWithRetry(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                                          excludePreviousThinkingSteps, previousConversationTurnsToInclude,
@@ -865,7 +825,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                          agentId, effectiveSessionId, requestId, writerException.getMessage());
           }
         }
-      }, STREAMING_EXECUTOR);
+      };
+      runAsyncWithCallerRunsOnRejection(producerTask, streamingScheduler);
       return inputStream;
 
     } catch (IOException e) {
@@ -1245,5 +1206,26 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       startData.put("userId", userId);
     }
     return startData;
+  }
+
+  /**
+   * Submits a task to the executor via {@link CompletableFuture#runAsync}. If the executor rejects the task (e.g. max concurrent
+   * tasks reached), the task is run on the caller's thread as backpressure — matching the behavior of
+   * {@link java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy}.
+   */
+  private static CompletableFuture<Void> runAsyncWithCallerRunsOnRejection(Runnable task, ExecutorService executor) {
+    try {
+      return CompletableFuture.runAsync(task, executor);
+    } catch (RejectedExecutionException e) {
+      logger.warn("Streaming scheduler rejected task, running on caller thread as backpressure: {}", e.getMessage());
+      CompletableFuture<Void> future = new CompletableFuture<>();
+      try {
+        task.run();
+        future.complete(null);
+      } catch (Exception ex) {
+        future.completeExceptionally(ex);
+      }
+      return future;
+    }
   }
 }
