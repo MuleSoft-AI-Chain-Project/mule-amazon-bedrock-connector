@@ -3,6 +3,7 @@ package com.mulesoft.connectors.bedrock.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -17,8 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -642,8 +642,8 @@ class AgentServiceImplTest {
   class WriteSessionStartEventQueueFull {
 
     @Test
-    @DisplayName("drops session-start event when queue is full (L1096)")
-    void queueFull_dropsSessionStartEvent() throws Exception {
+    @DisplayName("throws IOException when queue is full")
+    void queueFull_throwsIOException() throws Exception {
       BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
       writeQueue.offer("existing-event");
 
@@ -652,10 +652,18 @@ class AgentServiceImplTest {
                                                           String.class, String.class, String.class,
                                                           long.class, BlockingQueue.class);
       m.setAccessible(true);
-      m.invoke(service, "alias", "agentId", "prompt", "session1",
-               "req1", "corr1", "user1", 100L, writeQueue);
 
-      // Queue still has only the original event — session-start was dropped
+      Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+                                                                        () -> m.invoke(service, "alias", "agentId", "prompt",
+                                                                                       "session1",
+                                                                                       "req1", "corr1", "user1", 100L,
+                                                                                       writeQueue));
+      assertThat(thrown).isInstanceOf(InvocationTargetException.class);
+      assertThat(thrown.getCause())
+          .isInstanceOf(IOException.class)
+          .hasMessageContaining("Failed to queue session-start event");
+
+      // Queue still has only the original event
       assertThat(writeQueue.size()).isEqualTo(1);
       assertThat(writeQueue.peek()).isEqualTo("existing-event");
     }
@@ -886,8 +894,8 @@ class AgentServiceImplTest {
   class StreamBedrockResponseWithRetryExceptions {
 
     @Test
-    @DisplayName("re-throws IOException with enhanced message (L935-936)")
-    void ioException_rethrown() throws Exception {
+    @DisplayName("wraps IOException in ModuleException with enhanced message")
+    void ioException_wrappedInModuleException() throws Exception {
       when(mockConnection.invokeAgent(
                                       any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
           .thenAnswer(invocation -> {
@@ -896,16 +904,17 @@ class AgentServiceImplTest {
 
       try {
         invokeStreamBedrockResponseWithRetry();
-        org.assertj.core.api.Assertions.fail("Expected IOException");
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
       } catch (InvocationTargetException e) {
-        assertThat(e.getCause()).isInstanceOf(IOException.class);
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
         assertThat(e.getCause().getMessage()).contains("network error");
+        assertThat(e.getCause().getCause()).isInstanceOf(IOException.class);
       }
     }
 
     @Test
-    @DisplayName("re-throws InterruptedException with enhanced message (L931-934)")
-    void interruptedException_rethrown() throws Exception {
+    @DisplayName("wraps InterruptedException in ModuleException with enhanced message")
+    void interruptedException_wrappedInModuleException() throws Exception {
       when(mockConnection.invokeAgent(
                                       any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
           .thenAnswer(invocation -> {
@@ -914,17 +923,17 @@ class AgentServiceImplTest {
 
       try {
         invokeStreamBedrockResponseWithRetry();
-        org.assertj.core.api.Assertions.fail("Expected InterruptedException");
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
       } catch (InvocationTargetException e) {
-        assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
         assertThat(e.getCause().getMessage()).contains("interrupted");
+        assertThat(e.getCause().getCause()).isInstanceOf(InterruptedException.class);
       }
     }
 
     @Test
-    @DisplayName("wraps RuntimeException in ModuleException with null message handling (L920, L939)")
+    @DisplayName("wraps RuntimeException in ModuleException with null message handling")
     void runtimeException_wrappedInModuleException() throws Exception {
-      // RuntimeException with no message -> getMessage() returns null -> covers L920 (ternary false branch)
       when(mockConnection.invokeAgent(
                                       any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
           .thenThrow(new RuntimeException());
@@ -934,6 +943,7 @@ class AgentServiceImplTest {
         org.assertj.core.api.Assertions.fail("Expected ModuleException");
       } catch (InvocationTargetException e) {
         assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getCause()).isInstanceOf(RuntimeException.class);
       }
     }
   }
@@ -945,7 +955,7 @@ class AgentServiceImplTest {
   class StreamBedrockResponseSentinelRetryFailure {
 
     @Test
-    @DisplayName("logs error when sentinel cannot be queued after drain (L1014)")
+    @DisplayName("throws ModuleException when sentinel cannot be queued after drain (L1014)")
     @SuppressWarnings("unchecked")
     void sentinelRetryFailure_clientDisconnected() throws Exception {
       when(mockConnection.invokeAgent(
@@ -957,8 +967,12 @@ class AgentServiceImplTest {
       when(mockQueue.poll()).thenReturn("drained-event");
       AtomicBoolean clientDisconnected = new AtomicBoolean(true);
 
-      invokeStreamBedrockResponse(mockQueue, clientDisconnected);
-      // L1014 logger.error hit: mock queue always returns false for offer
+      Throwable thrown =
+          org.assertj.core.api.Assertions.catchThrowable(() -> invokeStreamBedrockResponse(mockQueue, clientDisconnected));
+      assertThat(thrown).isInstanceOf(InvocationTargetException.class);
+      assertThat(thrown.getCause())
+          .isInstanceOf(ModuleException.class)
+          .hasMessageContaining("Failed to queue end-of-stream sentinel");
     }
   }
 
@@ -1003,68 +1017,70 @@ class AgentServiceImplTest {
     }
   }
 
-  // ==================== runAsyncWithCallerRunsOnRejection ====================
+  // ==================== submitWithCallerRunsOnRejection ====================
 
   @Nested
-  @DisplayName("runAsyncWithCallerRunsOnRejection")
-  class RunAsyncWithCallerRunsOnRejection {
+  @DisplayName("submitWithCallerRunsOnRejection")
+  class SubmitWithCallerRunsOnRejection {
 
     @Test
-    @DisplayName("submits task to executor when capacity is available")
-    void happyPath_submitsToExecutor() throws Exception {
-      ExecutorService executor = Executors.newSingleThreadExecutor();
-      try {
-        AtomicBoolean taskRan = new AtomicBoolean(false);
-        CompletableFuture<Void> future = invokeRunAsync(() -> taskRan.set(true), executor);
-        future.get(5, TimeUnit.SECONDS);
+    @DisplayName("submits task to scheduler when capacity is available")
+    void happyPath_submitsToScheduler() throws Exception {
+      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
+      Future<?> mockFuture = mock(Future.class);
+      doAnswer(invocation -> mockFuture).when(scheduler).submit(any(Runnable.class));
 
-        assertThat(taskRan.get()).isTrue();
-        assertThat(future).isCompleted();
-      } finally {
-        executor.shutdownNow();
-      }
+      AtomicBoolean taskRan = new AtomicBoolean(false);
+      Future<?> future = invokeSubmit(() -> taskRan.set(true), scheduler);
+
+      assertThat(future).isSameAs(mockFuture);
     }
 
     @Test
-    @DisplayName("runs task on caller thread when executor rejects (backpressure)")
+    @DisplayName("runs task on caller thread when scheduler rejects (backpressure)")
     void rejection_runsOnCallerThread() throws Exception {
-      ExecutorService executor = mock(ExecutorService.class);
-      // Make CompletableFuture.runAsync throw RejectedExecutionException
-      doThrow(new RejectedExecutionException("pool full")).when(executor).execute(any(Runnable.class));
+      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
+      when(scheduler.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException("pool full"));
 
       Thread callerThread = Thread.currentThread();
       AtomicBoolean taskRan = new AtomicBoolean(false);
       AtomicBoolean ranOnCallerThread = new AtomicBoolean(false);
 
-      CompletableFuture<Void> future = invokeRunAsync(() -> {
+      Future<?> future = invokeSubmit(() -> {
         taskRan.set(true);
         ranOnCallerThread.set(Thread.currentThread() == callerThread);
-      }, executor);
+      }, scheduler);
 
       assertThat(taskRan.get()).isTrue();
       assertThat(ranOnCallerThread.get()).isTrue();
-      assertThat(future).isCompleted();
+      assertThat(future.isDone()).isTrue();
     }
 
     @Test
-    @DisplayName("completes future exceptionally when rejected task throws")
-    void rejection_taskThrows_completesExceptionally() throws Exception {
-      ExecutorService executor = mock(ExecutorService.class);
-      doThrow(new RejectedExecutionException("pool full")).when(executor).execute(any(Runnable.class));
+    @DisplayName("propagates exception when rejected task throws")
+    void rejection_taskThrows_propagatesException() {
+      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
+      when(scheduler.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException("pool full"));
 
       RuntimeException taskException = new RuntimeException("task failed");
-      CompletableFuture<Void> future = invokeRunAsync(() -> {
-        throw taskException;
-      }, executor);
-
-      assertThat(future).isCompletedExceptionally();
+      try {
+        invokeSubmit(() -> {
+          throw taskException;
+        }, scheduler);
+        assertThat(true).as("Expected InvocationTargetException").isFalse();
+      } catch (Exception e) {
+        assertThat(e).isInstanceOf(java.lang.reflect.InvocationTargetException.class);
+        assertThat(e.getCause()).isSameAs(taskException);
+      }
     }
 
-    private CompletableFuture<Void> invokeRunAsync(Runnable task, ExecutorService executor) throws Exception {
-      Method m = AgentServiceImpl.class.getDeclaredMethod("runAsyncWithCallerRunsOnRejection",
-                                                          Runnable.class, ExecutorService.class);
+    private Future<?> invokeSubmit(Runnable task,
+                                   org.mule.runtime.api.scheduler.Scheduler scheduler)
+        throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("submitWithCallerRunsOnRejection",
+                                                          Runnable.class, org.mule.runtime.api.scheduler.Scheduler.class);
       m.setAccessible(true);
-      return (CompletableFuture<Void>) m.invoke(null, task, executor);
+      return (Future<?>) m.invoke(null, task, scheduler);
     }
   }
 
