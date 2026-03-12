@@ -13,10 +13,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.concurrent.ExecutionException;
+import org.mule.runtime.api.scheduler.Scheduler;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
@@ -65,6 +71,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 public class AgentServiceImpl extends BedrockServiceImpl implements AgentService {
 
   private static final Logger logger = LoggerFactory.getLogger(AgentServiceImpl.class);
+
   private static final String AGENT_NAMES = "agentNames";
   private static final String AGENT_ID = "agentId";
   private static final String AGENT_NAME = "agentName";
@@ -99,6 +106,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   private static final String METADATA = "metadata";
   private static final String ERROR_KEY = "error";
   private static final String ERROR_WRITING_EVENT_LOG = "Error writing error event: {}";
+  private static final String END_OF_STREAM_SENTINEL = "__END_OF_STREAM__";
 
   private static final AtomicInteger eventCounter = new AtomicInteger(0);
 
@@ -685,8 +693,12 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                            StreamingRetryUtility.RetryConfig retryConfig,
                                            String requestId, String correlationId, String userId,
                                            Integer operationTimeout, TimeUnit operationTimeoutUnit) {
-    PipedOutputStream outputStream = null;
+    long requestStartTime = System.currentTimeMillis();
+    logger
+        .debug("SSE streaming request received - agentId: {}, agentAlias: {}, sessionId: {}, requestId: {}, correlationId: {}, promptLength: {}",
+               agentId, agentAliasId, effectiveSessionId, requestId, correlationId, prompt != null ? prompt.length() : 0);
 
+    PipedOutputStream outputStream = null;
     try {
       // Create piped streams for real-time streaming
       outputStream = new PipedOutputStream();
@@ -696,53 +708,45 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       AtomicBoolean chunksReceived = new AtomicBoolean(false);
       // Track if session-start has been sent (for consistency - always send before error if not already sent)
       AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+      // Track if client disconnected - used to stop processing new chunks and release thread
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+
+      // Bounded queue prevents unbounded memory growth if the writer thread is slow (e.g. slow client).
+      // 1000 is generous for SSE events; offer() returns false if full, which we log and drop to avoid OOM.
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1000);
+
       final PipedOutputStream finalOut = outputStream;
-      // Start the streaming process asynchronously
-      CompletableFuture.runAsync(() -> {
-        try {
-          streamBedrockResponseWithRetry(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
-                                         excludePreviousThinkingSteps, previousConversationTurnsToInclude,
-                                         knowledgeBaseConfigs,
-                                         finalOut, retryConfig, chunksReceived, sessionStartSent, requestId, correlationId,
-                                         userId,
-                                         operationTimeout, operationTimeoutUnit);
-        } catch (Exception e) {
-          if (e instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-          }
-          try {
-            // Send session-start event before error if not already sent (for consistency)
-            if (sessionStartSent.compareAndSet(false, true)) {
-              JSONObject startEvent =
-                  createSessionStartJson(agentAliasId, agentId, prompt, effectiveSessionId, Instant.now().toString(),
-                                         requestId, correlationId, userId);
-              String sseStart = formatSSEEvent("session-start", startEvent.toString());
-              finalOut.write(sseStart.getBytes(StandardCharsets.UTF_8));
-              finalOut.flush();
-              logger.info(sseStart);
-            }
 
-            // streamBedrockResponseWithRetry already enhances the error message with retry information
-            // The exception message already contains retry details if retries were attempted
-            // Send error as SSE event (createErrorJson will use the exception's message which is already enhanced)
-            JSONObject errorJson = createErrorJson(e);
-            String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
-            finalOut.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-            finalOut.flush();
-            logger.error(errorEvent);
-          } catch (IOException ioException) {
-            // Log error but can't do much more
-            logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
-          }
-        } finally {
-          closeQuietly(finalOut);
-        }
-      });
+      // Use Mule's managed IO scheduler for streaming operations instead of a manual ThreadPoolExecutor.
+      // The IO scheduler is designed for blocking I/O tasks and is lifecycle-managed by the Mule runtime,
+      // ensuring graceful shutdown on undeploy (no daemon thread abrupt termination, no classloader leaks).
+      Scheduler streamingScheduler = getConfig().getStreamingScheduler();
 
+      Future<?> writerFuture = submitToScheduler(
+                                                 () -> runWriterTask(writeQueue, finalOut,
+                                                                     clientDisconnected, agentId,
+                                                                     effectiveSessionId, requestId),
+                                                 streamingScheduler);
+
+      // Start the streaming process asynchronously on the Mule IO scheduler
+      // (NOT on ForkJoinPool.commonPool() which has ~CPU-cores threads and would starve under blocking retries)
+      submitToScheduler(
+                        () -> runProducerTask(agentAliasId, agentId, prompt, enableTrace, latencyOptimized,
+                                              effectiveSessionId,
+                                              excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                                              knowledgeBaseConfigs,
+                                              finalOut, retryConfig, chunksReceived, sessionStartSent, requestId,
+                                              correlationId, userId,
+                                              operationTimeout, operationTimeoutUnit, writeQueue,
+                                              clientDisconnected,
+                                              requestStartTime, writerFuture),
+                        streamingScheduler);
       return inputStream;
 
     } catch (IOException e) {
       // Return error as immediate SSE event
+      logger.debug("Failed to initialize SSE streaming - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
+                   agentId, effectiveSessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
       String errorEvent = formatSSEEvent(ERROR_KEY, createErrorJson(e).toString());
       logger.error(errorEvent);
       if (outputStream != null) {
@@ -762,7 +766,161 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   /**
-   * Wrapper method that adds retry logic around streamBedrockResponse. Only retries if no chunks have been received yet.
+   * Writer task: drains SSE events from the queue and writes them to the piped output stream. Runs until it receives the
+   * {@link #END_OF_STREAM_SENTINEL}. On client disconnect (IOException), sets the clientDisconnected flag and drains the queue to
+   * unblock producers.
+   */
+  private void runWriterTask(BlockingQueue<String> writeQueue, PipedOutputStream outputStream,
+                             AtomicBoolean clientDisconnected, String agentId, String effectiveSessionId, String requestId) {
+    logger.debug("Writer thread started - agentId: {}, sessionId: {}, requestId: {}", agentId,
+                 effectiveSessionId, requestId);
+    try {
+      while (true) {
+        String event = writeQueue.take();
+        if (END_OF_STREAM_SENTINEL.equals(event)) {
+          break;
+        }
+        outputStream.write(event.getBytes(StandardCharsets.UTF_8));
+        outputStream.flush();
+      }
+      logger.debug("Writer thread completed - agentId: {}, sessionId: {}, requestId: {}", agentId,
+                   effectiveSessionId, requestId);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      logger.debug("Writer thread interrupted - agentId: {}, sessionId: {}, requestId: {}", agentId, effectiveSessionId,
+                   requestId);
+    } catch (IOException e) {
+      clientDisconnected.set(true);
+      logger
+          .error("Writer thread IOException (client disconnect) - agentId: {}, sessionId: {}, requestId: {}, error: {}",
+                 agentId, effectiveSessionId, requestId, e.getMessage());
+      // Drain remaining queue items to prevent blocking producers
+      int drained = 0;
+      while (writeQueue.poll() != null) {
+        drained++;
+      }
+      if (drained > 0) {
+        logger.warn("Drained {} queued events after IOException - agentId: {}, sessionId: {}, requestId: {}",
+                    drained, agentId, effectiveSessionId, requestId);
+      }
+    } finally {
+      try {
+        outputStream.close();
+      } catch (IOException e) {
+        logger.debug("Could not close output stream: {}", e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Producer task: invokes Bedrock with retry logic, queues SSE events for the writer, and ensures the stream terminates cleanly.
+   * On failure, sends a session-start (if not yet sent) and error event before the end-of-stream sentinel. Always waits for the
+   * writer future to complete before returning.
+   */
+  private void runProducerTask(String agentAliasId, String agentId, String prompt, boolean enableTrace,
+                               boolean latencyOptimized, String effectiveSessionId,
+                               boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
+                               java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> knowledgeBaseConfigs,
+                               PipedOutputStream outputStream, StreamingRetryUtility.RetryConfig retryConfig,
+                               AtomicBoolean chunksReceived, AtomicBoolean sessionStartSent,
+                               String requestId, String correlationId, String userId,
+                               Integer operationTimeout, TimeUnit operationTimeoutUnit,
+                               BlockingQueue<String> writeQueue, AtomicBoolean clientDisconnected,
+                               long requestStartTime, Future<?> writerFuture) {
+    try {
+      streamBedrockResponseWithRetry(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
+                                     excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                                     knowledgeBaseConfigs,
+                                     outputStream, retryConfig, chunksReceived, sessionStartSent, requestId, correlationId,
+                                     userId,
+                                     operationTimeout, operationTimeoutUnit, writeQueue, clientDisconnected);
+      logger.debug("Streaming completed - agentId: {}, sessionId: {}, requestId: {}, elapsedMs: {}",
+                   agentId, effectiveSessionId, requestId, System.currentTimeMillis() - requestStartTime);
+    } catch (ModuleException e) {
+      logger.error("Async streaming operation failed - agentId: {}, sessionId: {}, requestId: {}, error: {}, elapsedMs: {}",
+                   agentId, effectiveSessionId, requestId, e.getMessage(), System.currentTimeMillis() - requestStartTime);
+      try {
+        queueStreamFailureEvents(e, agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId, userId,
+                                 sessionStartSent, writeQueue);
+      } catch (IOException ioe) {
+        logger.error("Failed to queue failure events - agentId: {}, sessionId: {}, requestId: {}, error: {}",
+                     agentId, effectiveSessionId, requestId, ioe.getMessage());
+      }
+      if (!forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId)) {
+        throw new ModuleException(
+                                  "Failed to queue end-of-stream sentinel - stream will not terminate cleanly. agentId: "
+                                      + agentId
+                                      + ", sessionId: " + effectiveSessionId + ", requestId: " + requestId,
+                                  BedrockErrorType.SERVICE_ERROR);
+      }
+    } finally {
+      awaitWriterCompletion(writerFuture, agentId, effectiveSessionId, requestId);
+    }
+  }
+
+  /**
+   * Queues session-start (if not yet sent) and error SSE events to the write queue on streaming failure. Ensures the client
+   * receives a consistent event sequence even when the Bedrock call fails.
+   */
+  private void queueStreamFailureEvents(Exception e, String agentAliasId, String agentId, String prompt,
+                                        String effectiveSessionId, String requestId, String correlationId, String userId,
+                                        AtomicBoolean sessionStartSent, BlockingQueue<String> writeQueue)
+      throws IOException {
+    if (sessionStartSent.compareAndSet(false, true)) {
+      writeSessionStartEvent(agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId, userId,
+                             -1, writeQueue);
+    }
+
+    JSONObject errorJson = createErrorJson(e);
+    String errorEvent = formatSSEEvent(ERROR_KEY, errorJson.toString());
+    if (!writeQueue.offer(errorEvent)) {
+      logger.warn("Queue full, dropping error event - agentId: {}, sessionId: {}, requestId: {}",
+                  agentId, effectiveSessionId, requestId);
+    }
+    logger.error("Streaming error - agentId: {}, sessionId: {}, requestId: {}, error: {}",
+                 agentId, effectiveSessionId, requestId, e.getMessage());
+  }
+
+  /**
+   * Forces the end-of-stream sentinel onto the write queue. If the queue is full, drops one item to make room. The sentinel is
+   * critical — without it the writer thread blocks forever on {@code writeQueue.take()}.
+   *
+   * @return {@code true} if the sentinel was successfully queued, {@code false} if it could not be queued even after draining
+   */
+  private boolean forceQueueSentinel(BlockingQueue<String> writeQueue, String agentId, String effectiveSessionId,
+                                     String requestId) {
+    if (writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+      return true;
+    }
+    writeQueue.poll();
+    if (writeQueue.offer(END_OF_STREAM_SENTINEL)) {
+      return true;
+    }
+    logger.error("Failed to queue end-of-stream sentinel after drain - agentId: {}, sessionId: {}, requestId: {}",
+                 agentId, effectiveSessionId, requestId);
+    return false;
+  }
+
+  /**
+   * Waits for the writer future to complete within 5 seconds. Ensures the writer thread has flushed all data and closed the
+   * output stream before the producer thread exits.
+   */
+  private void awaitWriterCompletion(Future<?> writerFuture, String agentId, String effectiveSessionId,
+                                     String requestId) {
+    try {
+      writerFuture.get(5, TimeUnit.SECONDS);
+    } catch (java.util.concurrent.TimeoutException te) {
+      logger.warn("Writer thread did not complete within 5s - agentId: {}, sessionId: {}, requestId: {}",
+                  agentId, effectiveSessionId, requestId);
+    } catch (Exception writerException) {
+      logger.error("Writer thread failed - agentId: {}, sessionId: {}, requestId: {}, error: {}",
+                   agentId, effectiveSessionId, requestId, writerException.getMessage());
+    }
+  }
+
+  /**
+   * Wrapper method that adds retry logic around streamBedrockResponse. Only retries if no chunks have been received yet. Added
+   * writeQueue and clientDisconnected parameters to pass through to streamBedrockResponse
    */
   private void streamBedrockResponseWithRetry(String agentAliasId, String agentId, String prompt,
                                               boolean enableTrace, boolean latencyOptimized,
@@ -773,20 +931,17 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                               AtomicBoolean chunksReceived,
                                               AtomicBoolean sessionStartSent,
                                               String requestId, String correlationId, String userId,
-                                              Integer operationTimeout, TimeUnit operationTimeoutUnit)
-      throws ExecutionException, InterruptedException, IOException {
-
+                                              Integer operationTimeout, TimeUnit operationTimeoutUnit,
+                                              BlockingQueue<String> writeQueue, AtomicBoolean clientDisconnected) {
     StreamingRetryUtility.StreamingOperation operation = () -> {
       streamBedrockResponse(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
                             excludePreviousThinkingSteps, previousConversationTurnsToInclude,
                             knowledgeBaseConfigs, outputStream, chunksReceived, sessionStartSent, requestId,
-                            correlationId, userId, operationTimeout, operationTimeoutUnit);
+                            correlationId, userId, operationTimeout, operationTimeoutUnit, writeQueue, clientDisconnected);
     };
 
-
-
-    StreamingRetryUtility.RetryResult result = StreamingRetryUtility.executeWithRetry(
-                                                                                      operation, retryConfig, chunksReceived);
+    StreamingRetryUtility.RetryResult result =
+        StreamingRetryUtility.executeWithRetry(operation, retryConfig, chunksReceived, agentId, effectiveSessionId, requestId);
     if (!result.isSuccess()) {
       // Create enhanced error message with retry information
       String errorMessage = StreamingRetryUtility.createRetryErrorMessage(
@@ -798,24 +953,13 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                                                           retryConfig.getMaxRetries(),
                                                                           result.isChunksReceived());
 
-      // Re-throw the original exception with enhanced message
-      // If it's an ExecutionException, InterruptedException, or IOException, preserve the type
-      Exception lastException = result.getLastException();
-      if (lastException instanceof ExecutionException) {
-        throw new ExecutionException(errorMessage, lastException.getCause());
-      } else if (lastException instanceof InterruptedException) {
-        InterruptedException ie = new InterruptedException(errorMessage);
-        ie.initCause(lastException);
-        throw ie;
-      } else if (lastException instanceof IOException) {
-        throw new IOException(errorMessage, lastException);
-      } else {
-        // For other exceptions, wrap in ModuleException
-        throw new ModuleException(errorMessage, BedrockErrorType.CLIENT_ERROR, lastException);
-      }
+      throw new ModuleException(errorMessage, BedrockErrorType.CLIENT_ERROR, result.getLastException());
     }
   }
 
+  /**
+   * invokeAgentSSEStream and passed through to avoid race conditions
+   */
   private void streamBedrockResponse(String agentAliasId, String agentId, String prompt,
                                      boolean enableTrace, boolean latencyOptimized, String effectiveSessionId,
                                      boolean excludePreviousThinkingSteps, Integer previousConversationTurnsToInclude,
@@ -823,10 +967,17 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                      PipedOutputStream outputStream, AtomicBoolean chunksReceived,
                                      AtomicBoolean sessionStartSent, String requestId,
                                      String correlationId, String userId,
-                                     Integer operationTimeout, TimeUnit operationTimeoutUnit)
+                                     Integer operationTimeout, TimeUnit operationTimeoutUnit,
+                                     BlockingQueue<String> writeQueue, AtomicBoolean clientDisconnected)
       throws ExecutionException, InterruptedException, IOException {
 
     long startTime = System.currentTimeMillis();
+
+    // Track chunk timing and count
+    AtomicInteger chunkCount = new AtomicInteger(0);
+    AtomicLong lastChunkTime = new AtomicLong(startTime);
+    AtomicLong timeToFirstChunk = new AtomicLong(-1);
+
     InvokeAgentRequest request = buildStreamingInvokeAgentRequest(agentAliasId, agentId, prompt, enableTrace,
                                                                   latencyOptimized, effectiveSessionId,
                                                                   excludePreviousThinkingSteps,
@@ -835,19 +986,51 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
     InvokeAgentResponseHandler.Visitor visitor = InvokeAgentResponseHandler.Visitor.builder()
         .onChunk(chunk -> handleStreamChunk(agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId,
-                                            userId, outputStream, chunksReceived, sessionStartSent, chunk))
+                                            userId, chunksReceived, sessionStartSent, startTime, writeQueue, chunk,
+                                            chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected))
         .build();
 
     InvokeAgentResponseHandler handler = InvokeAgentResponseHandler.builder()
         .subscriber(visitor)
         .onComplete(() -> handleStreamComplete(effectiveSessionId, agentId, agentAliasId, startTime, requestId,
-                                               correlationId, userId, outputStream))
+                                               correlationId, userId, chunkCount, timeToFirstChunk, chunksReceived, writeQueue,
+                                               clientDisconnected))
         .build();
 
     long effectiveTimeoutMs = (operationTimeout != null && operationTimeout > 0)
         ? toDuration(operationTimeout, operationTimeoutUnit).toMillis()
         : getConnection().getConnectionTimeoutMs();
-    getConnection().invokeAgent(request, handler, effectiveTimeoutMs).get();
+    CompletableFuture<Void> invocationFuture = getConnection().invokeAgent(request, handler, effectiveTimeoutMs);
+
+    // Use whenComplete callback to handle client disconnect instead of polling.
+    // When client disconnects (writer IOException), this cancels the Bedrock invocation.
+    invocationFuture.whenComplete((result, throwable) -> {
+      if (throwable == null && clientDisconnected.get()) {
+        logger.debug("Bedrock invocation completed but client already disconnected - agentId: {}, sessionId: {}, requestId: {}",
+                     agentId, effectiveSessionId, requestId);
+      }
+    });
+
+    try {
+      // Block until Bedrock invocation completes (or fails/times out).
+      // Client disconnect is handled by the writer thread setting clientDisconnected=true,
+      // which causes handleStreamChunk to skip queuing and handleStreamComplete to send sentinel.
+      invocationFuture.get();
+    } catch (ExecutionException | InterruptedException e) {
+      // If client disconnected during invocation, no need to propagate the error
+      if (clientDisconnected.get()) {
+        logger.debug("Client disconnected, suppressing Bedrock error - agentId: {}, sessionId: {}, requestId: {}",
+                     agentId, effectiveSessionId, requestId);
+        if (!forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId)) {
+          throw new ModuleException(
+                                    "Failed to queue end-of-stream sentinel after client disconnect. agentId: " + agentId
+                                        + ", sessionId: " + effectiveSessionId + ", requestId: " + requestId,
+                                    BedrockErrorType.SERVICE_ERROR);
+        }
+        return;
+      }
+      throw e;
+    }
   }
 
   private InvokeAgentRequest buildStreamingInvokeAgentRequest(String agentAliasId, String agentId, String prompt,
@@ -876,84 +1059,120 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   private void handleStreamChunk(String agentAliasId, String agentId, String prompt, String effectiveSessionId,
-                                 String requestId, String correlationId, String userId, PipedOutputStream outputStream,
-                                 AtomicBoolean chunksReceived, AtomicBoolean sessionStartSent, PayloadPart chunk) {
+                                 String requestId, String correlationId, String userId,
+                                 AtomicBoolean chunksReceived, AtomicBoolean sessionStartSent, long startTime,
+                                 BlockingQueue<String> writeQueue, PayloadPart chunk,
+                                 AtomicInteger chunkCount, AtomicLong lastChunkTime, AtomicLong timeToFirstChunk,
+                                 AtomicBoolean clientDisconnected) {
+    // IMPORTANT: This callback runs on Netty's event loop thread.
+    // We must NOT block here, so we queue the data for the writer thread.
+    // Skip processing if client already disconnected - prevents queue growth
+    if (clientDisconnected.get()) {
+      return;
+    }
     try {
       chunksReceived.set(true);
+      // Track chunk timing
+      long currentTime = System.currentTimeMillis();
+      int currentChunkCount = chunkCount.incrementAndGet();
+      long timeSinceLastChunk = currentTime - lastChunkTime.getAndSet(currentTime);
+
       if (sessionStartSent.compareAndSet(false, true)) {
+        long firstChunkTime = currentTime - startTime;
+        timeToFirstChunk.set(firstChunkTime);
+        logger.debug("First chunk received - agentId: {}, sessionId: {}, requestId: {}, timeToFirstChunkMs: {}",
+                     agentId, effectiveSessionId, requestId, firstChunkTime);
         writeSessionStartEvent(agentAliasId, agentId, prompt, effectiveSessionId, requestId, correlationId, userId,
-                               outputStream);
+                               firstChunkTime, writeQueue);
+      } else if (timeSinceLastChunk > 1000) {
+        logger.debug("Slow chunk gap - agentId: {}, sessionId: {}, requestId: {}, chunkNumber: {}, gapMs: {}",
+                     agentId, effectiveSessionId, requestId, currentChunkCount, timeSinceLastChunk);
       }
       JSONObject chunkData = createChunkJson(chunk);
       String sseEvent = formatSSEEvent(CHUNK, chunkData.toString());
-      outputStream.write(sseEvent.getBytes(StandardCharsets.UTF_8));
-      outputStream.flush();
-      logger.debug(sseEvent);
+      boolean queued = writeQueue.offer(sseEvent);
+      if (!queued) {
+        logger.warn("Queue full, dropping chunk event - agentId: {}, sessionId: {}, requestId: {}, chunkNumber: {}",
+                    agentId, effectiveSessionId, requestId, currentChunkCount);
+      }
     } catch (IOException e) {
-      writeChunkErrorEvent(e, outputStream);
+      writeChunkErrorEvent(e, writeQueue);
     }
   }
 
   private void writeSessionStartEvent(String agentAliasId, String agentId, String prompt, String effectiveSessionId,
                                       String requestId, String correlationId, String userId,
-                                      PipedOutputStream outputStream)
+                                      long firstChunkTime, BlockingQueue<String> writeQueue)
       throws IOException {
     JSONObject startEvent = createSessionStartJson(agentAliasId, agentId, prompt, effectiveSessionId,
-                                                   Instant.now().toString(), requestId, correlationId, userId);
+                                                   Instant.now().toString(), requestId, correlationId, userId, firstChunkTime);
     String sseStart = formatSSEEvent("session-start", startEvent.toString());
-    outputStream.write(sseStart.getBytes(StandardCharsets.UTF_8));
-    outputStream.flush();
-    logger.info(sseStart);
+    if (!writeQueue.offer(sseStart)) {
+      throw new IOException(
+                            "Failed to queue session-start event - agentId: " + agentId
+                                + ", sessionId: " + effectiveSessionId + ", requestId: " + requestId);
+    }
   }
 
-  private void writeChunkErrorEvent(IOException e, PipedOutputStream outputStream) {
-    try {
-      String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
-      outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-      outputStream.flush();
-      logger.error(errorEvent);
-    } catch (IOException ioException) {
-      logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+  private void writeChunkErrorEvent(IOException e, BlockingQueue<String> writeQueue) {
+    String errorEvent = formatSSEEvent("chunk-error", createErrorJson(e).toString());
+    if (!writeQueue.offer(errorEvent)) {
+      logger.warn("Queue full, dropping chunk-error event");
     }
+    logger.error("Error processing chunk: {}", e.getMessage());
   }
 
   private void handleStreamComplete(String effectiveSessionId, String agentId, String agentAliasId, long startTime,
                                     String requestId, String correlationId, String userId,
-                                    PipedOutputStream outputStream) {
+                                    AtomicInteger chunkCount, AtomicLong timeToFirstChunk,
+                                    AtomicBoolean chunksReceived, BlockingQueue<String> writeQueue,
+                                    AtomicBoolean clientDisconnected) {
+    // IMPORTANT: This callback runs on Netty's event loop thread.
+    // We must NOT block here, so we queue the data for the writer thread.
+    // Skip completion event if client already disconnected
+    if (clientDisconnected.get()) {
+      logger.debug("Skipping completion - client disconnected - agentId: {}, sessionId: {}, requestId: {}",
+                   agentId, effectiveSessionId, requestId);
+      forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId);
+      return;
+    }
     try {
-      long endTime = System.currentTimeMillis();
-      JSONObject completionData = createCompletionJson(effectiveSessionId, agentId, agentAliasId, endTime - startTime,
-                                                       requestId, correlationId, userId);
+      long totalDuration = System.currentTimeMillis() - startTime;
+      int finalChunkCount = chunkCount.get();
+      long timeToFirstChunkMs = timeToFirstChunk.get();
+
+      JSONObject completionData = createCompletionJson(effectiveSessionId, agentId, agentAliasId, totalDuration,
+                                                       requestId, correlationId, userId,
+                                                       timeToFirstChunkMs >= 0 ? timeToFirstChunkMs : -1, finalChunkCount);
       String completionEvent = formatSSEEvent("session-complete", completionData.toString());
-      outputStream.write(completionEvent.getBytes(StandardCharsets.UTF_8));
-      outputStream.flush();
-      logger.info(completionEvent);
-    } catch (IOException e) {
-      try {
-        String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
-        outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
-        outputStream.flush();
-        logger.error(errorEvent);
-      } catch (IOException ioException) {
-        logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
+      if (!writeQueue.offer(completionEvent)) {
+        logger.warn("Queue full, dropping completion event - agentId: {}, sessionId: {}, requestId: {}",
+                    agentId, effectiveSessionId, requestId);
+      }
+    } catch (Exception e) {
+      logger.error("Error creating completion event - agentId: {}, sessionId: {}, requestId: {}, error: {}",
+                   agentId, effectiveSessionId, requestId, e.getMessage());
+      String errorEvent = formatSSEEvent("completion-error", createErrorJson(e).toString());
+      if (!writeQueue.offer(errorEvent)) {
+        logger.warn("Queue full, dropping completion-error event - agentId: {}, sessionId: {}, requestId: {}",
+                    agentId, effectiveSessionId, requestId);
       }
     } finally {
-      try {
-        outputStream.close();
-      } catch (IOException ioException) {
-        logger.error(ERROR_WRITING_EVENT_LOG, ioException.getMessage());
-      }
+      forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId);
     }
   }
 
   private static JSONObject createCompletionJson(String sessionId, String agentId, String agentAlias, long duration,
-                                                 String requestId, String correlationId, String userId) {
+                                                 String requestId, String correlationId, String userId, long timeToFirstChunkMs,
+                                                 int totalChunks) {
     JSONObject completionData = new JSONObject();
     completionData.put(SESSION_ID, sessionId);
     completionData.put(AGENT_ID, agentId);
     completionData.put(AGENT_ALIAS, agentAlias);
     completionData.put("status", "completed");
     completionData.put("total_duration_ms", duration);
+    completionData.put("timeToFirstChunkMs", timeToFirstChunkMs);
+    completionData.put("totalChunks", totalChunks);
     completionData.put(TIMESTAMP, Instant.now().toString());
     if (requestId != null && !requestId.isEmpty()) {
       completionData.put("requestId", requestId);
@@ -1000,7 +1219,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
 
   private static JSONObject createSessionStartJson(String agentAlias, String agentId, String prompt,
                                                    String sessionId, String timestamp, String requestId, String correlationId,
-                                                   String userId) {
+                                                   String userId, long timeToFirstChunkMs) {
     JSONObject startData = new JSONObject();
     startData.put(SESSION_ID, sessionId);
     startData.put(AGENT_ID, agentId);
@@ -1008,6 +1227,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     startData.put(PROMPT, prompt);
     startData.put(PROCESSED_AT, timestamp);
     startData.put("status", "started");
+    startData.put("timeToFirstChunkMs", timeToFirstChunkMs);
     if (requestId != null && !requestId.isEmpty()) {
       startData.put("requestId", requestId);
     }
@@ -1018,5 +1238,22 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       startData.put("userId", userId);
     }
     return startData;
+  }
+
+  /**
+   * Submits a task to the Mule IO scheduler via {@link Scheduler#submit(Runnable)}. If the scheduler rejects the task (e.g. all
+   * concurrent slots are occupied), the rejection propagates as a {@link ModuleException} so the caller can return a clean error
+   * to the client. Running on the caller thread is not safe here because the writer and producer tasks have a producer-consumer
+   * dependency that would deadlock if both ran on the same thread.
+   */
+  private static Future<?> submitToScheduler(Runnable task, Scheduler scheduler) {
+    try {
+      return scheduler.submit(task);
+    } catch (RejectedExecutionException e) {
+      throw new ModuleException(
+                                "Streaming scheduler capacity exceeded - all concurrent slots are occupied. "
+                                    + "Consider increasing the scheduler pool size or reducing concurrent streaming requests.",
+                                BedrockErrorType.SERVICE_ERROR, e);
+    }
   }
 }
