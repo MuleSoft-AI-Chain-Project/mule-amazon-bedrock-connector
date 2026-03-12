@@ -845,14 +845,13 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       } catch (IOException ioe) {
         logger.error("Failed to queue failure events - agentId: {}, sessionId: {}, requestId: {}, error: {}",
                      agentId, effectiveSessionId, requestId, ioe.getMessage());
-      } finally {
-        if (!forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId)) {
-          throw new ModuleException(
-                                    "Failed to queue end-of-stream sentinel - stream will not terminate cleanly. agentId: "
-                                        + agentId
-                                        + ", sessionId: " + effectiveSessionId + ", requestId: " + requestId,
-                                    BedrockErrorType.SERVICE_ERROR);
-        }
+      }
+      if (!forceQueueSentinel(writeQueue, agentId, effectiveSessionId, requestId)) {
+        throw new ModuleException(
+                                  "Failed to queue end-of-stream sentinel - stream will not terminate cleanly. agentId: "
+                                      + agentId
+                                      + ", sessionId: " + effectiveSessionId + ", requestId: " + requestId,
+                                  BedrockErrorType.SERVICE_ERROR);
       }
     } finally {
       awaitWriterCompletion(writerFuture, agentId, effectiveSessionId, requestId);
