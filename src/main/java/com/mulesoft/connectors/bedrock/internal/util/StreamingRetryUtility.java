@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
 
 /**
  * Utility class for handling retries in streaming operations. Implements exponential backoff and retryable exception detection.
@@ -78,8 +79,10 @@ public class StreamingRetryUtility {
   }
 
   /**
-   * Determines if a throwable is retryable for operations. Only retries on timeout and network-related errors. Handles both
-   * Exception and RuntimeException (including CompletionException).
+   * Determines if a throwable is retryable for operations. Retries on: - Server-side errors (HTTP 5XX) and throttling (HTTP 429)
+   * via SdkServiceException - Timeout and network-related errors via SdkClientException - TimeoutException Handles wrapper
+   * exceptions (CompletionException, ExecutionException, RuntimeException) by unwrapping to the root cause. Does NOT retry on
+   * client errors (HTTP 4XX except 429) such as ValidationException, AccessDeniedException, ResourceNotFoundException.
    *
    * @param throwable The throwable to check
    * @return true if the throwable is retryable, false otherwise
@@ -90,6 +93,9 @@ public class StreamingRetryUtility {
     }
     if (throwable instanceof CompletionException) {
       return isRetryableCompletionException((CompletionException) throwable);
+    }
+    if (throwable instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) throwable);
     }
     if (throwable instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) throwable);
@@ -122,6 +128,9 @@ public class StreamingRetryUtility {
     if (cause instanceof TimeoutException) {
       return true;
     }
+    if (cause instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) cause);
+    }
     if (cause instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) cause);
     }
@@ -136,6 +145,9 @@ public class StreamingRetryUtility {
   private static boolean isRetryableGenericException(Exception exception) {
     if (exception instanceof TimeoutException) {
       return true;
+    }
+    if (exception instanceof SdkServiceException) {
+      return isRetryableSdkServiceException((SdkServiceException) exception);
     }
     if (exception instanceof SdkClientException) {
       return isRetryableSdkClientException((SdkClientException) exception);
@@ -171,6 +183,25 @@ public class StreamingRetryUtility {
         lowerMessage.contains("failed to connect") ||
         lowerMessage.contains("connection refused") ||
         lowerMessage.contains("connection reset");
+  }
+
+  /**
+   * Checks if an SdkServiceException is retryable based on its HTTP status code. Only server-side errors (5XX) and throttling
+   * (429) are retryable. Client errors (4XX except 429) such as ValidationException (400), AccessDeniedException (403), and
+   * ResourceNotFoundException (404) are NOT retryable as they indicate request-level problems that will not resolve on retry.
+   *
+   * @param exception The SdkServiceException to check
+   * @return true if retryable (5XX or 429), false otherwise
+   */
+  private static boolean isRetryableSdkServiceException(SdkServiceException exception) {
+    int statusCode = exception.statusCode();
+    boolean retryable = statusCode >= 500 || statusCode == 429;
+    if (retryable) {
+      logger.debug("SdkServiceException with status {} is retryable: {}", statusCode, exception.getMessage());
+    } else {
+      logger.debug("SdkServiceException with status {} is not retryable (client error): {}", statusCode, exception.getMessage());
+    }
+    return retryable;
   }
 
   /**
@@ -274,7 +305,10 @@ public class StreamingRetryUtility {
   public static RetryResult executeWithRetry(
                                              StreamingOperation operation,
                                              RetryConfig config,
-                                             AtomicBoolean chunksReceived) {
+                                             AtomicBoolean chunksReceived,
+                                             String agentId,
+                                             String sessionId,
+                                             String requestId) {
 
     if (!config.isEnabled()) {
       return executeStreamingOnce(operation, chunksReceived);
@@ -282,26 +316,74 @@ public class StreamingRetryUtility {
 
     Exception lastException = null;
     int attemptsMade = 0;
+    long retryStartTime = System.currentTimeMillis();
+
 
     for (int attempt = 0; attempt <= config.getMaxRetries(); attempt++) {
       attemptsMade++;
+      long attemptStartTime = System.currentTimeMillis();
       try {
         if (attempt > 0) {
           chunksReceived.set(false);
+          logger
+              .debug("Retry attempt {} starting - agentId: {}, sessionId: {}, requestId: {}, attemptNumber: {}, totalAttempts: {}",
+                     attemptsMade, agentId, sessionId, requestId, attempt, config.getMaxRetries() + 1);
+        } else {
+          logger.debug("Initial attempt starting - agentId: {}, sessionId: {}, requestId: {}", agentId, sessionId, requestId);
         }
         operation.execute();
+        // Success - exit retry loop
+        long attemptDuration = System.currentTimeMillis() - attemptStartTime;
+        logger
+            .debug("Operation succeeded on attempt {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
+                   attemptsMade, agentId, sessionId, requestId, attemptDuration, System.currentTimeMillis() - retryStartTime);
         return new RetryResult(true, null, attemptsMade, chunksReceived.get());
       } catch (Exception e) {
         lastException = e;
         boolean chunksWereReceived = chunksReceived.get();
-        if (!canRetryStreaming(attempt, config, e, chunksWereReceived)) {
-          return failStreamingRetry(e, attemptsMade, chunksWereReceived, config);
+        long attemptDuration = System.currentTimeMillis() - attemptStartTime;
+        // Check if we can retry
+        boolean canRetry = attempt < config.getMaxRetries()
+            && isRetryableException(e)
+            && !chunksWereReceived; // CRITICAL: Only retry if no chunks received
+        if (!canRetry) {
+          String reason;
+          if (chunksWereReceived) {
+            reason = "chunks were already received";
+          } else if (!isRetryableException(e)) {
+            reason = "exception is not retryable: " + e.getClass().getSimpleName();
+          } else {
+            reason = "max retries (" + config.getMaxRetries() + ") exceeded";
+          }
+          logger
+              .warn("Cannot retry streaming operation (attempt {}): {} - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}, totalElapsedMs: {}",
+                    attemptsMade, reason, agentId, sessionId, requestId, attemptDuration,
+                    System.currentTimeMillis() - retryStartTime);
+          return new RetryResult(false, e, attemptsMade, chunksWereReceived);
         }
-        RetryResult interrupted = sleepBeforeStreamingRetry(attempt, config, attemptsMade, e.getMessage(),
-                                                            chunksWereReceived);
-        if (interrupted != null) {
-          return interrupted;
+        // Calculate exponential backoff
+        long backoffMs = calculateExponentialBackoff(attempt, config.getBaseBackoffMs());
+        logger
+            .warn("Retryable error on attempt {}: {}. Retrying in {}ms - agentId: {}, sessionId: {}, requestId: {}, attemptDurationMs: {}",
+                  attemptsMade, e.getMessage(), backoffMs, agentId, sessionId, requestId, attemptDuration);
+        logger.debug("Waiting {}ms before retry attempt {} - agentId: {}, sessionId: {}, requestId: {}",
+                     backoffMs, attemptsMade + 1, agentId, sessionId, requestId);
+
+        // Wait before retrying
+        try {
+          Thread.sleep(backoffMs);
+          logger.debug("Backoff completed, starting retry attempt {} - agentId: {}, sessionId: {}, requestId: {}",
+                       attemptsMade + 1, agentId, sessionId, requestId);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          logger.debug("Retry interrupted during backoff - agentId: {}, sessionId: {}, requestId: {}, attempt: {}",
+                       agentId, sessionId, requestId, attemptsMade);
+          return new RetryResult(false,
+                                 new Exception("Retry interrupted", ie),
+                                 attemptsMade,
+                                 chunksWereReceived);
         }
+
       }
     }
 
@@ -314,41 +396,6 @@ public class StreamingRetryUtility {
       return new RetryResult(true, null, 1, chunksReceived.get());
     } catch (Exception e) {
       return new RetryResult(false, e, 1, chunksReceived.get());
-    }
-  }
-
-  private static boolean canRetryStreaming(int attempt, RetryConfig config, Exception e, boolean chunksWereReceived) {
-    return attempt < config.getMaxRetries() && isRetryableException(e) && !chunksWereReceived;
-  }
-
-  private static RetryResult failStreamingRetry(Exception e, int attemptsMade, boolean chunksWereReceived,
-                                                RetryConfig config) {
-    String reason = buildStreamingCannotRetryReason(e, chunksWereReceived, config);
-    logger.warn("Cannot retry streaming operation (attempt {}): {}", attemptsMade, reason);
-    return new RetryResult(false, e, attemptsMade, chunksWereReceived);
-  }
-
-  private static String buildStreamingCannotRetryReason(Exception e, boolean chunksWereReceived, RetryConfig config) {
-    if (chunksWereReceived) {
-      return "chunks were already received";
-    }
-    if (!isRetryableException(e)) {
-      return "exception is not retryable: " + e.getClass().getSimpleName();
-    }
-    return "max retries (" + config.getMaxRetries() + ") exceeded";
-  }
-
-  /** Returns non-null RetryResult if interrupted, null to continue retrying. */
-  private static RetryResult sleepBeforeStreamingRetry(int attempt, RetryConfig config, int attemptsMade,
-                                                       String lastMessage, boolean chunksWereReceived) {
-    long backoffMs = calculateExponentialBackoff(attempt, config.getBaseBackoffMs());
-    logger.warn("Retryable error on attempt {}: {}. Retrying in {}ms", attemptsMade, lastMessage, backoffMs);
-    try {
-      Thread.sleep(backoffMs);
-      return null;
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      return new RetryResult(false, new Exception("Retry interrupted", ie), attemptsMade, chunksWereReceived);
     }
   }
 
