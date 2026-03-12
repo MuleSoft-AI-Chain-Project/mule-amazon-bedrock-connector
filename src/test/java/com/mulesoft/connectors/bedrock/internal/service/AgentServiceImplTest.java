@@ -1017,11 +1017,11 @@ class AgentServiceImplTest {
     }
   }
 
-  // ==================== submitWithCallerRunsOnRejection ====================
+  // ==================== submitToScheduler ====================
 
   @Nested
-  @DisplayName("submitWithCallerRunsOnRejection")
-  class SubmitWithCallerRunsOnRejection {
+  @DisplayName("submitToScheduler")
+  class SubmitToScheduler {
 
     @Test
     @DisplayName("submits task to scheduler when capacity is available")
@@ -1030,54 +1030,34 @@ class AgentServiceImplTest {
       Future<?> mockFuture = mock(Future.class);
       doAnswer(invocation -> mockFuture).when(scheduler).submit(any(Runnable.class));
 
-      AtomicBoolean taskRan = new AtomicBoolean(false);
-      Future<?> future = invokeSubmit(() -> taskRan.set(true), scheduler);
+      Future<?> future = invokeSubmit(() -> {
+      }, scheduler);
 
       assertThat(future).isSameAs(mockFuture);
     }
 
     @Test
-    @DisplayName("runs task on caller thread when scheduler rejects (backpressure)")
-    void rejection_runsOnCallerThread() throws Exception {
+    @DisplayName("throws ModuleException when scheduler rejects task")
+    void rejection_throwsModuleException() {
       org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
       when(scheduler.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException("pool full"));
 
-      Thread callerThread = Thread.currentThread();
-      AtomicBoolean taskRan = new AtomicBoolean(false);
-      AtomicBoolean ranOnCallerThread = new AtomicBoolean(false);
-
-      Future<?> future = invokeSubmit(() -> {
-        taskRan.set(true);
-        ranOnCallerThread.set(Thread.currentThread() == callerThread);
-      }, scheduler);
-
-      assertThat(taskRan.get()).isTrue();
-      assertThat(ranOnCallerThread.get()).isTrue();
-      assertThat(future.isDone()).isTrue();
-    }
-
-    @Test
-    @DisplayName("propagates exception when rejected task throws")
-    void rejection_taskThrows_propagatesException() {
-      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
-      when(scheduler.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException("pool full"));
-
-      RuntimeException taskException = new RuntimeException("task failed");
       try {
         invokeSubmit(() -> {
-          throw taskException;
         }, scheduler);
-        assertThat(true).as("Expected InvocationTargetException").isFalse();
+        assertThat(true).as("Expected InvocationTargetException wrapping ModuleException").isFalse();
       } catch (Exception e) {
         assertThat(e).isInstanceOf(java.lang.reflect.InvocationTargetException.class);
-        assertThat(e.getCause()).isSameAs(taskException);
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getMessage()).contains("Streaming scheduler capacity exceeded");
+        assertThat(e.getCause().getCause()).isInstanceOf(RejectedExecutionException.class);
       }
     }
 
     private Future<?> invokeSubmit(Runnable task,
                                    org.mule.runtime.api.scheduler.Scheduler scheduler)
         throws Exception {
-      Method m = AgentServiceImpl.class.getDeclaredMethod("submitWithCallerRunsOnRejection",
+      Method m = AgentServiceImpl.class.getDeclaredMethod("submitToScheduler",
                                                           Runnable.class, org.mule.runtime.api.scheduler.Scheduler.class);
       m.setAccessible(true);
       return (Future<?>) m.invoke(null, task, scheduler);

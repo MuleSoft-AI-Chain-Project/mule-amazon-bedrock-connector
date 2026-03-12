@@ -722,25 +722,25 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       // ensuring graceful shutdown on undeploy (no daemon thread abrupt termination, no classloader leaks).
       Scheduler streamingScheduler = getConfig().getStreamingScheduler();
 
-      Future<?> writerFuture = submitWithCallerRunsOnRejection(
-                                                               () -> runWriterTask(writeQueue, finalOut,
-                                                                                   clientDisconnected, agentId,
-                                                                                   effectiveSessionId, requestId),
-                                                               streamingScheduler);
+      Future<?> writerFuture = submitToScheduler(
+                                                 () -> runWriterTask(writeQueue, finalOut,
+                                                                     clientDisconnected, agentId,
+                                                                     effectiveSessionId, requestId),
+                                                 streamingScheduler);
 
       // Start the streaming process asynchronously on the Mule IO scheduler
       // (NOT on ForkJoinPool.commonPool() which has ~CPU-cores threads and would starve under blocking retries)
-      submitWithCallerRunsOnRejection(
-                                      () -> runProducerTask(agentAliasId, agentId, prompt, enableTrace, latencyOptimized,
-                                                            effectiveSessionId,
-                                                            excludePreviousThinkingSteps, previousConversationTurnsToInclude,
-                                                            knowledgeBaseConfigs,
-                                                            finalOut, retryConfig, chunksReceived, sessionStartSent, requestId,
-                                                            correlationId, userId,
-                                                            operationTimeout, operationTimeoutUnit, writeQueue,
-                                                            clientDisconnected,
-                                                            requestStartTime, writerFuture),
-                                      streamingScheduler);
+      submitToScheduler(
+                        () -> runProducerTask(agentAliasId, agentId, prompt, enableTrace, latencyOptimized,
+                                              effectiveSessionId,
+                                              excludePreviousThinkingSteps, previousConversationTurnsToInclude,
+                                              knowledgeBaseConfigs,
+                                              finalOut, retryConfig, chunksReceived, sessionStartSent, requestId,
+                                              correlationId, userId,
+                                              operationTimeout, operationTimeoutUnit, writeQueue,
+                                              clientDisconnected,
+                                              requestStartTime, writerFuture),
+                        streamingScheduler);
       return inputStream;
 
     } catch (IOException e) {
@@ -1242,17 +1242,19 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   }
 
   /**
-   * Submits a task to the Mule IO scheduler via {@link Scheduler#submit(Runnable)}. If the scheduler rejects the task (e.g. max
-   * concurrent tasks reached), the task is run on the caller's thread as backpressure — matching the behavior of
-   * {@link java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy}.
+   * Submits a task to the Mule IO scheduler via {@link Scheduler#submit(Runnable)}. If the scheduler rejects the task (e.g. all
+   * concurrent slots are occupied), the rejection propagates as a {@link ModuleException} so the caller can return a clean error
+   * to the client. Running on the caller thread is not safe here because the writer and producer tasks have a producer-consumer
+   * dependency that would deadlock if both ran on the same thread.
    */
-  private static Future<?> submitWithCallerRunsOnRejection(Runnable task, Scheduler scheduler) {
+  private static Future<?> submitToScheduler(Runnable task, Scheduler scheduler) {
     try {
       return scheduler.submit(task);
     } catch (RejectedExecutionException e) {
-      logger.warn("Streaming scheduler rejected task, running on caller thread as backpressure: {}", e.getMessage());
-      task.run();
-      return CompletableFuture.completedFuture(null);
+      throw new ModuleException(
+                                "Streaming scheduler capacity exceeded - all concurrent slots are occupied. "
+                                    + "Consider increasing the scheduler pool size or reducing concurrent streaming requests.",
+                                BedrockErrorType.SERVICE_ERROR, e);
     }
   }
 }
