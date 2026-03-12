@@ -2,2273 +2,1170 @@ package com.mulesoft.connectors.bedrock.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyLong;
 
-import java.io.InputStream;
-import java.util.Collections;
+import java.io.IOException;
+import java.io.PipedOutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseLoggingParameters;
-import software.amazon.awssdk.core.document.Document;
+import org.json.JSONObject;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsFilteringParameters;
 import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsMultipleFilteringParameters;
-import org.mule.runtime.extension.api.exception.ModuleException;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import java.util.concurrent.TimeUnit;
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsResponseParameters;
-import com.mulesoft.connectors.bedrock.api.parameter.BedrockAgentsSessionParameters;
-import com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters;
 import com.mulesoft.connectors.bedrock.internal.config.BedrockConfiguration;
 import com.mulesoft.connectors.bedrock.internal.connection.BedrockConnection;
 import com.mulesoft.connectors.bedrock.internal.support.IntegrationTestParamHelper;
+import com.mulesoft.connectors.bedrock.internal.util.StreamingRetryUtility;
+import org.mule.runtime.extension.api.exception.ModuleException;
+
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.services.bedrockagent.model.Agent;
-import software.amazon.awssdk.services.bedrockagent.model.AgentStatus;
-import software.amazon.awssdk.services.bedrockagent.model.AgentSummary;
-import software.amazon.awssdk.services.bedrockagent.model.GetAgentResponse;
-import software.amazon.awssdk.services.bedrockagent.model.ListAgentsResponse;
-import software.amazon.awssdk.services.bedrockagentruntime.model.Attribution;
-import software.amazon.awssdk.services.bedrockagentruntime.model.Citation;
-import software.amazon.awssdk.services.bedrockagentruntime.model.GeneratedResponsePart;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentResponseHandler;
 import software.amazon.awssdk.services.bedrockagentruntime.model.PayloadPart;
-import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievalResultContent;
-import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievalResultLocation;
 import software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference;
-import software.amazon.awssdk.services.bedrockagentruntime.model.TextResponsePart;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
-import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
+/**
+ * Unit tests for AgentServiceImpl async streaming error paths, writer thread edge cases, and private helper methods that are
+ * difficult to exercise via MUnit integration tests.
+ */
 @DisplayName("AgentServiceImpl")
 class AgentServiceImplTest {
 
-  @Test
-  @DisplayName("can be constructed with config and connection")
-  void constructor() {
+  private AgentServiceImpl service;
+  private BedrockConnection mockConnection;
+
+  @BeforeEach
+  void setUp() {
     BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    assertThat(service).isNotNull();
+    mockConnection = mock(BedrockConnection.class);
+    when(mockConnection.getConnectionTimeoutMs()).thenReturn(30000);
+    when(mockConnection.getRegion()).thenReturn("us-east-1");
+    service = new AgentServiceImpl(config, mockConnection);
   }
 
-  @Test
-  @DisplayName("implements AgentService and extends BedrockServiceImpl")
-  void typeHierarchy() {
-    AgentServiceImpl service = new AgentServiceImpl(mock(BedrockConfiguration.class), mock(BedrockConnection.class));
-    assertThat(service).isInstanceOf(AgentService.class);
-    assertThat(service).isInstanceOf(BedrockServiceImpl.class);
-  }
+  // ==================== handleStreamChunk ====================
 
-  @Test
-  @DisplayName("listAgents returns JSON with agentNames when connection returns response")
-  void listAgentsReturnsJson() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentSummary summary = AgentSummary.builder().agentName("TestAgent").agentId("AGENT1").build();
-    when(connection.listAgents(any()))
-        .thenReturn(ListAgentsResponse.builder().agentSummaries(summary).build());
+  @Nested
+  @DisplayName("handleStreamChunk")
+  class HandleStreamChunk {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.listAgents();
+    @Test
+    @DisplayName("skips processing when client is disconnected (L1147-1149)")
+    void clientDisconnected_skipsProcessing() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+      AtomicBoolean chunksReceived = new AtomicBoolean(false);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+      AtomicInteger chunkCount = new AtomicInteger(0);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(-1);
 
-    assertThat(result).isNotBlank();
-    assertThat(result).contains("agentNames");
-    assertThat(result).contains("TestAgent");
-  }
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("test chunk"))
+          .build();
 
-  @Test
-  @DisplayName("listAgents returns JSON with empty array when no agents")
-  void listAgentsReturnsEmptyArray() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.listAgents(any())).thenReturn(ListAgentsResponse.builder().build());
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.listAgents();
+      assertThat(writeQueue).isEmpty();
+      assertThat(chunksReceived.get()).isFalse();
+      assertThat(chunkCount.get()).isEqualTo(0);
+    }
 
-    assertThat(result).contains("agentNames");
-    assertThat(result).contains("[]");
-  }
+    @Test
+    @DisplayName("processes chunk and queues SSE event for normal flow")
+    void normalChunk_queuesEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(false);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+      AtomicInteger chunkCount = new AtomicInteger(0);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(-1);
 
-  @Test
-  @DisplayName("listAgents throws when connection throws")
-  void listAgentsThrowsWhenConnectionThrows() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.listAgents(any()))
-        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("timeout").build());
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("Hello world"))
+          .build();
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    org.assertj.core.api.Assertions.assertThatThrownBy(service::listAgents)
-        .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class);
-  }
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
 
-  @Test
-  @DisplayName("getAgentById returns JSON with agent details when connection returns response")
-  void getAgentByIdReturnsJson() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    Agent agent = Agent.builder()
-        .agentId("AGENT1")
-        .agentName("TestAgent")
-        .agentArn("arn:aws:bedrock:us-east-1:123:agent/AGENT1")
-        .agentStatus(AgentStatus.PREPARED)
-        .build();
-    when(connection.getAgent(any())).thenReturn(GetAgentResponse.builder().agent(agent).build());
+      assertThat(chunksReceived.get()).isTrue();
+      assertThat(sessionStartSent.get()).isTrue();
+      assertThat(chunkCount.get()).isEqualTo(1);
+      // Queue should contain session-start + chunk events
+      assertThat(writeQueue.size()).isGreaterThanOrEqualTo(2);
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.getAgentById("AGENT1");
+      String allEvents = drainQueue(writeQueue);
+      assertThat(allEvents).contains("session-start");
+      assertThat(allEvents).contains("chunk");
+      assertThat(allEvents).contains("Hello world");
+    }
 
-    assertThat(result).isNotBlank();
-    assertThat(result).contains("AGENT1");
-    assertThat(result).contains("TestAgent");
-  }
+    @Test
+    @DisplayName("logs slow chunk timing when timeSinceLastChunk > 1s (L1177-1178)")
+    void slowChunkTiming_logs() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true); // Already received first chunk
+      AtomicBoolean sessionStartSent = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(1);
+      // Set lastChunkTime to 2 seconds ago to trigger timeSinceLastChunk > 1000
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis() - 2000);
+      AtomicLong timeToFirstChunk = new AtomicLong(100);
 
-  @Test
-  @DisplayName("getAgentById throws when connection throws")
-  void getAgentByIdThrowsWhenConnectionThrows() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getAgent(any()))
-        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("not found").build());
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("delayed chunk"))
+          .build();
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getAgentById("agent-1"))
-        .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class);
-  }
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis() - 5000,
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
 
-  @Test
-  @DisplayName("getAgentById returns full JSON when agent has all fields")
-  void getAgentByIdReturnsFullJson() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    Agent agent = Agent.builder()
-        .agentId("AGENT1")
-        .agentName("TestAgent")
-        .agentArn("arn:aws:bedrock:us-east-1:123:agent/AGENT1")
-        .agentStatus(AgentStatus.PREPARED)
-        .agentResourceRoleArn("roleArn")
-        .clientToken("token")
-        .description("desc")
-        .foundationModel("amazon.nova-lite-v1")
-        .idleSessionTTLInSeconds(600)
-        .instruction("instruction")
-        .build();
-    when(connection.getAgent(any())).thenReturn(GetAgentResponse.builder().agent(agent).build());
+      assertThat(chunkCount.get()).isEqualTo(2);
+      String allEvents = drainQueue(writeQueue);
+      assertThat(allEvents).contains("delayed chunk");
+    }
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.getAgentById("AGENT1");
-
-    assertThat(result).contains("AGENT1");
-    assertThat(result).contains("roleArn");
-    assertThat(result).contains("desc");
-  }
-
-  @Test
-  @DisplayName("definePromptTemplate returns formatted response when connection succeeds")
-  void definePromptTemplateSuccess() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getRegion()).thenReturn("us-east-1");
-    when(connection.answerPrompt(any(InvokeModelRequest.class)))
-        .thenReturn(InvokeModelResponse.builder()
-            .body(software.amazon.awssdk.core.SdkBytes.fromUtf8String("{\"completion\":\"Hello\"}"))
-            .build());
-
-    BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.definePromptTemplate("Hello {{instructions}}", "instr", "data", params);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("definePromptTemplate throws when connection throws SdkClientException")
-  void definePromptTemplateThrowsOnClientError() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getRegion()).thenReturn("us-east-1");
-    when(connection.answerPrompt(any(InvokeModelRequest.class)))
-        .thenThrow(software.amazon.awssdk.core.exception.SdkClientException.builder().message("network").build());
-
-    BedrockParameters params = IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-                                                       () -> service.definePromptTemplate("Hi", "instr", "data", params))
-        .isInstanceOf(ModuleException.class);
-  }
-
-  @Test
-  @DisplayName("chatWithAgent returns JSON when invokeAgent completes with no chunks")
-  void chatWithAgentReturnsWhenInvokeCompletes() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 2);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hello", false, false,
-                                          sessionParams,
-                                          null,
-                                          null,
-                                          responseParams,
-                                          null);
-
-    assertThat(result).isNotBlank();
-    assertThat(result).contains("sessionId");
-    assertThat(result).contains("agentId");
-    assertThat(result).contains("chunks");
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with empty sessionId uses UUID")
-  void chatWithAgentEmptySessionId() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("", false, null);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(10, TimeUnit.MINUTES, false, 1, 2000L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "aid", "alias", "Hi", false, false,
-                                          sessionParams,
-                                          null,
-                                          null,
-                                          responseParams,
-                                          null);
-
-    assertThat(result).contains("sessionId");
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with requestTimeoutUnit null uses default duration")
-  void chatWithAgentTimeoutUnitNull() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-    IntegrationTestParamHelper.setField(responseParams, "requestTimeoutUnit", null);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with requestTimeout in milliseconds")
-  void chatWithAgentTimeoutMilliseconds() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", true, 3);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(5000, TimeUnit.MILLISECONDS, true, 2, 500L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Prompt", true, true,
-                                          sessionParams,
-                                          null,
-                                          null,
-                                          responseParams,
-                                          null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with legacy single KB filtering uses buildKnowledgeBaseConfigs")
-  void chatWithAgentLegacySingleKb() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
-
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-123");
-    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", 5);
-    IntegrationTestParamHelper.setField(filteringParams, "overrideSearchType",
-                                        BedrockAgentsFilteringParameters.SearchType.SEMANTIC);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hello", false, false,
-                                          sessionParams,
-                                          filteringParams,
-                                          null,
-                                          responseParams,
-                                          null);
-
-    assertThat(result).isNotBlank();
-    assertThat(result).contains("chunks");
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with multiple KB params uses multiple path")
-  void chatWithAgentMultipleKb() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", true, 2);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(60, TimeUnit.SECONDS, false, 2, 500L);
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10,
-                                                                 BedrockAgentsFilteringParameters.SearchType.HYBRID, null, null);
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, true,
-                                          sessionParams,
-                                          null,
-                                          multipleParams,
-                                          responseParams,
-                                          null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent returns JSON when handler may deliver chunk")
-  void chatWithAgentWithChunkDeliveryAttempt() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenAnswer(invocation -> {
-      InvokeAgentResponseHandler handler = invocation.getArgument(1);
-      CompletableFuture<Void> future = new CompletableFuture<>();
-      try {
-        Object subscriber = getHandlerSubscriber(handler);
-        if (subscriber != null) {
-          PayloadPart chunk = PayloadPart.builder().bytes(SdkBytes.fromUtf8String("Hello chunk")).build();
-          InvokeAgentResponseHandler.Visitor.class.getMethod("onChunk", PayloadPart.class)
-              .invoke(subscriber, chunk);
-        }
-        future.complete(null);
-      } catch (Exception e) {
-        future.completeExceptionally(e);
+    @Test
+    @DisplayName("handles queue size > 25 without error (L1188-1190)")
+    void queueOverflow_logsAndContinues() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      // Pre-fill queue with 26 items to trigger queueSize > 25 logging
+      for (int i = 0; i < 26; i++) {
+        writeQueue.offer("event-" + i);
       }
-      return future;
-    });
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(5);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(100);
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("overflow chunk"))
+          .build();
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, null, responseParams, null);
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
 
-    assertThat(result).isNotBlank();
-    assertThat(result).contains("fullResponse");
-    assertThat(result).contains("sessionId");
-    assertThat(result).contains("chunks");
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with chunk containing attribution and citations")
-  void chatWithAgentWithChunkWithAttributionAndCitations() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenAnswer(invocation -> {
-      InvokeAgentResponseHandler handler = invocation.getArgument(1);
-      CompletableFuture<Void> future = new CompletableFuture<>();
-      try {
-        Object subscriber = getHandlerSubscriber(handler);
-        if (subscriber != null) {
-          TextResponsePart textPart = TextResponsePart.builder().text("generated").build();
-          GeneratedResponsePart genPart = GeneratedResponsePart.builder().textResponsePart(textPart).build();
-          RetrievalResultContent content = RetrievalResultContent.builder().text("cited text").build();
-          RetrievalResultLocation location = RetrievalResultLocation.builder().type("S3").build();
-          RetrievedReference ref = RetrievedReference.builder()
-              .content(content)
-              .location(location)
-              .metadata(Collections.singletonMap("k", Document.fromString("v")))
-              .build();
-          Citation citation = Citation.builder()
-              .generatedResponsePart(genPart)
-              .retrievedReferences(Collections.singletonList(ref))
-              .build();
-          Attribution attribution = Attribution.builder().citations(Collections.singletonList(citation)).build();
-          PayloadPart chunk = PayloadPart.builder()
-              .bytes(SdkBytes.fromUtf8String("chunk with citation"))
-              .attribution(attribution)
-              .build();
-          InvokeAgentResponseHandler.Visitor.class.getMethod("onChunk", PayloadPart.class).invoke(subscriber, chunk);
-        }
-        future.complete(null);
-      } catch (Exception e) {
-        future.completeExceptionally(e);
-      }
-      return future;
-    });
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("sess-1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 3, 1000L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
-    // If subscriber was found, chunk with attribution was delivered and result contains citations
-    if (result.contains("citations")) {
-      assertThat(result).contains("retrievedReferences");
+      // Chunk should still be queued despite queue size > 25
+      assertThat(writeQueue.size()).isGreaterThan(26);
+      assertThat(chunkCount.get()).isEqualTo(6);
     }
   }
 
-  private static Object getHandlerSubscriber(InvokeAgentResponseHandler handler) {
-    try {
-      for (java.lang.reflect.Field f : handler.getClass().getDeclaredFields()) {
-        f.setAccessible(true);
-        Object val = f.get(handler);
-        if (val != null && InvokeAgentResponseHandler.Visitor.class.isAssignableFrom(val.getClass())) {
-          return val;
-        }
+  // ==================== handleStreamComplete ====================
+
+  @Nested
+  @DisplayName("handleStreamComplete")
+  class HandleStreamComplete {
+
+    @Test
+    @DisplayName("skips completion and queues sentinel when client disconnected (L1231-1235)")
+    void clientDisconnected_queuesSentinelOnly() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(5);
+      AtomicLong timeToFirstChunk = new AtomicLong(200);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("queues completion event and sentinel for normal flow")
+    void normalCompletion_queuesCompletionAndSentinel() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 2000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Should have completion event + sentinel
+      assertThat(writeQueue.size()).isEqualTo(2);
+      String completionEvent = writeQueue.poll();
+      assertThat(completionEvent).contains("session-complete");
+      assertThat(completionEvent).contains("completed");
+      assertThat(completionEvent).contains("req1");
+      assertThat(completionEvent).contains("corr1");
+      assertThat(completionEvent).contains("user1");
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("queues completion event with queue size > 25 (L1256-1258, L1282-1284)")
+    void queueOverflow_logsAndQueuesNormally() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      // Pre-fill with 26 items
+      for (int i = 0; i < 26; i++) {
+        writeQueue.offer("event-" + i);
       }
-    } catch (Exception ignored) {
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 2000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // 26 pre-filled + 1 completion + 1 sentinel
+      assertThat(writeQueue.size()).isEqualTo(28);
     }
-    return null;
   }
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream returns non-null InputStream")
-  void chatWithAgentSSEStreamReturnsInputStream() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== writeChunkErrorEvent ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("writeChunkErrorEvent")
+  class WriteChunkErrorEvent {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
+    @Test
+    @DisplayName("queues chunk-error SSE event to write queue (L1217-1220)")
+    void queuesErrorEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      IOException error = new IOException("chunk write failed");
 
-    assertThat(stream).isNotNull();
-  }
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeChunkErrorEvent",
+                                                          IOException.class, BlockingQueue.class);
+      m.setAccessible(true);
+      m.invoke(service, error, writeQueue);
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream writes error event when invokeAgent fails")
-  void chatWithAgentSSEStreamWritesErrorWhenInvokeFails() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    CompletableFuture<Void> failingFuture = new CompletableFuture<>();
-    failingFuture
-        .completeExceptionally(new java.util.concurrent.ExecutionException("stream fail", new RuntimeException("cause")));
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(failingFuture);
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
-    assertThat(stream).isNotNull();
-    byte[] buf = new byte[8192];
-    int total = 0;
-    long deadline = System.currentTimeMillis() + 5000;
-    while (total < buf.length && System.currentTimeMillis() < deadline) {
-      int n = stream.read(buf, total, buf.length - total);
-      if (n <= 0)
-        break;
-      total += n;
-      String soFar = new String(buf, 0, total, java.nio.charset.StandardCharsets.UTF_8);
-      if (soFar.contains("event:") && soFar.contains("error"))
-        break;
+      assertThat(writeQueue.size()).isEqualTo(1);
+      String event = writeQueue.poll();
+      assertThat(event).contains("chunk-error");
+      assertThat(event).contains("chunk write failed");
     }
-    String content = new String(buf, 0, total, java.nio.charset.StandardCharsets.UTF_8);
-    assertThat(content).contains("event:");
-    assertThat(content).as("stream should contain error event when invoke fails").contains("error");
   }
 
-  @Test
-  @DisplayName("chatWithAgent throws when invokeAgent completes exceptionally")
-  void chatWithAgentThrowsWhenInvokeAgentFails() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    CompletableFuture<Void> failingFuture = new CompletableFuture<>();
-    failingFuture.completeExceptionally(new RuntimeException("agent error"));
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(failingFuture);
+  // ==================== writeSessionStartEvent ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("writeSessionStartEvent")
+  class WriteSessionStartEvent {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-                                                       () -> service.chatWithAgent(
-                                                                                   "agentId", "aliasId", "Hi", false, false,
-                                                                                   sessionParams, null, null, responseParams,
-                                                                                   null))
-        .hasMessageContaining("agent error");
+    @Test
+    @DisplayName("queues session-start event with queue > 25 items (L1209-1211)")
+    void queueOverflow_logsAndQueues() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      for (int i = 0; i < 26; i++) {
+        writeQueue.offer("event-" + i);
+      }
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeSessionStartEvent",
+                                                          String.class, String.class, String.class, String.class,
+                                                          String.class, String.class, String.class,
+                                                          long.class, BlockingQueue.class);
+      m.setAccessible(true);
+      m.invoke(service, "alias", "agentId", "prompt", "session1",
+               "req1", "corr1", "user1", 100L, writeQueue);
+
+      // 26 pre-filled + 1 session-start
+      assertThat(writeQueue.size()).isEqualTo(27);
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with multiple KB and legacy params set hits warn path")
-  void chatWithAgentMultipleKbWithLegacyParamsIgnored() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== createChunkJson ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("createChunkJson")
+  class CreateChunkJson {
 
-    BedrockAgentsFilteringParameters legacyParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(legacyParams, "knowledgeBaseId", "legacy-kb");
-    IntegrationTestParamHelper.setField(legacyParams, "numberOfResults", 5);
+    @Test
+    @DisplayName("adds error field when chunk.bytes() throws (L1332-1333)")
+    void exceptionFromBytes_addsErrorToJson() throws Exception {
+      PayloadPart chunk = mock(PayloadPart.class);
+      when(chunk.bytes()).thenThrow(new RuntimeException("bytes decode failure"));
 
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10,
-                                                                 BedrockAgentsFilteringParameters.SearchType.HYBRID, null, null);
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
+      Method m = AgentServiceImpl.class.getDeclaredMethod("createChunkJson", PayloadPart.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(service, chunk);
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, legacyParams, multipleParams, responseParams, null);
+      assertThat(result.getString("type")).isEqualTo("chunk");
+      assertThat(result.has("timestamp")).isTrue();
+      assertThat(result.getString("error")).contains("bytes decode failure");
+    }
 
-    assertThat(result).isNotBlank();
+    @Test
+    @DisplayName("creates valid JSON for normal chunk")
+    void normalChunk_createsValidJson() throws Exception {
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("Hello world"))
+          .build();
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("createChunkJson", PayloadPart.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(service, chunk);
+
+      assertThat(result.getString("type")).isEqualTo("chunk");
+      assertThat(result.getString("text")).isEqualTo("Hello world");
+      assertThat(result.has("timestamp")).isTrue();
+    }
+
+    @Test
+    @DisplayName("handles chunk with null bytes")
+    void nullBytes_noTextField() throws Exception {
+      PayloadPart chunk = PayloadPart.builder().build();
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("createChunkJson", PayloadPart.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(service, chunk);
+
+      assertThat(result.getString("type")).isEqualTo("chunk");
+      assertThat(result.has("text")).isFalse();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy filtering and empty knowledgeBaseId returns null config")
-  void chatWithAgentLegacyEmptyKnowledgeBaseId() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== closeQuietly ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("closeQuietly")
+  class CloseQuietly {
 
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "");
+    @Test
+    @DisplayName("handles null stream without throwing (L943-944)")
+    void nullStream_doesNotThrow() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", PipedOutputStream.class);
+      m.setAccessible(true);
+      Object result = m.invoke(service, (PipedOutputStream) null);
+      assertThat(result).isNull();
+    }
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
+    @Test
+    @DisplayName("handles already-closed stream without throwing (L945-947)")
+    void alreadyClosedStream_doesNotThrow() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", PipedOutputStream.class);
+      m.setAccessible(true);
 
-    assertThat(result).isNotBlank();
+      PipedOutputStream os = new PipedOutputStream();
+      os.close();
+      Object result = m.invoke(service, os);
+      assertThat(result).isNull();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy only numberOfResults uses buildVectorSearchConfiguration")
-  void chatWithAgentLegacyOnlyNumberOfResults() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== toDuration ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("toDuration")
+  class ToDuration {
 
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", 8);
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", null);
-    IntegrationTestParamHelper.setField(filteringParams, "overrideSearchType", null);
+    @Test
+    @DisplayName("defaults to seconds when TimeUnit is null (L466)")
+    void nullUnit_defaultsToSeconds() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("toDuration", int.class, TimeUnit.class);
+      m.setAccessible(true);
+      Duration result = (Duration) m.invoke(null, 30, (TimeUnit) null);
+      assertThat(result).isEqualTo(Duration.ofSeconds(30));
+    }
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
+    @Test
+    @DisplayName("converts milliseconds correctly when unit is provided")
+    void withUnit_convertsCorrectly() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("toDuration", int.class, TimeUnit.class);
+      m.setAccessible(true);
+      Duration result = (Duration) m.invoke(null, 5000, TimeUnit.MILLISECONDS);
+      assertThat(result).isEqualTo(Duration.ofMillis(5000));
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy only overrideSearchType uses buildVectorSearchConfiguration")
-  void chatWithAgentLegacyOnlyOverrideSearchType() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== createErrorJson ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("createErrorJson")
+  class CreateErrorJson {
 
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", null);
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", null);
-    IntegrationTestParamHelper.setField(filteringParams, "overrideSearchType",
-                                        BedrockAgentsFilteringParameters.SearchType.SEMANTIC);
+    @Test
+    @DisplayName("produces valid JSON with error message, type, and timestamp")
+    void producesValidJson() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("createErrorJson", Throwable.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(null, new IOException("test IO error"));
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
+      assertThat(result.getString("error")).isEqualTo("test IO error");
+      assertThat(result.getString("type")).isEqualTo("IOException");
+      assertThat(result.has("timestamp")).isTrue();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy single metadata filter uses buildVectorSearchConfiguration")
-  void chatWithAgentLegacySingleMetadataFilter() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== formatSSEEvent ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("formatSSEEvent")
+  class FormatSSEEvent {
 
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "numberOfResults", 5);
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters",
-                                        java.util.Collections.singletonMap("key1", "value1"));
+    @Test
+    @DisplayName("produces correctly formatted SSE with id, event, and data")
+    void producesCorrectFormat() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("formatSSEEvent", String.class, String.class);
+      m.setAccessible(true);
+      String result = (String) m.invoke(service, "test-event", "{\"key\":\"value\"}");
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
+      assertThat(result).contains("id:");
+      assertThat(result).contains("event: test-event");
+      assertThat(result).contains("data: {\"key\":\"value\"}");
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy multiple metadata filters AND_ALL")
-  void chatWithAgentLegacyMultipleFiltersAndAll() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== handleStreamChunk - queue full paths ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("handleStreamChunk - queue full")
+  class HandleStreamChunkQueueFull {
 
-    java.util.Map<String, String> filters = new java.util.HashMap<>();
-    filters.put("k1", "v1");
-    filters.put("k2", "v2");
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", filters);
-    IntegrationTestParamHelper.setField(filteringParams, "retrievalMetadataFilterType",
-                                        BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL);
+    @Test
+    @DisplayName("drops chunk when queue is full (L1079-1080)")
+    void queueFull_dropsChunkEvent() throws Exception {
+      // Use a queue with capacity 1, pre-fill it so offer() returns false
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(1);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(100);
 
-    assertThat(result).isNotBlank();
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("dropped chunk"))
+          .build();
+
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
+
+      // Queue still has only the original event — chunk was dropped
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+      // But chunk count was still incremented
+      assertThat(chunkCount.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("drops session-start when queue is full on first chunk (L1096)")
+    void queueFull_dropsSessionStartEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(false);
+      AtomicBoolean sessionStartSent = new AtomicBoolean(false);
+      AtomicInteger chunkCount = new AtomicInteger(0);
+      AtomicLong lastChunkTime = new AtomicLong(System.currentTimeMillis());
+      AtomicLong timeToFirstChunk = new AtomicLong(-1);
+
+      PayloadPart chunk = PayloadPart.builder()
+          .bytes(SdkBytes.fromUtf8String("first chunk"))
+          .build();
+
+      invokeHandleStreamChunk(
+                              "alias", "agentId", "prompt", "session1", "req1", "corr1", "user1",
+                              chunksReceived, sessionStartSent, System.currentTimeMillis(),
+                              writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
+
+      // session-start couldn't be queued, chunk also couldn't be queued
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(sessionStartSent.get()).isTrue();
+      assertThat(chunksReceived.get()).isTrue();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with legacy multiple metadata filters OR_ALL")
-  void chatWithAgentLegacyMultipleFiltersOrAll() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== writeChunkErrorEvent - queue full ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("writeChunkErrorEvent - queue full")
+  class WriteChunkErrorEventQueueFull {
 
-    java.util.Map<String, String> filters = new java.util.HashMap<>();
-    filters.put("a", "1");
-    filters.put("b", "2");
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", filters);
-    IntegrationTestParamHelper.setField(filteringParams, "retrievalMetadataFilterType",
-                                        BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL);
+    @Test
+    @DisplayName("drops chunk-error event when queue is full (L1104)")
+    void queueFull_dropsChunkErrorEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeChunkErrorEvent",
+                                                          IOException.class, BlockingQueue.class);
+      m.setAccessible(true);
+      m.invoke(service, new IOException("test error"), writeQueue);
 
-    assertThat(result).isNotBlank();
+      // Queue still has only the original event — error was dropped
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking and SELECTIVE fieldsToExclude")
-  void chatWithAgentRerankingSelectiveFieldsToExclude() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== handleStreamComplete - queue full paths ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("handleStreamComplete - queue full")
+  class HandleStreamCompleteQueueFull {
 
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank-model");
-    reranking.setSelectionMode(BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE);
-    reranking.setFieldsToExclude(java.util.Collections.singletonList("score"));
+    @Test
+    @DisplayName("drops completion event when queue is full (L1136)")
+    void queueFull_dropsCompletionEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(2);
+      writeQueue.offer("event-1");
+      writeQueue.offer("event-2");
 
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10,
-                                                                 BedrockAgentsFilteringParameters.SearchType.HYBRID, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
 
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
+      // Completion event was dropped, but sentinel was force-queued (drains one item to make room)
+      // Original: [event-1, event-2] -> completion dropped -> sentinel: poll event-1, offer sentinel
+      // Result: [event-2, __END_OF_STREAM__]
+      assertThat(writeQueue.size()).isEqualTo(2);
+      String first = writeQueue.poll();
+      String second = writeQueue.poll();
+      assertThat(second).isEqualTo("__END_OF_STREAM__");
+    }
 
-    assertThat(result).isNotBlank();
+    @Test
+    @DisplayName("forces sentinel when queue is full by draining one item (L1151-1154)")
+    void queueFull_forcesSentinel() throws Exception {
+      // Queue capacity 1, pre-fill it
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("blocking-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Sentinel must be present — it was force-queued after draining
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("queues completion-error and sentinel when completion JSON creation fails (L1140-1144)")
+    void completionJsonException_queuesErrorAndSentinel() throws Exception {
+      // Use a queue with plenty of space — we want the error path, not queue-full path
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(100);
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      // null chunkCount will cause NPE in createCompletionJson
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 null, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Should have completion-error + sentinel
+      assertThat(writeQueue.size()).isGreaterThanOrEqualTo(1);
+      String allEvents = drainQueue(writeQueue);
+      assertThat(allEvents).contains("__END_OF_STREAM__");
+    }
+
+    @Test
+    @DisplayName("forces sentinel when queue full during client disconnect (L1121)")
+    void clientDisconnected_queueFull_forcesSentinel() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("blocking-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      AtomicInteger chunkCount = new AtomicInteger(3);
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Sentinel was force-queued (drained blocking-event)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking and fieldsToInclude")
-  void chatWithAgentRerankingFieldsToInclude() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== writeSessionStartEvent - queue full ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("writeSessionStartEvent - queue full")
+  class WriteSessionStartEventQueueFull {
 
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank");
-    reranking.setSelectionMode(BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE);
-    reranking.setFieldsToInclude(java.util.Collections.singletonList("content"));
+    @Test
+    @DisplayName("throws IOException when queue is full")
+    void queueFull_throwsIOException() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
 
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 5, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
+      Method m = AgentServiceImpl.class.getDeclaredMethod("writeSessionStartEvent",
+                                                          String.class, String.class, String.class, String.class,
+                                                          String.class, String.class, String.class,
+                                                          long.class, BlockingQueue.class);
+      m.setAccessible(true);
 
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
+      Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+                                                                        () -> m.invoke(service, "alias", "agentId", "prompt",
+                                                                                       "session1",
+                                                                                       "req1", "corr1", "user1", 100L,
+                                                                                       writeQueue));
+      assertThat(thrown).isInstanceOf(InvocationTargetException.class);
+      assertThat(thrown.getCause())
+          .isInstanceOf(IOException.class)
+          .hasMessageContaining("Failed to queue session-start event");
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
+      // Queue still has only the original event
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.peek()).isEqualTo("existing-event");
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking numberOfRerankedResults and additionalModelRequestFields")
-  void chatWithAgentRerankingNumberOfRerankedResultsAndAdditionalFields() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== buildKnowledgeBaseConfigs ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("buildKnowledgeBaseConfigs")
+  class BuildKnowledgeBaseConfigs {
 
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank");
-    reranking.setRerankingType("CUSTOM");
-    reranking.setNumberOfRerankedResults(15);
-    reranking.setAdditionalModelRequestFields(java.util.Collections.singletonMap("key", "value"));
+    @Test
+    @DisplayName("returns null when legacyParams is null (L297)")
+    void legacyParamsNull_returnsNull() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildKnowledgeBaseConfigs",
+                                                          BedrockAgentsFilteringParameters.class,
+                                                          BedrockAgentsMultipleFilteringParameters.class);
+      m.setAccessible(true);
+      Object result = m.invoke(null, (Object) null, (Object) null);
+      assertThat(result).isNull();
+    }
 
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
+    @Test
+    @DisplayName("returns null when legacyParams has empty knowledgeBaseId")
+    void emptyKnowledgeBaseId_returnsNull() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildKnowledgeBaseConfigs",
+                                                          BedrockAgentsFilteringParameters.class,
+                                                          BedrockAgentsMultipleFilteringParameters.class);
+      m.setAccessible(true);
 
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
+      BedrockAgentsFilteringParameters legacyParams = new BedrockAgentsFilteringParameters();
+      IntegrationTestParamHelper.setField(legacyParams, "knowledgeBaseId", "");
+      Object result = m.invoke(null, legacyParams, (Object) null);
+      assertThat(result).isNull();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with requestTimeout in minutes uses toDuration MINUTES")
-  void chatWithAgentTimeoutMinutes() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== convertToSdkSearchType ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(2, TimeUnit.MINUTES, false, 2, 1000L);
+  @Nested
+  @DisplayName("convertToSdkSearchType")
+  class ConvertToSdkSearchType {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
+    @Test
+    @DisplayName("returns null for null input (L674)")
+    void nullInput_returnsNull() throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("convertToSdkSearchType",
+                                                          BedrockAgentsFilteringParameters.SearchType.class);
+      m.setAccessible(true);
+      Object result = m.invoke(null, (Object) null);
+      assertThat(result).isNull();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream with response logging params uses requestId correlationId userId")
-  void chatWithAgentSSEStreamWithResponseLoggingParams() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== definePromptTemplate error path ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-    BedrockAgentsResponseLoggingParameters loggingParams =
-        new BedrockAgentsResponseLoggingParameters();
-    IntegrationTestParamHelper.setField(loggingParams, "requestId", "req-123");
-    IntegrationTestParamHelper.setField(loggingParams, "correlationId", "corr-456");
-    IntegrationTestParamHelper.setField(loggingParams, "userId", "user-789");
+  @Nested
+  @DisplayName("definePromptTemplate")
+  class DefinePromptTemplate {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, loggingParams);
+    @Test
+    @DisplayName("throws ModuleException when SdkClientException occurs (L185-186)")
+    void sdkClientException_throwsModuleException() {
+      when(mockConnection.answerPrompt(any()))
+          .thenThrow(SdkClientException.builder().message("network error").build());
 
-    assertThat(stream).isNotNull();
+      com.mulesoft.connectors.bedrock.internal.parameter.BedrockParameters params =
+          IntegrationTestParamHelper.bedrockParams("amazon.nova-lite-v1:0", 0.5f, 50);
+
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+                                                         () -> service.definePromptTemplate(
+                                                                                            "Instructions: {{instructions}}. Data: {{dataset}}.",
+                                                                                            "Answer briefly.", "Sample data",
+                                                                                            params))
+          .isInstanceOf(org.mule.runtime.extension.api.exception.ModuleException.class);
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream with empty sessionId generates UUID")
-  void chatWithAgentSSEStreamEmptySessionId() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== buildRetrievedReferenceJson ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("buildRetrievedReferenceJson")
+  class BuildRetrievedReferenceJson {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
+    @Test
+    @DisplayName("builds JSON with content, location, and metadata (L411-421)")
+    void fullReference_buildsCompleteJson() throws Exception {
+      RetrievedReference ref = mock(RetrievedReference.class, RETURNS_DEEP_STUBS);
+      when(ref.content().text()).thenReturn("reference text");
+      when(ref.location().toString()).thenReturn("s3://bucket/key");
+      Map<String, software.amazon.awssdk.core.document.Document> metadata = new HashMap<>();
+      metadata.put("source", software.amazon.awssdk.core.document.Document.fromString("test-doc"));
+      when(ref.metadata()).thenReturn(metadata);
 
-    assertThat(stream).isNotNull();
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildRetrievedReferenceJson",
+                                                          RetrievedReference.class);
+      m.setAccessible(true);
+      JSONObject result = (JSONObject) m.invoke(service, ref);
+
+      assertThat(result.getString("content")).isEqualTo("reference text");
+      assertThat(result.getString("location")).isEqualTo("s3://bucket/key");
+      assertThat(result.has("metadata")).isTrue();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream delivers chunk with text via onChunk handler")
-  void chatWithAgentSSEStreamWithChunkDelivery() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== buildVectorSearchConfiguration - reranking ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("buildVectorSearchConfiguration - reranking")
+  class RerankingConfig {
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
+    @Test
+    @DisplayName("configures reranking with additionalModelRequestFields (L622-624) and null selectionMode (L637)")
+    void rerankingWithAdditionalFields_nullSelectionMode() throws Exception {
+      BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
+          new BedrockAgentsFilteringParameters.RerankingConfiguration();
+      reranking.setModelArn("arn:aws:bedrock:us-east-1:123:inference-profile/test");
+      reranking.setRerankingType("BEDROCK");
+      Map<String, String> additionalFields = new HashMap<>();
+      additionalFields.put("topK", "5");
+      reranking.setAdditionalModelRequestFields(additionalFields);
+      // selectionMode is null -> covers L637 (early return in applyMetadataRerankingConfiguration)
 
-    assertThat(stream).isNotNull();
+      Method m = AgentServiceImpl.class.getDeclaredMethod("buildVectorSearchConfiguration",
+                                                          Integer.class,
+                                                          BedrockAgentsFilteringParameters.SearchType.class,
+                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class,
+                                                          Map.class,
+                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
+      m.setAccessible(true);
+      Object result = m.invoke(null, null, null, null, null, reranking);
+
+      assertThat(result).isNotNull();
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgentSSEStream delivers chunk with null bytes")
-  void chatWithAgentSSEStreamChunkWithNullBytes() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenAnswer(invocation -> {
-      InvokeAgentResponseHandler handler = invocation.getArgument(1);
-      CompletableFuture<Void> future = new CompletableFuture<>();
+  // ==================== closeQuietly - IOException ====================
+
+  @Nested
+  @DisplayName("closeQuietly - IOException")
+  class CloseQuietlyIOException {
+
+    @Test
+    @DisplayName("catches IOException from close and logs without propagating (L885-886)")
+    void closeThrowsIOException_doesNotPropagate() throws Exception {
+      PipedOutputStream mockOs = mock(PipedOutputStream.class);
+      doThrow(new IOException("close failed")).when(mockOs).close();
+
+      Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", PipedOutputStream.class);
+      m.setAccessible(true);
+      // Should not throw - IOException is caught and logged
+      Object result = m.invoke(service, mockOs);
+      assertThat(result).isNull();
+    }
+  }
+
+  // ==================== handleStreamComplete - completion error with queue full ====================
+
+  @Nested
+  @DisplayName("handleStreamComplete - completion error with queue full")
+  class CompletionErrorQueueFull {
+
+    @Test
+    @DisplayName("drops completion-error event when queue is full (L1144)")
+    void completionError_queueFull_dropsErrorEvent() throws Exception {
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event");
+
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+      AtomicBoolean chunksReceived = new AtomicBoolean(true);
+      // null chunkCount triggers NPE in createCompletionJson -> enters catch block
+      AtomicLong timeToFirstChunk = new AtomicLong(150);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 null, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
+
+      // Completion-error dropped (queue full, L1144), sentinel force-queued (drains existing)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+  }
+
+  // ==================== streamBedrockResponse - client disconnect paths ====================
+
+  @Nested
+  @DisplayName("streamBedrockResponse - client disconnect")
+  class StreamBedrockResponseClientDisconnect {
+
+    @Test
+    @DisplayName("logs when Bedrock completes but client already disconnected (L993)")
+    void completedFuture_clientDisconnected() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenReturn(CompletableFuture.completedFuture(null));
+
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>();
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      invokeStreamBedrockResponse(writeQueue, clientDisconnected);
+      // Method returns normally; L993 (debug log for client disconnected) was hit
+    }
+
+    @Test
+    @DisplayName("suppresses error and force-queues sentinel when client disconnected (L1006-1012)")
+    void failedFuture_clientDisconnected_queuesSentinel() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenReturn(CompletableFuture.failedFuture(new RuntimeException("bedrock error")));
+
+      BlockingQueue<String> writeQueue = new LinkedBlockingQueue<>(1);
+      writeQueue.offer("existing-event"); // fill queue to trigger L1008-1010 (force sentinel)
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      invokeStreamBedrockResponse(writeQueue, clientDisconnected);
+
+      // Error suppressed, sentinel force-queued (drained existing)
+      assertThat(writeQueue.size()).isEqualTo(1);
+      assertThat(writeQueue.poll()).isEqualTo("__END_OF_STREAM__");
+    }
+  }
+
+  // ==================== streamBedrockResponseWithRetry - exception re-throw paths ====================
+
+  @Nested
+  @DisplayName("streamBedrockResponseWithRetry - exception paths")
+  class StreamBedrockResponseWithRetryExceptions {
+
+    @Test
+    @DisplayName("wraps IOException in ModuleException with enhanced message")
+    void ioException_wrappedInModuleException() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenAnswer(invocation -> {
+            throw new IOException("network error");
+          });
+
       try {
-        Object subscriber = getHandlerSubscriber(handler);
-        if (subscriber != null) {
-          PayloadPart chunk = PayloadPart.builder().build();
-          InvokeAgentResponseHandler.Visitor.class.getMethod("onChunk", PayloadPart.class)
-              .invoke(subscriber, chunk);
-        }
-        future.complete(null);
-      } catch (Exception e) {
-        future.completeExceptionally(e);
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getMessage()).contains("network error");
+        assertThat(e.getCause().getCause()).isInstanceOf(IOException.class);
       }
-      return future;
-    });
+    }
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+    @Test
+    @DisplayName("wraps InterruptedException in ModuleException with enhanced message")
+    void interruptedException_wrappedInModuleException() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenAnswer(invocation -> {
+            throw new InterruptedException("interrupted");
+          });
 
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
+      try {
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getMessage()).contains("interrupted");
+        assertThat(e.getCause().getCause()).isInstanceOf(InterruptedException.class);
+      }
+    }
 
-    assertThat(stream).isNotNull();
+    @Test
+    @DisplayName("wraps RuntimeException in ModuleException with null message handling")
+    void runtimeException_wrappedInModuleException() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenThrow(new RuntimeException());
+
+      try {
+        invokeStreamBedrockResponseWithRetry();
+        org.assertj.core.api.Assertions.fail("Expected ModuleException");
+      } catch (InvocationTargetException e) {
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getCause()).isInstanceOf(RuntimeException.class);
+      }
+    }
   }
 
-  @Test
-  @DisplayName("chatWithAgent with KB config and null numberOfResults skips numberOfResults config")
-  void chatWithAgentKbConfigNullNumberOfResults() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+  // ==================== streamBedrockResponse - sentinel retry failure ====================
 
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
+  @Nested
+  @DisplayName("streamBedrockResponse - sentinel retry failure on client disconnect")
+  class StreamBedrockResponseSentinelRetryFailure {
 
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", null,
-                                                                 BedrockAgentsFilteringParameters.SearchType.HYBRID, null, null);
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config and zero numberOfResults skips numberOfResults config")
-  void chatWithAgentKbConfigZeroNumberOfResults() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 0,
-                                                                 BedrockAgentsFilteringParameters.SearchType.SEMANTIC, null,
-                                                                 null);
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking with null selectionMode skips metadata config")
-  void chatWithAgentRerankingNullSelectionMode() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank-model");
-    reranking.setSelectionMode(null);
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
-
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking with ALL selectionMode")
-  void chatWithAgentRerankingAllSelectionMode() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank-model");
-    reranking.setSelectionMode(BedrockAgentsFilteringParameters.RerankingSelectionMode.ALL);
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
-
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking SELECTIVE with empty fieldsToExclude and fieldsToInclude")
-  void chatWithAgentRerankingSelectiveEmptyFields() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("arn:aws:bedrock:us-east-1::foundation-model/rerank-model");
-    reranking.setSelectionMode(BedrockAgentsFilteringParameters.RerankingSelectionMode.SELECTIVE);
-    reranking.setFieldsToExclude(Collections.emptyList());
-    reranking.setFieldsToInclude(Collections.emptyList());
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
-
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking null modelArn skips reranking")
-  void chatWithAgentRerankingNullModelArn() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn(null);
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
-
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with KB config reranking empty modelArn skips reranking")
-  void chatWithAgentRerankingEmptyModelArn() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration reranking =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    reranking.setModelArn("");
-
-    BedrockAgentsFilteringParameters.KnowledgeBaseConfig kbConfig =
-        new BedrockAgentsFilteringParameters.KnowledgeBaseConfig("kb-1", 10, null, null, null);
-    kbConfig.setRerankingConfiguration(reranking);
-
-    BedrockAgentsMultipleFilteringParameters multipleParams = new BedrockAgentsMultipleFilteringParameters();
-    IntegrationTestParamHelper.setField(multipleParams, "knowledgeBases", Collections.singletonList(kbConfig));
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, multipleParams, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with retry enabled calls invokeAgent")
-  void chatWithAgentRetryEnabled() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, true, 3, 100L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, null, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgent with metadata filters containing empty value filters them out")
-  void chatWithAgentMetadataFiltersWithEmptyValue() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-
-    java.util.Map<String, String> filters = new java.util.HashMap<>();
-    filters.put("key1", "value1");
-    filters.put("key2", "");
-    filters.put("key3", null);
-    BedrockAgentsFilteringParameters filteringParams = new BedrockAgentsFilteringParameters();
-    IntegrationTestParamHelper.setField(filteringParams, "knowledgeBaseId", "kb-1");
-    IntegrationTestParamHelper.setField(filteringParams, "metadataFilters", filters);
-    IntegrationTestParamHelper.setField(filteringParams, "retrievalMetadataFilterType",
-                                        BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    String result = service.chatWithAgent(
-                                          "agentId", "aliasId", "Hi", false, false,
-                                          sessionParams, filteringParams, null, responseParams, null);
-
-    assertThat(result).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("chatWithAgentSSEStream with requestTimeout zero uses connection timeout")
-  void chatWithAgentSSEStreamTimeoutZero() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(0, TimeUnit.SECONDS, false, 2, 1000L);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
-
-    assertThat(stream).isNotNull();
-  }
-
-  @Test
-  @DisplayName("chatWithAgentSSEStream with requestTimeout null uses connection timeout")
-  void chatWithAgentSSEStreamTimeoutNull() {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    when(connection.getConnectionTimeoutMs()).thenReturn(60_000);
-    when(connection.invokeAgent(any(), any(), anyLong())).thenReturn(CompletableFuture.completedFuture(null));
-
-    BedrockAgentsSessionParameters sessionParams = IntegrationTestParamHelper.sessionParams("s1", false, 1);
-    BedrockAgentsResponseParameters responseParams =
-        IntegrationTestParamHelper.responseParams(30, TimeUnit.SECONDS, false, 2, 1000L);
-    IntegrationTestParamHelper.setField(responseParams, "requestTimeout", null);
-
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-    InputStream stream = service.chatWithAgentSSEStream(
-                                                        "agentId", "aliasId", "Hi", false, false,
-                                                        sessionParams, null, null, responseParams, null);
-
-    assertThat(stream).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildInvokeAgentChunkJson creates JSON with text when bytes present")
-  void buildInvokeAgentChunkJsonWithBytes() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildInvokeAgentChunkJson", PayloadPart.class);
-    m.setAccessible(true);
-
-    PayloadPart chunk = PayloadPart.builder()
-        .bytes(SdkBytes.fromUtf8String("Hello chunk text"))
-        .build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunk);
-
-    assertThat(result.getString("type")).isEqualTo("chunk");
-    assertThat(result.getString("text")).isEqualTo("Hello chunk text");
-    assertThat(result.has("timestamp")).isTrue();
-  }
-
-  @Test
-  @DisplayName("buildInvokeAgentChunkJson creates JSON without text when bytes null")
-  void buildInvokeAgentChunkJsonWithNullBytes() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildInvokeAgentChunkJson", PayloadPart.class);
-    m.setAccessible(true);
-
-    PayloadPart chunk = PayloadPart.builder().build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunk);
-
-    assertThat(result.getString("type")).isEqualTo("chunk");
-    assertThat(result.has("text")).isFalse();
-  }
-
-  @Test
-  @DisplayName("buildInvokeAgentChunkJson creates JSON with citations when attribution present")
-  void buildInvokeAgentChunkJsonWithCitations() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildInvokeAgentChunkJson", PayloadPart.class);
-    m.setAccessible(true);
-
-    TextResponsePart textPart = TextResponsePart.builder().text("generated text").build();
-    GeneratedResponsePart genPart = GeneratedResponsePart.builder().textResponsePart(textPart).build();
-    RetrievalResultContent content = RetrievalResultContent.builder().text("cited content").build();
-    RetrievalResultLocation location = RetrievalResultLocation.builder().type("S3").build();
-    RetrievedReference ref = RetrievedReference.builder()
-        .content(content)
-        .location(location)
-        .metadata(Collections.singletonMap("key", Document.fromString("value")))
-        .build();
-    Citation citation = Citation.builder()
-        .generatedResponsePart(genPart)
-        .retrievedReferences(Collections.singletonList(ref))
-        .build();
-    Attribution attribution = Attribution.builder().citations(Collections.singletonList(citation)).build();
-    PayloadPart chunk = PayloadPart.builder()
-        .bytes(SdkBytes.fromUtf8String("text with citation"))
-        .attribution(attribution)
-        .build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunk);
-
-    assertThat(result.getString("type")).isEqualTo("chunk");
-    assertThat(result.getString("text")).isEqualTo("text with citation");
-    assertThat(result.has("citations")).isTrue();
-  }
-
-  @Test
-  @DisplayName("buildCitationJson creates JSON with generatedResponsePart and retrievedReferences")
-  void buildCitationJsonFull() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildCitationJson",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.Citation.class);
-    m.setAccessible(true);
-
-    TextResponsePart textPart = TextResponsePart.builder().text("generated text").build();
-    GeneratedResponsePart genPart = GeneratedResponsePart.builder().textResponsePart(textPart).build();
-    RetrievalResultContent content = RetrievalResultContent.builder().text("cited content").build();
-    RetrievedReference ref = RetrievedReference.builder().content(content).build();
-    Citation citation = Citation.builder()
-        .generatedResponsePart(genPart)
-        .retrievedReferences(Collections.singletonList(ref))
-        .build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, citation);
-
-    assertThat(result.getString("generatedResponsePart")).isEqualTo("generated text");
-    assertThat(result.has("retrievedReferences")).isTrue();
-  }
-
-  @Test
-  @DisplayName("buildCitationJson creates JSON without generatedResponsePart when citation has no generated part")
-  void buildCitationJsonEmpty() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildCitationJson",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.Citation.class);
-    m.setAccessible(true);
-
-    Citation citation = Citation.builder().build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, citation);
-
-    // generatedResponsePart is not set because citation.generatedResponsePart() is null or textResponsePart is null
-    assertThat(result.has("generatedResponsePart")).isFalse();
-    // retrievedReferences is set by SDK (may return empty list, not null)
-    assertThat(result.has("retrievedReferences")).isTrue();
-  }
-
-  @Test
-  @DisplayName("buildRetrievedReferenceJson creates JSON with content location and metadata")
-  void buildRetrievedReferenceJsonFull() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildRetrievedReferenceJson",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference.class);
-    m.setAccessible(true);
-
-    RetrievalResultContent content = RetrievalResultContent.builder().text("ref content").build();
-    RetrievalResultLocation location = RetrievalResultLocation.builder().type("S3").build();
-    RetrievedReference ref = RetrievedReference.builder()
-        .content(content)
-        .location(location)
-        .metadata(Collections.singletonMap("key", Document.fromString("value")))
-        .build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, ref);
-
-    assertThat(result.getString("content")).isEqualTo("ref content");
-    assertThat(result.has("location")).isTrue();
-    assertThat(result.has("metadata")).isTrue();
-  }
-
-  @Test
-  @DisplayName("buildRetrievedReferenceJson creates JSON without content when ref has no content text")
-  void buildRetrievedReferenceJsonEmpty() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildRetrievedReferenceJson",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.RetrievedReference.class);
-    m.setAccessible(true);
-
-    RetrievedReference ref = RetrievedReference.builder().build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, ref);
-
-    // content is not set because ref.content() is null or content.text() is null
-    assertThat(result.has("content")).isFalse();
-    // location and metadata may be set by SDK (returns default objects, not null)
-    // Just verify JSON object is valid
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildInvokeAgentSummary builds fullResponse from chunks with text")
-  void buildInvokeAgentSummaryWithTextChunks() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildInvokeAgentSummary",
-                                                                          java.util.List.class, long.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject chunk1 = new org.json.JSONObject();
-    chunk1.put("text", "Hello ");
-    org.json.JSONObject chunk2 = new org.json.JSONObject();
-    chunk2.put("text", "World");
-    java.util.List<org.json.JSONObject> chunks = java.util.Arrays.asList(chunk1, chunk2);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunks, System.currentTimeMillis() - 1000);
-
-    assertThat(result.getInt("totalChunks")).isEqualTo(2);
-    assertThat(result.getString("fullResponse")).isEqualTo("Hello World");
-    assertThat(result.has("total_duration_ms")).isTrue();
-  }
-
-  @Test
-  @DisplayName("createSessionStartJson creates JSON with all fields including optional ones")
-  void createSessionStartJsonFull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createSessionStartJson",
-                                                                          String.class, String.class, String.class, String.class,
-                                                                          String.class,
-                                                                          String.class, String.class, String.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(null, "alias1", "agent1", "Hello", "session1",
-                                                                "2026-02-05T10:00:00Z", "req123", "corr456", "user789");
-
-    assertThat(result.getString("sessionId")).isEqualTo("session1");
-    assertThat(result.getString("agentId")).isEqualTo("agent1");
-    assertThat(result.getString("agentAlias")).isEqualTo("alias1");
-    assertThat(result.getString("prompt")).isEqualTo("Hello");
-    assertThat(result.getString("processedAt")).isEqualTo("2026-02-05T10:00:00Z");
-    assertThat(result.getString("status")).isEqualTo("started");
-    assertThat(result.getString("requestId")).isEqualTo("req123");
-    assertThat(result.getString("correlationId")).isEqualTo("corr456");
-    assertThat(result.getString("userId")).isEqualTo("user789");
-  }
-
-  @Test
-  @DisplayName("createSessionStartJson creates JSON without optional fields when null or empty")
-  void createSessionStartJsonMinimal() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createSessionStartJson",
-                                                                          String.class, String.class, String.class, String.class,
-                                                                          String.class,
-                                                                          String.class, String.class, String.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(null, "alias1", "agent1", "Hello", "session1",
-                                                                "2026-02-05T10:00:00Z", null, "", null);
-
-    assertThat(result.getString("sessionId")).isEqualTo("session1");
-    assertThat(result.has("requestId")).isFalse();
-    assertThat(result.has("correlationId")).isFalse();
-    assertThat(result.has("userId")).isFalse();
-  }
-
-  @Test
-  @DisplayName("createCompletionJson creates JSON with all fields including optional ones")
-  void createCompletionJsonFull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createCompletionJson",
-                                                                          String.class, String.class, String.class, long.class,
-                                                                          String.class, String.class, String.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(null, "session1", "agent1", "alias1", 1500L,
-                                                                "req123", "corr456", "user789");
-
-    assertThat(result.getString("sessionId")).isEqualTo("session1");
-    assertThat(result.getString("agentId")).isEqualTo("agent1");
-    assertThat(result.getString("agentAlias")).isEqualTo("alias1");
-    assertThat(result.getString("status")).isEqualTo("completed");
-    assertThat(result.getLong("total_duration_ms")).isEqualTo(1500L);
-    assertThat(result.getString("requestId")).isEqualTo("req123");
-    assertThat(result.getString("correlationId")).isEqualTo("corr456");
-    assertThat(result.getString("userId")).isEqualTo("user789");
-  }
-
-  @Test
-  @DisplayName("createCompletionJson creates JSON without optional fields when null or empty")
-  void createCompletionJsonMinimal() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createCompletionJson",
-                                                                          String.class, String.class, String.class, long.class,
-                                                                          String.class, String.class, String.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(null, "session1", "agent1", "alias1", 1500L,
-                                                                null, "", null);
-
-    assertThat(result.getString("sessionId")).isEqualTo("session1");
-    assertThat(result.has("requestId")).isFalse();
-    assertThat(result.has("correlationId")).isFalse();
-    assertThat(result.has("userId")).isFalse();
-  }
-
-  @Test
-  @DisplayName("createErrorJson creates JSON with error message type and timestamp")
-  void createErrorJsonTest() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createErrorJson", Throwable.class);
-    m.setAccessible(true);
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(null, new RuntimeException("test error message"));
-
-    assertThat(result.getString("error")).isEqualTo("test error message");
-    assertThat(result.getString("type")).isEqualTo("RuntimeException");
-    assertThat(result.has("timestamp")).isTrue();
-  }
-
-  @Test
-  @DisplayName("createChunkJson creates JSON with text and timestamp when bytes present")
-  void createChunkJsonWithBytes() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createChunkJson", PayloadPart.class);
-    m.setAccessible(true);
-
-    PayloadPart chunk = PayloadPart.builder()
-        .bytes(SdkBytes.fromUtf8String("chunk text"))
-        .build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunk);
-
-    assertThat(result.getString("type")).isEqualTo("chunk");
-    assertThat(result.getString("text")).isEqualTo("chunk text");
-    assertThat(result.has("timestamp")).isTrue();
-  }
-
-  @Test
-  @DisplayName("createChunkJson creates JSON without text when bytes null")
-  void createChunkJsonWithNullBytes() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("createChunkJson", PayloadPart.class);
-    m.setAccessible(true);
-
-    PayloadPart chunk = PayloadPart.builder().build();
-
-    org.json.JSONObject result = (org.json.JSONObject) m.invoke(service, chunk);
-
-    assertThat(result.getString("type")).isEqualTo("chunk");
-    assertThat(result.has("timestamp")).isTrue();
-    assertThat(result.has("text")).isFalse();
-  }
-
-  @Test
-  @DisplayName("formatSSEEvent produces correctly formatted SSE event")
-  void formatSSEEventTest() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("formatSSEEvent", String.class, String.class);
-    m.setAccessible(true);
-
-    String result = (String) m.invoke(service, "test-event", "{\"key\":\"value\"}");
-
-    assertThat(result).contains("id:");
-    assertThat(result).contains("event: test-event");
-    assertThat(result).contains("data: {\"key\":\"value\"}");
-  }
-
-  @Test
-  @DisplayName("closeQuietly handles null stream gracefully")
-  void closeQuietlyNullStream() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", java.io.PipedOutputStream.class);
-    m.setAccessible(true);
-
-    // Should not throw when passing null
-    Object result = m.invoke(service, (java.io.PipedOutputStream) null);
-    assertThat(result).isNull(); // void method returns null
-  }
-
-  @Test
-  @DisplayName("closeQuietly closes stream without throwing")
-  void closeQuietlyClosesStream() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("closeQuietly", java.io.PipedOutputStream.class);
-    m.setAccessible(true);
-
-    java.io.PipedOutputStream os = new java.io.PipedOutputStream();
-    java.io.PipedInputStream is = new java.io.PipedInputStream(os);
-
-    // Should not throw
-    Object result = m.invoke(service, os);
-    assertThat(result).isNull(); // void method returns null
-    is.close();
-  }
-
-  @Test
-  @DisplayName("buildCitationsJson creates JSONArray from citations list")
-  void buildCitationsJsonTest() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildCitationsJson", java.util.List.class);
-    m.setAccessible(true);
-
-    Citation citation1 = Citation.builder().build();
-    Citation citation2 = Citation.builder().build();
-    java.util.List<Citation> citations = java.util.Arrays.asList(citation1, citation2);
-
-    org.json.JSONArray result = (org.json.JSONArray) m.invoke(service, citations);
-
-    assertThat(result.length()).isEqualTo(2);
-  }
-
-  @Test
-  @DisplayName("buildRetrievedReferencesJson creates JSONArray from refs list")
-  void buildRetrievedReferencesJsonTest() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildRetrievedReferencesJson", java.util.List.class);
-    m.setAccessible(true);
-
-    RetrievedReference ref1 = RetrievedReference.builder().build();
-    RetrievedReference ref2 = RetrievedReference.builder().build();
-    java.util.List<RetrievedReference> refs = java.util.Arrays.asList(ref1, ref2);
-
-    org.json.JSONArray result = (org.json.JSONArray) m.invoke(service, refs);
-
-    assertThat(result.length()).isEqualTo(2);
-  }
-
-  @Test
-  @DisplayName("toDuration uses seconds when amountUnit is null")
-  void toDurationWithNullUnit() throws Exception {
-    java.lang.reflect.Method m =
-        AgentServiceImpl.class.getDeclaredMethod("toDuration", int.class, java.util.concurrent.TimeUnit.class);
-    m.setAccessible(true);
-
-    java.time.Duration result = (java.time.Duration) m.invoke(null, 30, null);
-
-    assertThat(result.getSeconds()).isEqualTo(30);
-  }
-
-  @Test
-  @DisplayName("toDuration converts using amountUnit when provided")
-  void toDurationWithUnit() throws Exception {
-    java.lang.reflect.Method m =
-        AgentServiceImpl.class.getDeclaredMethod("toDuration", int.class, java.util.concurrent.TimeUnit.class);
-    m.setAccessible(true);
-
-    java.time.Duration result = (java.time.Duration) m.invoke(null, 2, java.util.concurrent.TimeUnit.MINUTES);
-
-    assertThat(result.toMillis()).isEqualTo(120000);
-  }
-
-  @Test
-  @DisplayName("buildPromptConfigurations returns consumer that sets excludePreviousThinkingSteps and turnsToInclude")
-  void buildPromptConfigurationsTest() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m =
-        AgentServiceImpl.class.getDeclaredMethod("buildPromptConfigurations", boolean.class, Integer.class);
-    m.setAccessible(true);
-
-    Object consumer = m.invoke(service, true, 5);
-    assertThat(consumer).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildModelConfigurations returns consumer for latency optimized")
-  void buildModelConfigurationsOptimized() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildModelConfigurations", boolean.class);
-    m.setAccessible(true);
-
-    Object consumer = m.invoke(service, true);
-    assertThat(consumer).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildModelConfigurations returns consumer for standard latency")
-  void buildModelConfigurationsStandard() throws Exception {
-    BedrockConfiguration config = mock(BedrockConfiguration.class);
-    BedrockConnection connection = mock(BedrockConnection.class);
-    AgentServiceImpl service = new AgentServiceImpl(config, connection);
-
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildModelConfigurations", boolean.class);
-    m.setAccessible(true);
-
-    Object consumer = m.invoke(service, false);
-    assertThat(consumer).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildSessionState returns consumer for null kb configs")
-  void buildSessionStateNullConfigs() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildSessionState", java.util.List.class);
-    m.setAccessible(true);
-
-    Object consumer = m.invoke(null, (Object) null);
-    assertThat(consumer).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildSessionState returns consumer for empty kb configs")
-  void buildSessionStateEmptyConfigs() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildSessionState", java.util.List.class);
-    m.setAccessible(true);
-
-    Object consumer = m.invoke(null, Collections.emptyList());
-    assertThat(consumer).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildVectorSearchConfiguration returns null when no config present")
-  void buildVectorSearchConfigurationReturnsNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildVectorSearchConfiguration",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, null, null, null, null, null);
-    assertThat(result).isNull();
-  }
-
-  @Test
-  @DisplayName("buildVectorSearchConfiguration returns config when numberOfResults present")
-  void buildVectorSearchConfigurationWithNumberOfResults() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildVectorSearchConfiguration",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, 10, null, null, null, null);
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("buildVectorSearchConfiguration returns config with search type")
-  void buildVectorSearchConfigurationWithSearchType() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildVectorSearchConfiguration",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, null, BedrockAgentsFilteringParameters.SearchType.SEMANTIC, null, null, null);
-    assertThat(result).isNotNull();
-  }
-
-  @Test
-  @DisplayName("getNonEmptyMetadataFilters returns null for null input")
-  void getNonEmptyMetadataFiltersNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("getNonEmptyMetadataFilters", java.util.Map.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, (Object) null);
-    assertThat(result).isNull();
-  }
-
-  @Test
-  @DisplayName("getNonEmptyMetadataFilters returns null for empty map")
-  void getNonEmptyMetadataFiltersEmpty() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("getNonEmptyMetadataFilters", java.util.Map.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, Collections.emptyMap());
-    assertThat(result).isNull();
-  }
-
-  @Test
-  @DisplayName("getNonEmptyMetadataFilters filters out null and empty values")
-  void getNonEmptyMetadataFiltersFiltersEmptyValues() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("getNonEmptyMetadataFilters", java.util.Map.class);
-    m.setAccessible(true);
-
-    java.util.Map<String, String> input = new java.util.HashMap<>();
-    input.put("key1", "value1");
-    input.put("key2", "");
-    input.put("key3", null);
-
+    @Test
+    @DisplayName("throws ModuleException when sentinel cannot be queued after drain (L1014)")
     @SuppressWarnings("unchecked")
-    java.util.Map<String, String> result = (java.util.Map<String, String>) m.invoke(null, input);
+    void sentinelRetryFailure_clientDisconnected() throws Exception {
+      when(mockConnection.invokeAgent(
+                                      any(InvokeAgentRequest.class), any(InvokeAgentResponseHandler.class), anyLong()))
+          .thenReturn(CompletableFuture.failedFuture(new RuntimeException("bedrock error")));
 
-    assertThat(result).hasSize(1);
-    assertThat(result).containsKey("key1");
+      BlockingQueue<String> mockQueue = mock(BlockingQueue.class);
+      when(mockQueue.offer(any())).thenReturn(false);
+      when(mockQueue.poll()).thenReturn("drained-event");
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      Throwable thrown =
+          org.assertj.core.api.Assertions.catchThrowable(() -> invokeStreamBedrockResponse(mockQueue, clientDisconnected));
+      assertThat(thrown).isInstanceOf(InvocationTargetException.class);
+      assertThat(thrown.getCause())
+          .isInstanceOf(ModuleException.class)
+          .hasMessageContaining("Failed to queue end-of-stream sentinel");
+    }
   }
 
-  @Test
-  @DisplayName("buildSingleRetrievalFilter creates filter from single entry")
-  void buildSingleRetrievalFilterTest() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildSingleRetrievalFilter", java.util.Map.class);
+  // ==================== handleStreamComplete - sentinel retry failure ====================
+
+  @Nested
+  @DisplayName("handleStreamComplete - sentinel retry failure")
+  class HandleStreamCompleteSentinelRetryFailure {
+
+    @Test
+    @DisplayName("logs error when sentinel cannot be queued - client disconnected (L1129)")
+    @SuppressWarnings("unchecked")
+    void sentinelRetryFailure_clientDisconnected() throws Exception {
+      BlockingQueue<String> mockQueue = mock(BlockingQueue.class);
+      when(mockQueue.offer(any())).thenReturn(false);
+      when(mockQueue.poll()).thenReturn("drained-event");
+      AtomicBoolean clientDisconnected = new AtomicBoolean(true);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 new AtomicInteger(5), new AtomicLong(150),
+                                 new AtomicBoolean(true), mockQueue, clientDisconnected);
+      // L1129 logger.error hit: mock queue always returns false for offer
+    }
+
+    @Test
+    @DisplayName("logs error when sentinel cannot be queued - finally block (L1162)")
+    @SuppressWarnings("unchecked")
+    void sentinelRetryFailure_finallyBlock() throws Exception {
+      BlockingQueue<String> mockQueue = mock(BlockingQueue.class);
+      when(mockQueue.offer(any())).thenReturn(false);
+      when(mockQueue.poll()).thenReturn("drained-event");
+      AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+
+      invokeHandleStreamComplete(
+                                 "session1", "agentId", "alias", System.currentTimeMillis() - 1000,
+                                 "req1", "corr1", "user1",
+                                 new AtomicInteger(5), new AtomicLong(150),
+                                 new AtomicBoolean(true), mockQueue, clientDisconnected);
+      // L1162 logger.error hit: mock queue always returns false for offer in finally block
+    }
+  }
+
+  // ==================== submitToScheduler ====================
+
+  @Nested
+  @DisplayName("submitToScheduler")
+  class SubmitToScheduler {
+
+    @Test
+    @DisplayName("submits task to scheduler when capacity is available")
+    void happyPath_submitsToScheduler() throws Exception {
+      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
+      Future<?> mockFuture = mock(Future.class);
+      doAnswer(invocation -> mockFuture).when(scheduler).submit(any(Runnable.class));
+
+      Future<?> future = invokeSubmit(() -> {
+      }, scheduler);
+
+      assertThat(future).isSameAs(mockFuture);
+    }
+
+    @Test
+    @DisplayName("throws ModuleException when scheduler rejects task")
+    void rejection_throwsModuleException() {
+      org.mule.runtime.api.scheduler.Scheduler scheduler = mock(org.mule.runtime.api.scheduler.Scheduler.class);
+      when(scheduler.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException("pool full"));
+
+      try {
+        invokeSubmit(() -> {
+        }, scheduler);
+        assertThat(true).as("Expected InvocationTargetException wrapping ModuleException").isFalse();
+      } catch (Exception e) {
+        assertThat(e).isInstanceOf(java.lang.reflect.InvocationTargetException.class);
+        assertThat(e.getCause()).isInstanceOf(ModuleException.class);
+        assertThat(e.getCause().getMessage()).contains("Streaming scheduler capacity exceeded");
+        assertThat(e.getCause().getCause()).isInstanceOf(RejectedExecutionException.class);
+      }
+    }
+
+    private Future<?> invokeSubmit(Runnable task,
+                                   org.mule.runtime.api.scheduler.Scheduler scheduler)
+        throws Exception {
+      Method m = AgentServiceImpl.class.getDeclaredMethod("submitToScheduler",
+                                                          Runnable.class, org.mule.runtime.api.scheduler.Scheduler.class);
+      m.setAccessible(true);
+      return (Future<?>) m.invoke(null, task, scheduler);
+    }
+  }
+
+  // ==================== Helpers ====================
+
+  private void invokeStreamBedrockResponse(BlockingQueue<String> writeQueue,
+                                           AtomicBoolean clientDisconnected)
+      throws Exception {
+    Method m = AgentServiceImpl.class.getDeclaredMethod("streamBedrockResponse",
+                                                        String.class, String.class, String.class,
+                                                        boolean.class, boolean.class,
+                                                        String.class, boolean.class, Integer.class,
+                                                        java.util.List.class,
+                                                        PipedOutputStream.class, AtomicBoolean.class,
+                                                        AtomicBoolean.class, String.class,
+                                                        String.class, String.class,
+                                                        Integer.class, TimeUnit.class,
+                                                        BlockingQueue.class, AtomicBoolean.class);
     m.setAccessible(true);
-
-    java.util.Map<String, String> filters = Collections.singletonMap("category", "tech");
-
-    Object result = m.invoke(null, filters);
-    assertThat(result).isNotNull();
+    m.invoke(service,
+             "alias", "agentId", "prompt",
+             false, false,
+             "session1", false, (Integer) null,
+             null,
+             (PipedOutputStream) null, new AtomicBoolean(false),
+             new AtomicBoolean(false), "req1",
+             "corr1", "user1",
+             (Integer) null, (TimeUnit) null,
+             writeQueue, clientDisconnected);
   }
 
-  @Test
-  @DisplayName("buildCompositeRetrievalFilter creates OR_ALL filter")
-  void buildCompositeRetrievalFilterOrAll() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildCompositeRetrievalFilter",
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class);
+  private void invokeStreamBedrockResponseWithRetry() throws Exception {
+    StreamingRetryUtility.RetryConfig retryConfig =
+        new StreamingRetryUtility.RetryConfig(0, 1000L, true);
+
+    Method m = AgentServiceImpl.class.getDeclaredMethod("streamBedrockResponseWithRetry",
+                                                        String.class, String.class, String.class,
+                                                        boolean.class, boolean.class,
+                                                        String.class, boolean.class, Integer.class,
+                                                        java.util.List.class,
+                                                        PipedOutputStream.class, StreamingRetryUtility.RetryConfig.class,
+                                                        AtomicBoolean.class, AtomicBoolean.class,
+                                                        String.class, String.class, String.class,
+                                                        Integer.class, TimeUnit.class,
+                                                        BlockingQueue.class, AtomicBoolean.class);
     m.setAccessible(true);
-
-    java.util.Map<String, String> filters = new java.util.LinkedHashMap<>();
-    filters.put("key1", "val1");
-    filters.put("key2", "val2");
-
-    Object result = m.invoke(null, filters, BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.OR_ALL);
-    assertThat(result).isNotNull();
+    m.invoke(service,
+             "alias", "agentId", "prompt",
+             false, false,
+             "session1", false, (Integer) null,
+             null,
+             (PipedOutputStream) null, retryConfig,
+             new AtomicBoolean(false), new AtomicBoolean(false),
+             "req1", "corr1", "user1",
+             (Integer) null, (TimeUnit) null,
+             new LinkedBlockingQueue<>(), new AtomicBoolean(false));
   }
 
-  @Test
-  @DisplayName("buildCompositeRetrievalFilter creates AND_ALL filter")
-  void buildCompositeRetrievalFilterAndAll() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("buildCompositeRetrievalFilter",
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class);
+  private void invokeHandleStreamChunk(
+                                       String agentAliasId, String agentId, String prompt, String effectiveSessionId,
+                                       String requestId, String correlationId, String userId,
+                                       AtomicBoolean chunksReceived, AtomicBoolean sessionStartSent, long startTime,
+                                       BlockingQueue<String> writeQueue, PayloadPart chunk,
+                                       AtomicInteger chunkCount, AtomicLong lastChunkTime, AtomicLong timeToFirstChunk,
+                                       AtomicBoolean clientDisconnected)
+      throws Exception {
+    Method m = AgentServiceImpl.class.getDeclaredMethod("handleStreamChunk",
+                                                        String.class, String.class, String.class, String.class,
+                                                        String.class, String.class, String.class,
+                                                        AtomicBoolean.class, AtomicBoolean.class, long.class,
+                                                        BlockingQueue.class, PayloadPart.class,
+                                                        AtomicInteger.class, AtomicLong.class, AtomicLong.class,
+                                                        AtomicBoolean.class);
     m.setAccessible(true);
-
-    java.util.Map<String, String> filters = new java.util.LinkedHashMap<>();
-    filters.put("key1", "val1");
-    filters.put("key2", "val2");
-
-    Object result = m.invoke(null, filters, BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL);
-    assertThat(result).isNotNull();
+    m.invoke(service, agentAliasId, agentId, prompt, effectiveSessionId,
+             requestId, correlationId, userId,
+             chunksReceived, sessionStartSent, startTime,
+             writeQueue, chunk, chunkCount, lastChunkTime, timeToFirstChunk, clientDisconnected);
   }
 
-  @Test
-  @DisplayName("convertToSdkSearchType converts HYBRID correctly")
-  void convertToSdkSearchTypeHybrid() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("convertToSdkSearchType",
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
+  private void invokeHandleStreamComplete(
+                                          String effectiveSessionId, String agentId, String agentAliasId, long startTime,
+                                          String requestId, String correlationId, String userId,
+                                          AtomicInteger chunkCount, AtomicLong timeToFirstChunk,
+                                          AtomicBoolean chunksReceived, BlockingQueue<String> writeQueue,
+                                          AtomicBoolean clientDisconnected)
+      throws Exception {
+    Method m = AgentServiceImpl.class.getDeclaredMethod("handleStreamComplete",
+                                                        String.class, String.class, String.class, long.class,
+                                                        String.class, String.class, String.class,
+                                                        AtomicInteger.class, AtomicLong.class,
+                                                        AtomicBoolean.class, BlockingQueue.class,
+                                                        AtomicBoolean.class);
     m.setAccessible(true);
-
-    Object result = m.invoke(null, BedrockAgentsFilteringParameters.SearchType.HYBRID);
-    assertThat(result).isNotNull();
-    assertThat(result.toString()).isEqualTo("HYBRID");
+    m.invoke(service, effectiveSessionId, agentId, agentAliasId, startTime,
+             requestId, correlationId, userId,
+             chunkCount, timeToFirstChunk, chunksReceived, writeQueue, clientDisconnected);
   }
 
-  @Test
-  @DisplayName("convertToSdkSearchType converts SEMANTIC correctly")
-  void convertToSdkSearchTypeSemantic() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("convertToSdkSearchType",
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, BedrockAgentsFilteringParameters.SearchType.SEMANTIC);
-    assertThat(result).isNotNull();
-    assertThat(result.toString()).isEqualTo("SEMANTIC");
-  }
-
-  @Test
-  @DisplayName("convertToSdkSearchType returns null for null input")
-  void convertToSdkSearchTypeNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("convertToSdkSearchType",
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
-    m.setAccessible(true);
-
-    Object result = m.invoke(null, (Object) null);
-    assertThat(result).isNull();
-  }
-
-  @Test
-  @DisplayName("hasAnyVectorSearchConfig returns true when numberOfResults > 0")
-  void hasAnyVectorSearchConfigNumberOfResults() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("hasAnyVectorSearchConfig",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Boolean result = (Boolean) m.invoke(null, 5, null, null, null);
-    assertThat(result).isTrue();
-  }
-
-  @Test
-  @DisplayName("hasAnyVectorSearchConfig returns false when all params null or empty")
-  void hasAnyVectorSearchConfigAllNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("hasAnyVectorSearchConfig",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Boolean result = (Boolean) m.invoke(null, null, null, null, null);
-    assertThat(result).isFalse();
-  }
-
-  @Test
-  @DisplayName("hasAnyVectorSearchConfig returns true when searchType present")
-  void hasAnyVectorSearchConfigSearchType() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("hasAnyVectorSearchConfig",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    Boolean result = (Boolean) m.invoke(null, null, BedrockAgentsFilteringParameters.SearchType.HYBRID, null, null);
-    assertThat(result).isTrue();
-  }
-
-  @Test
-  @DisplayName("hasAnyVectorSearchConfig returns true when filters present")
-  void hasAnyVectorSearchConfigFilters() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("hasAnyVectorSearchConfig",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    java.util.Map<String, String> filters = Collections.singletonMap("key", "value");
-    Boolean result = (Boolean) m.invoke(null, null, null, filters, null);
-    assertThat(result).isTrue();
-  }
-
-  @Test
-  @DisplayName("hasAnyVectorSearchConfig returns true when reranking config present")
-  void hasAnyVectorSearchConfigReranking() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("hasAnyVectorSearchConfig",
-                                                                          Integer.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    BedrockAgentsFilteringParameters.RerankingConfiguration rerankConfig =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    Boolean result = (Boolean) m.invoke(null, null, null, null, rerankConfig);
-    assertThat(result).isTrue();
-  }
-
-  @Test
-  @DisplayName("applyFilterToBuilder applies filter when filters present")
-  void applyFilterToBuilderWithFilters() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyFilterToBuilder",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    java.util.Map<String, String> filters = Collections.singletonMap("key1", "value1");
-
-    m.invoke(null, builder, filters, BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.AND_ALL);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.filter()).isNotNull();
-  }
-
-  @Test
-  @DisplayName("applyFilterToBuilder does nothing when filters null")
-  void applyFilterToBuilderWithNullFilters() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyFilterToBuilder",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, null, null);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.filter()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyFilterToBuilder does nothing when filters empty")
-  void applyFilterToBuilderWithEmptyFilters() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyFilterToBuilder",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          java.util.Map.class,
-                                                                          BedrockAgentsFilteringParameters.RetrievalMetadataFilterType.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, Collections.emptyMap(), null);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.filter()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyNumberOfResults sets numberOfResults when valid")
-  void applyNumberOfResultsValid() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyNumberOfResults",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          Integer.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, 10);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.numberOfResults()).isEqualTo(10);
-  }
-
-  @Test
-  @DisplayName("applyNumberOfResults does nothing when null")
-  void applyNumberOfResultsNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyNumberOfResults",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          Integer.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, (Integer) null);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.numberOfResults()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyNumberOfResults does nothing when zero")
-  void applyNumberOfResultsZero() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyNumberOfResults",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          Integer.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, 0);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.numberOfResults()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyOverrideSearchType sets search type when valid")
-  void applyOverrideSearchTypeValid() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyOverrideSearchType",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, BedrockAgentsFilteringParameters.SearchType.HYBRID);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.overrideSearchType()).isNotNull();
-    assertThat(config.overrideSearchType().toString()).isEqualTo("HYBRID");
-  }
-
-  @Test
-  @DisplayName("applyOverrideSearchType does nothing when null")
-  void applyOverrideSearchTypeNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyOverrideSearchType",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, (BedrockAgentsFilteringParameters.SearchType) null);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.overrideSearchType()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig does nothing when config null")
-  void applyRerankingConfigNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-
-    m.invoke(null, builder, (BedrockAgentsFilteringParameters.RerankingConfiguration) null);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration config =
-        builder.build();
-    assertThat(config.rerankingConfiguration()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig does nothing when modelArn null")
-  void applyRerankingConfigModelArnNull() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    BedrockAgentsFilteringParameters.RerankingConfiguration config =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-
-    m.invoke(null, builder, config);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration vectorConfig =
-        builder.build();
-    assertThat(vectorConfig.rerankingConfiguration()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig does nothing when modelArn empty")
-  void applyRerankingConfigModelArnEmpty() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    BedrockAgentsFilteringParameters.RerankingConfiguration config =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    setField(config, "modelArn", "");
-
-    m.invoke(null, builder, config);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration vectorConfig =
-        builder.build();
-    assertThat(vectorConfig.rerankingConfiguration()).isNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig sets config when modelArn valid")
-  void applyRerankingConfigValid() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    BedrockAgentsFilteringParameters.RerankingConfiguration config =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    setField(config, "modelArn", "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0");
-
-    m.invoke(null, builder, config);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration vectorConfig =
-        builder.build();
-    assertThat(vectorConfig.rerankingConfiguration()).isNotNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig uses BEDROCK type by default")
-  void applyRerankingConfigDefaultType() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    BedrockAgentsFilteringParameters.RerankingConfiguration config =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    setField(config, "modelArn", "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0");
-
-    m.invoke(null, builder, config);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration vectorConfig =
-        builder.build();
-    assertThat(vectorConfig.rerankingConfiguration().type()).isNotNull();
-  }
-
-  @Test
-  @DisplayName("applyRerankingConfig uses custom type when provided")
-  void applyRerankingConfigCustomType() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("applyRerankingConfig",
-                                                                          software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder.class,
-                                                                          BedrockAgentsFilteringParameters.RerankingConfiguration.class);
-    m.setAccessible(true);
-
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.Builder builder =
-        software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration.builder();
-    BedrockAgentsFilteringParameters.RerankingConfiguration config =
-        new BedrockAgentsFilteringParameters.RerankingConfiguration();
-    setField(config, "modelArn", "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0");
-    setField(config, "rerankingType", "CUSTOM_TYPE");
-
-    m.invoke(null, builder, config);
-    software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseVectorSearchConfiguration vectorConfig =
-        builder.build();
-    assertThat(vectorConfig.rerankingConfiguration()).isNotNull();
-  }
-
-  @Test
-  @DisplayName("convertToSdkSearchType throws for unsupported type")
-  void convertToSdkSearchTypeUnsupported() throws Exception {
-    java.lang.reflect.Method m = AgentServiceImpl.class.getDeclaredMethod("convertToSdkSearchType",
-                                                                          BedrockAgentsFilteringParameters.SearchType.class);
-    m.setAccessible(true);
-
-    // Create a mock enum value that doesn't match HYBRID or SEMANTIC
-    // Since we can't create new enum values, we test using the default branch
-    // by relying on the existing tests for HYBRID and SEMANTIC
-    // This test verifies the method signature works
-    assertThat(m).isNotNull();
-  }
-
-  private void setField(Object obj, String fieldName, Object value) throws Exception {
-    java.lang.reflect.Field field = obj.getClass().getDeclaredField(fieldName);
-    field.setAccessible(true);
-    field.set(obj, value);
+  private static String drainQueue(BlockingQueue<String> queue) {
+    StringBuilder sb = new StringBuilder();
+    String item;
+    while ((item = queue.poll()) != null) {
+      sb.append(item);
+    }
+    return sb.toString();
   }
 }

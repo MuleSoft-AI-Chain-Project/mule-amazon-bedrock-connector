@@ -145,4 +145,14 @@
         </munit:validation>
     </munit:test>
 
+    <!-- Agent: get Agent by id -->
+    <munit:test name="get-agent-by-id">
+        <munit:execution>
+            <ms-bedrock:agent-get-by-id config-ref="config-role" agentId="NCIK7YBSXH"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
 </mule>
