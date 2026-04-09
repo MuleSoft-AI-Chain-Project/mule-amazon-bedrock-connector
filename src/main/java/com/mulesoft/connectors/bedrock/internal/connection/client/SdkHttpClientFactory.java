@@ -7,8 +7,11 @@ import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.time.Duration;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import com.mulesoft.connectors.bedrock.internal.connection.parameters.CommonParameters;
@@ -28,9 +31,82 @@ public class SdkHttpClientFactory {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SdkHttpClientFactory.class);
 
+  private static final String[] FIPS_PROVIDER_NAMES = {"BCJSSE", "BCFIPS", "SunPKCS11-NSS-FIPS"};
+  private static final String[] FIPS_TLS_ALGORITHMS = {"PKIX", "SunX509", "X509"};
 
   public SdkHttpClientFactory(ProxyParameterGroup proxyParameterGroup) {
     this.proxyParameterGroup = proxyParameterGroup;
+  }
+
+  private Provider findFipsProvider() {
+    for (Provider provider : Security.getProviders()) {
+      String providerName = provider.getName();
+      for (String fipsName : FIPS_PROVIDER_NAMES) {
+        if (providerName.contains(fipsName)) {
+          LOGGER.debug("Found FIPS provider: {}", providerName);
+          return provider;
+        }
+      }
+    }
+    return null;
+  }
+
+  private TrustManagerFactory createTrustManagerFactory() throws NoSuchAlgorithmException {
+    Provider fipsProvider = findFipsProvider();
+    if (fipsProvider != null) {
+      for (String algorithm : FIPS_TLS_ALGORITHMS) {
+        try {
+          TrustManagerFactory tmf = TrustManagerFactory.getInstance(algorithm, fipsProvider);
+          LOGGER.debug("Using TrustManagerFactory with algorithm {} from provider {}", algorithm, fipsProvider.getName());
+          return tmf;
+        } catch (NoSuchAlgorithmException ignored) {
+          LOGGER.trace("Algorithm {} not available from provider {}", algorithm, fipsProvider.getName());
+        }
+      }
+    }
+    String defaultAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+    LOGGER.debug("Using default TrustManagerFactory algorithm: {}", defaultAlgorithm);
+    return TrustManagerFactory.getInstance(defaultAlgorithm);
+  }
+
+  private SSLContext createSslContext(CommonParameters commonParameters)
+      throws NoSuchAlgorithmException, KeyManagementException {
+    if (commonParameters.getTlsContext() != null) {
+      try {
+        return commonParameters.getTlsContext().createSslContext();
+      } catch (NoSuchAlgorithmException e) {
+        LOGGER.info("Default SSLContext creation failed, attempting FIPS-compatible creation: {}", e.getMessage());
+        return createFipsCompatibleSslContext();
+      }
+    }
+    return createFipsCompatibleSslContext();
+  }
+
+  private SSLContext createFipsCompatibleSslContext() throws NoSuchAlgorithmException, KeyManagementException {
+    Provider fipsProvider = findFipsProvider();
+    String[] protocols = {"TLSv1.3", "TLSv1.2", "TLS"};
+
+    for (String protocol : protocols) {
+      if (fipsProvider != null) {
+        try {
+          SSLContext sslContext = SSLContext.getInstance(protocol, fipsProvider);
+          sslContext.init(null, null, null);
+          LOGGER.debug("Created SSLContext with protocol {} from FIPS provider {}", protocol, fipsProvider.getName());
+          return sslContext;
+        } catch (NoSuchAlgorithmException ignored) {
+          LOGGER.trace("Protocol {} not available from FIPS provider {}", protocol, fipsProvider.getName());
+        }
+      }
+      try {
+        SSLContext sslContext = SSLContext.getInstance(protocol);
+        sslContext.init(null, null, null);
+        LOGGER.info("Created SSLContext with protocol {}", protocol);
+        return sslContext;
+      } catch (NoSuchAlgorithmException ignored) {
+        LOGGER.info("Protocol {} not available from default providers", protocol);
+      }
+    }
+    throw new NoSuchAlgorithmException("No suitable TLS protocol found in available security providers");
   }
 
   public SdkHttpClient buildHttpClient(CommonParameters commonParameters) throws ConnectionException {
@@ -46,9 +122,10 @@ public class SdkHttpClientFactory {
       throws ConnectionException {
     if (commonParameters.getTlsContext() != null) {
       try {
-        clientBuilder.socketFactory(new SSLConnectionSocketFactory(commonParameters.getTlsContext().createSslContext()));
+        SSLContext sslContext = createSslContext(commonParameters);
+        clientBuilder.socketFactory(new SSLConnectionSocketFactory(sslContext));
       } catch (KeyManagementException | NoSuchAlgorithmException e) {
-        LOGGER.info("SSL/TLS configuration error: " + e.getMessage());
+        LOGGER.info("SSL/TLS configuration error: {}", e.getMessage());
         throw new ConnectionException("SSL/TLS configuration error", e);
       }
     }
@@ -61,19 +138,40 @@ public class SdkHttpClientFactory {
         String keyType = commonParameters.getTlsContext().getTrustStoreConfiguration().getType();
         String keyPath = commonParameters.getTlsContext().getTrustStoreConfiguration().getPath();
         String keyPassword = commonParameters.getTlsContext().getTrustStoreConfiguration().getPassword();
-        KeyStore trustStore = KeyStore.getInstance(keyType);
-        try (FileInputStream fis = new FileInputStream(keyPath)) {
-          trustStore.load(fis, keyPassword != null ? keyPassword.toCharArray() : null);
-        }
-        TrustManagerFactory trustManagerFactory = TrustManagerFactory
-            .getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        KeyStore trustStore = loadKeyStore(keyType, keyPath, keyPassword);
+        TrustManagerFactory trustManagerFactory = createTrustManagerFactory();
         trustManagerFactory.init(trustStore);
         clientBuilder.tlsTrustManagersProvider(trustManagerFactory::getTrustManagers);
       } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
-        LOGGER.info("TLS configuration error: " + e.getMessage());
+        LOGGER.info("TLS configuration error: {}", e.getMessage());
         throw new ConnectionException("TLS configuration error", e);
       }
     }
+  }
+
+  private KeyStore loadKeyStore(String keyType, String keyPath, String keyPassword)
+      throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
+    Provider fipsProvider = findFipsProvider();
+    KeyStore keyStore = null;
+
+    if (fipsProvider != null) {
+      try {
+        keyStore = KeyStore.getInstance(keyType, fipsProvider);
+        LOGGER.debug("Using KeyStore type {} from FIPS provider {}", keyType, fipsProvider.getName());
+      } catch (KeyStoreException e) {
+        LOGGER.debug("KeyStore type {} not available from FIPS provider, falling back to default", keyType);
+      }
+    }
+
+    if (keyStore == null) {
+      keyStore = KeyStore.getInstance(keyType);
+      LOGGER.debug("Using KeyStore type {} from default provider", keyType);
+    }
+
+    try (FileInputStream fis = new FileInputStream(keyPath)) {
+      keyStore.load(fis, keyPassword != null ? keyPassword.toCharArray() : null);
+    }
+    return keyStore;
   }
 
   private void proxyConfiguration(ApacheHttpClient.Builder clientBuilder) {
