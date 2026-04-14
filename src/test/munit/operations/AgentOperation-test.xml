@@ -19,7 +19,7 @@
             <ms-bedrock:agent-chat config-ref="config-role"
                                    agentId="${config.agentId}"
                                    agentAliasId="${config.agentAliasId}"
-                                   prompt="what is the capital of delhi?"/>
+                                   prompt="what is the capital of delhi?" requestTimeout="180000"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
