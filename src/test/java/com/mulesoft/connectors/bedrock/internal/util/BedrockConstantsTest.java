@@ -30,6 +30,22 @@ class BedrockConstantsTest {
     assertThat(BedrockConstants.ModelPatterns.AMAZON_TITAN_TEXT).isEqualTo("amazon.titan-text");
     assertThat(BedrockConstants.ModelPatterns.AMAZON_NOVA).isEqualTo("amazon.nova");
     assertThat(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE).isEqualTo("anthropic.claude");
+    assertThat(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_OPUS).isEqualTo("anthropic.claude-opus-4");
+    assertThat(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_SONNET).isEqualTo("anthropic.claude-sonnet-4");
+    assertThat(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_HAIKU).isEqualTo("anthropic.claude-haiku-4");
+    assertThat(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_OPUS_4_7).isEqualTo("claude-opus-4-7");
+  }
+
+  @Test
+  @DisplayName("GeoPrefix constants are defined")
+  void geoPrefix() {
+    assertThat(BedrockConstants.GeoPrefix.US).isEqualTo("us.");
+    assertThat(BedrockConstants.GeoPrefix.EU).isEqualTo("eu.");
+    assertThat(BedrockConstants.GeoPrefix.APAC).isEqualTo("apac.");
+    assertThat(BedrockConstants.GeoPrefix.JP).isEqualTo("jp.");
+    assertThat(BedrockConstants.GeoPrefix.AU).isEqualTo("au.");
+    assertThat(BedrockConstants.GeoPrefix.GLOBAL).isEqualTo("global.");
+    assertThat(BedrockConstants.GeoPrefix.NONE).isEqualTo("");
   }
 
   @Test
