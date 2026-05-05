@@ -17,10 +17,10 @@ public class ClaudeResponseFormatter extends BaseResponseFormatter {
     // Parse the original JSON
     JSONObject original = new JSONObject(rawJson);
 
-    // Extract the content text
+    // Extract the content text. Claude 4 extended thinking may emit non-text blocks
+    // (e.g. {"type":"thinking", ...}) before the final answer, so scan for the first text block.
     JSONArray contentArray = original.getJSONArray("content");
-    JSONObject firstContentObj = contentArray.getJSONObject(0);
-    String originalText = firstContentObj.getString("text");
+    String originalText = extractFirstTextBlock(contentArray);
 
     // Get token usage
     JSONObject usageOriginal = original.getJSONObject("usage");
@@ -44,5 +44,18 @@ public class ClaudeResponseFormatter extends BaseResponseFormatter {
     String guardrailAction = original.optString("amazon-bedrock-guardrailAction", "NONE");
 
     return createFinalPayload(message, stopReason, usage, guardrailAction);
+  }
+
+  private static String extractFirstTextBlock(JSONArray contentArray) {
+    for (int i = 0; i < contentArray.length(); i++) {
+      JSONObject block = contentArray.getJSONObject(i);
+      String type = block.optString("type", "text");
+      if ("text".equals(type) && block.has("text")) {
+        return block.getString("text");
+      }
+    }
+    // Fallback: no explicit text block found, return first block's text if present.
+    JSONObject first = contentArray.getJSONObject(0);
+    return first.optString("text", "");
   }
 }
