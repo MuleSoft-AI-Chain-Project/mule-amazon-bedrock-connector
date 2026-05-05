@@ -44,6 +44,54 @@ class ClaudeResponseFormatterTest {
   }
 
   @Test
+  @DisplayName("format skips extended-thinking blocks and returns the text block")
+  void formatSkipsThinkingBlock() {
+    JSONObject thinkingBlock = new JSONObject();
+    thinkingBlock.put("type", "thinking");
+    thinkingBlock.put("thinking", "internal reasoning...");
+    JSONObject textBlock = new JSONObject();
+    textBlock.put("type", "text");
+    textBlock.put("text", "Final answer");
+    JSONArray contentArray = new JSONArray().put(thinkingBlock).put(textBlock);
+
+    JSONObject raw = new JSONObject();
+    raw.put("content", contentArray);
+    raw.put("role", "assistant");
+    raw.put("usage", new JSONObject().put("input_tokens", 5).put("output_tokens", 7));
+
+    InvokeModelResponse response = InvokeModelResponse.builder()
+        .body(SdkBytes.fromUtf8String(raw.toString()))
+        .build();
+
+    String output = new ClaudeResponseFormatter().format(response);
+
+    assertThat(output).contains("Final answer");
+    assertThat(output).doesNotContain("internal reasoning");
+  }
+
+  @Test
+  @DisplayName("format falls back to first block text when no text-typed block present")
+  void formatFallsBackToFirstBlockWhenNoTextType() {
+    JSONObject firstBlock = new JSONObject();
+    firstBlock.put("type", "tool_use");
+    firstBlock.put("text", "fallback text");
+    JSONArray contentArray = new JSONArray().put(firstBlock);
+
+    JSONObject raw = new JSONObject();
+    raw.put("content", contentArray);
+    raw.put("role", "assistant");
+    raw.put("usage", new JSONObject().put("input_tokens", 3).put("output_tokens", 4));
+
+    InvokeModelResponse response = InvokeModelResponse.builder()
+        .body(SdkBytes.fromUtf8String(raw.toString()))
+        .build();
+
+    String output = new ClaudeResponseFormatter().format(response);
+
+    assertThat(output).contains("fallback text");
+  }
+
+  @Test
   @DisplayName("format uses default stop_reason and guardrail when missing")
   void formatWithDefaults() {
     JSONObject content0 = new JSONObject();
