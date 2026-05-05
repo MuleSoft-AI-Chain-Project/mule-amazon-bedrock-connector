@@ -23,13 +23,75 @@ public final class ModelIdentifier {
       return false;
     }
 
+    // If the model ID already carries a cross-region geo prefix, the caller is passing a
+    // pre-qualified inference profile ID and should be routed through the ARN path unchanged.
+    if (hasGeoPrefix(modelId)) {
+      return true;
+    }
+
     return modelId.contains(BedrockConstants.ModelPatterns.AMAZON_NOVA_PREMIER) ||
         modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_3) ||
+        modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_OPUS) ||
+        modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_SONNET) ||
+        modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_4_HAIKU) ||
         modelId.contains(BedrockConstants.ModelPatterns.MISTRAL_PIXTRAL) ||
         modelId.contains(BedrockConstants.ModelPatterns.META_LLAMA_4) ||
         modelId.contains(BedrockConstants.ModelPatterns.META_LLAMA_3_3) ||
         modelId.contains(BedrockConstants.ModelPatterns.META_LLAMA_3_2) ||
         modelId.contains(BedrockConstants.ModelPatterns.META_LLAMA_3_1);
+  }
+
+  /**
+   * Returns true if the model ID already starts with a cross-region geo prefix (e.g. "us.", "eu.", "global.").
+   *
+   * @param modelId the model identifier
+   * @return true if the ID is already geo-qualified
+   */
+  public static boolean hasGeoPrefix(String modelId) {
+    if (modelId == null || modelId.isBlank()) {
+      return false;
+    }
+    return modelId.startsWith(BedrockConstants.GeoPrefix.US)
+        || modelId.startsWith(BedrockConstants.GeoPrefix.EU)
+        || modelId.startsWith(BedrockConstants.GeoPrefix.APAC)
+        || modelId.startsWith(BedrockConstants.GeoPrefix.JP)
+        || modelId.startsWith(BedrockConstants.GeoPrefix.AU)
+        || modelId.startsWith(BedrockConstants.GeoPrefix.GLOBAL);
+  }
+
+  /**
+   * Resolves the geographic prefix for a cross-region inference profile based on the region and model.
+   *
+   * <p>
+   * Claude Opus 4.7 is only available via the {@code global.} profile regardless of region. Otherwise the prefix is derived from
+   * the AWS region family: {@code us-*} -> {@code us.}, {@code eu-*} -> {@code eu.}, {@code ap-*} -> {@code apac.}, {@code ca-*}
+   * -> {@code us.} (North-American routing), else {@code us.} as a safe default.
+   *
+   * @param region the AWS region (e.g. "us-east-1")
+   * @param modelId the base model identifier (without geo prefix)
+   * @return the geo prefix to inject into the ARN
+   */
+  public static String resolveGeoPrefix(String region, String modelId) {
+    if (modelId != null && modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_OPUS_4_7)) {
+      return BedrockConstants.GeoPrefix.GLOBAL;
+    }
+    if (region == null || region.isBlank()) {
+      return BedrockConstants.GeoPrefix.US;
+    }
+    String r = region.toLowerCase();
+    if (r.startsWith("eu-")) {
+      return BedrockConstants.GeoPrefix.EU;
+    }
+    if (r.startsWith("ap-northeast-1") || r.startsWith("ap-northeast-3")) {
+      return BedrockConstants.GeoPrefix.JP;
+    }
+    if (r.startsWith("ap-southeast-2") || r.startsWith("ap-southeast-4")) {
+      return BedrockConstants.GeoPrefix.AU;
+    }
+    if (r.startsWith("ap-")) {
+      return BedrockConstants.GeoPrefix.APAC;
+    }
+    return BedrockConstants.GeoPrefix.US;
   }
 
   /**
@@ -41,7 +103,12 @@ public final class ModelIdentifier {
    * @return the inference profile ARN
    */
   public static String buildInferenceProfileArn(String region, String accountId, String modelId) {
-    return String.format(BedrockConstants.INFERENCE_PROFILE_ARN_TEMPLATE, region, accountId, modelId);
+    // If the caller passed a pre-qualified model ID (e.g. "global.anthropic.claude-opus-4-7-..."),
+    // use it verbatim. Otherwise inject the geo prefix resolved from region + model.
+    String geoPrefix = hasGeoPrefix(modelId)
+        ? BedrockConstants.GeoPrefix.NONE
+        : resolveGeoPrefix(region, modelId);
+    return String.format(BedrockConstants.INFERENCE_PROFILE_ARN_TEMPLATE, region, accountId, geoPrefix, modelId);
   }
 
   /**
