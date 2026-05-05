@@ -26,9 +26,16 @@ public class AnthropicClaudePayloadGenerator extends BasePayloadGenerator {
     JSONObject jsonRequest = new JSONObject();
     jsonRequest.put(BedrockConstants.JsonKeys.MESSAGES, messages);
     jsonRequest.put("anthropic_version", "bedrock-2023-05-31");
-    jsonRequest.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
-    if (parameters.getTopP() != null) {
-      jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+
+    // Claude Opus 4.7 rejects temperature / top_p / top_k (returns 400). Omit entirely for that family.
+    String modelId = parameters.getModelName();
+    boolean isOpus47 = modelId != null
+        && modelId.contains(BedrockConstants.ModelPatterns.ANTHROPIC_CLAUDE_OPUS_4_7);
+    if (!isOpus47) {
+      jsonRequest.put(BedrockConstants.JsonKeys.TEMPERATURE, parameters.getTemperature());
+      if (parameters.getTopP() != null) {
+        jsonRequest.put(BedrockConstants.JsonKeys.TOP_P.toLowerCase(), parameters.getTopP());
+      }
     }
     jsonRequest.put(BedrockConstants.JsonKeys.MAX_TOKENS_LIMIT.toLowerCase(), parameters.getMaxTokenCount());
 

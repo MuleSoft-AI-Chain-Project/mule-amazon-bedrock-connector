@@ -10,7 +10,22 @@ public final class BedrockConstants {
   }
 
   // AWS Configuration
-  public static final String INFERENCE_PROFILE_ARN_TEMPLATE = "arn:aws:bedrock:%s:%s:inference-profile/us.%s";
+  // Template args: region, accountId, geoPrefix (e.g. "us.", "eu.", "global."), modelId
+  public static final String INFERENCE_PROFILE_ARN_TEMPLATE = "arn:aws:bedrock:%s:%s:inference-profile/%s%s";
+
+  // Geographic prefixes for cross-region inference profiles
+  public static final class GeoPrefix {
+
+    private GeoPrefix() {}
+
+    public static final String NONE = "";
+    public static final String US = "us.";
+    public static final String EU = "eu.";
+    public static final String APAC = "apac.";
+    public static final String JP = "jp.";
+    public static final String AU = "au.";
+    public static final String GLOBAL = "global.";
+  }
 
   // Model ID Patterns
   public static final class ModelPatterns {
@@ -22,6 +37,11 @@ public final class BedrockConstants {
     public static final String AMAZON_NOVA_PREMIER = "amazon.nova-premier";
     public static final String ANTHROPIC_CLAUDE = "anthropic.claude";
     public static final String ANTHROPIC_CLAUDE_3 = "anthropic.claude-3";
+    public static final String ANTHROPIC_CLAUDE_3_5_HAIKU = "anthropic.claude-3-5-haiku";
+    public static final String ANTHROPIC_CLAUDE_4_OPUS = "anthropic.claude-opus-4";
+    public static final String ANTHROPIC_CLAUDE_4_SONNET = "anthropic.claude-sonnet-4";
+    public static final String ANTHROPIC_CLAUDE_4_HAIKU = "anthropic.claude-haiku-4";
+    public static final String ANTHROPIC_CLAUDE_OPUS_4_7 = "claude-opus-4-7";
     public static final String AI21_JAMBA = "ai21.jamba";
     public static final String MISTRAL = "mistral";
     public static final String MISTRAL_PIXTRAL = "mistral.pixtral";

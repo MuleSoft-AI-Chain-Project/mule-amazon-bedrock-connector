@@ -117,6 +117,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
   @Override
   public String definePromptTemplate(String promptTemplate, String instructions, String dataset,
                                      BedrockParameters bedrockParameters) {
+    long sessionStart = System.currentTimeMillis();
+    logger.info("Agent operation [AGENT-define-prompt-template] session-start modelName={}",
+                bedrockParameters != null ? bedrockParameters.getModelName() : null);
     try {
       String finalPromptTemplate = PromptPayloadHelper.definePromptTemplate(promptTemplate, instructions, dataset);
       String nativeRequest = PromptPayloadHelper.identifyPayload(finalPromptTemplate, bedrockParameters);
@@ -126,51 +129,68 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
       throw ErrorHandler.handleSdkClientException(e, bedrockParameters.getModelName());
+    } finally {
+      logger.info("Agent operation [AGENT-define-prompt-template] session-end durationMs={}",
+                  System.currentTimeMillis() - sessionStart);
     }
 
   }
 
   @Override
   public String listAgents() {
-    ListAgentsRequest listAgentsRequest = ListAgentsRequest.builder().build();
-    ListAgentsResponse listAgentsResponse = getConnection().listAgents(listAgentsRequest);
-    List<AgentSummary> agentSummaries = listAgentsResponse.agentSummaries();
-    List<String> agentNames = agentSummaries.stream()
-        .map(AgentSummary::agentName)
-        .collect(Collectors.toList());
-    JSONArray jsonArray = new JSONArray(agentNames);
+    long sessionStart = System.currentTimeMillis();
+    logger.info("Agent operation [AGENT-list] session-start");
+    try {
+      ListAgentsRequest listAgentsRequest = ListAgentsRequest.builder().build();
+      ListAgentsResponse listAgentsResponse = getConnection().listAgents(listAgentsRequest);
+      List<AgentSummary> agentSummaries = listAgentsResponse.agentSummaries();
+      List<String> agentNames = agentSummaries.stream()
+          .map(AgentSummary::agentName)
+          .collect(Collectors.toList());
+      JSONArray jsonArray = new JSONArray(agentNames);
 
-    // Create a JSONObject to store the JSONArray
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(AGENT_NAMES, jsonArray);
+      // Create a JSONObject to store the JSONArray
+      JSONObject jsonObject = new JSONObject();
+      jsonObject.put(AGENT_NAMES, jsonArray);
 
-    // Convert the JSONObject to a JSON string
-    return jsonObject.toString();
+      // Convert the JSONObject to a JSON string
+      return jsonObject.toString();
+    } finally {
+      logger.info("Agent operation [AGENT-list] session-end durationMs={}",
+                  System.currentTimeMillis() - sessionStart);
+    }
   }
 
   @Override
   public String getAgentById(String agentId) {
-    GetAgentRequest getAgentRequest = GetAgentRequest.builder()
-        .agentId(agentId)
-        .build();
-    GetAgentResponse getAgentResponse = getConnection().getAgent(getAgentRequest);
-    Agent agent = getAgentResponse.agent();
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(AGENT_ID, agent.agentId());
-    jsonObject.put(AGENT_NAME, agent.agentName());
-    jsonObject.put(AGENT_ARN, agent.agentArn());
-    jsonObject.put(AGENT_STATUS, agent.agentStatusAsString());
-    jsonObject.put(AGENT_RESOURCE_ROLE_ARN, agent.agentResourceRoleArn());
-    jsonObject.put(CLIENT_TOKEN, agent.clientToken());
-    jsonObject.put(CREATED_AT, agent.createdAt());
-    jsonObject.put(DESCRIPTION, agent.description());
-    jsonObject.put(FOUNDATION_MODEL, agent.foundationModel());
-    jsonObject.put(IDLE_SESSION_TTL_IN_SECONDS, agent.idleSessionTTLInSeconds());
-    jsonObject.put(INSTRUCTION, agent.instruction());
-    jsonObject.put(PROMPT_OVERRIDE_CONFIGURATION, agent.promptOverrideConfiguration());
-    jsonObject.put(UPDATED_AT, agent.updatedAt());
+    long sessionStart = System.currentTimeMillis();
+    logger.info("Agent operation [AGENT-get-by-id] session-start agentId={}", agentId);
+    try {
+      GetAgentRequest getAgentRequest = GetAgentRequest.builder()
+          .agentId(agentId)
+          .build();
+      GetAgentResponse getAgentResponse = getConnection().getAgent(getAgentRequest);
+      Agent agent = getAgentResponse.agent();
+      JSONObject jsonObject = new JSONObject();
+      jsonObject.put(AGENT_ID, agent.agentId());
+      jsonObject.put(AGENT_NAME, agent.agentName());
+      jsonObject.put(AGENT_ARN, agent.agentArn());
+      jsonObject.put(AGENT_STATUS, agent.agentStatusAsString());
+      jsonObject.put(AGENT_RESOURCE_ROLE_ARN, agent.agentResourceRoleArn());
+      jsonObject.put(CLIENT_TOKEN, agent.clientToken());
+      jsonObject.put(CREATED_AT, agent.createdAt());
+      jsonObject.put(DESCRIPTION, agent.description());
+      jsonObject.put(FOUNDATION_MODEL, agent.foundationModel());
+      jsonObject.put(IDLE_SESSION_TTL_IN_SECONDS, agent.idleSessionTTLInSeconds());
+      jsonObject.put(INSTRUCTION, agent.instruction());
+      jsonObject.put(PROMPT_OVERRIDE_CONFIGURATION, agent.promptOverrideConfiguration());
+      jsonObject.put(UPDATED_AT, agent.updatedAt());
 
-    return jsonObject.toString();
+      return jsonObject.toString();
+    } finally {
+      logger.info("Agent operation [AGENT-get-by-id] session-end agentId={} durationMs={}",
+                  agentId, System.currentTimeMillis() - sessionStart);
+    }
   }
 
 
@@ -187,7 +207,11 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
         : UUID.randomUUID().toString();
-    logger.info("Using sessionId: {}", effectiveSessionId);
+    logger.debug("Using sessionId: {}", effectiveSessionId);
+
+    long sessionStart = System.currentTimeMillis();
+    logger.info("Agent operation [AGENT-chat] session-start sessionId={} agentId={} agentAliasId={}",
+                effectiveSessionId, agentId, agentAliasId);
 
     // Create retry configuration from response parameters
     StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
@@ -204,19 +228,24 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                                                                           bedrockAgentsResponseParameters
                                                                                               .getEnableRetry());
 
-    // Execute with retry logic for non-streaming operation
-    return StreamingRetryUtility.executeWithRetry(() -> {
-      return invokeAgent(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
-                         bedrockSessionParameters.getExcludePreviousThinkingSteps(),
-                         bedrockSessionParameters.getPreviousConversationTurnsToInclude(),
-                         buildKnowledgeBaseConfigs(bedrockAgentsFilteringParameters,
-                                                   bedrockAgentsMultipleFilteringParameters),
-                         operationTimeout, operationTimeoutUnit)
-          .thenApply(response -> {
-            logger.debug(response);
-            return response;
-          }).join();
-    }, retryConfig);
+    try {
+      // Execute with retry logic for non-streaming operation
+      return StreamingRetryUtility.executeWithRetry(() -> {
+        return invokeAgent(agentAliasId, agentId, prompt, enableTrace, latencyOptimized, effectiveSessionId,
+                           bedrockSessionParameters.getExcludePreviousThinkingSteps(),
+                           bedrockSessionParameters.getPreviousConversationTurnsToInclude(),
+                           buildKnowledgeBaseConfigs(bedrockAgentsFilteringParameters,
+                                                     bedrockAgentsMultipleFilteringParameters),
+                           operationTimeout, operationTimeoutUnit)
+            .thenApply(response -> {
+              logger.debug(response);
+              return response;
+            }).join();
+      }, retryConfig);
+    } finally {
+      logger.info("Agent operation [AGENT-chat] session-end sessionId={} agentId={} durationMs={}",
+                  effectiveSessionId, agentId, System.currentTimeMillis() - sessionStart);
+    }
   }
 
   private static java.util.List<BedrockAgentsFilteringParameters.KnowledgeBaseConfig> buildKnowledgeBaseConfigs(
@@ -640,7 +669,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
     String sessionId = bedrockSessionParameters.getSessionId();
     String effectiveSessionId = (sessionId != null && !sessionId.isEmpty()) ? sessionId
         : UUID.randomUUID().toString();
-    logger.info("Using sessionId: {}", effectiveSessionId);
+    logger.debug("Using sessionId: {}", effectiveSessionId);
+    logger.info("Agent operation [AGENT-chat-streaming-SSE] session-start sessionId={} agentId={} agentAliasId={}",
+                effectiveSessionId, agentId, agentAliasId);
 
     // Create retry configuration from response parameters
     StreamingRetryUtility.RetryConfig retryConfig = new StreamingRetryUtility.RetryConfig(
@@ -752,6 +783,9 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       if (outputStream != null) {
         closeQuietly(outputStream);
       }
+      logger
+          .info("Agent operation [AGENT-chat-streaming-SSE] session-end sessionId={} agentId={} durationMs={} status=init-failed",
+                effectiveSessionId, agentId, System.currentTimeMillis() - requestStartTime);
       return new ByteArrayInputStream(errorEvent.getBytes(StandardCharsets.UTF_8));
     }
   }
@@ -855,6 +889,8 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       }
     } finally {
       awaitWriterCompletion(writerFuture, agentId, effectiveSessionId, requestId);
+      logger.info("Agent operation [AGENT-chat-streaming-SSE] session-end sessionId={} agentId={} durationMs={}",
+                  effectiveSessionId, agentId, System.currentTimeMillis() - requestStartTime);
     }
   }
 

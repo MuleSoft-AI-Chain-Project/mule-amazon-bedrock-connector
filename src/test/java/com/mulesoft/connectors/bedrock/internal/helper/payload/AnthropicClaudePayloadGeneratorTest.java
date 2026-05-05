@@ -41,4 +41,25 @@ class AnthropicClaudePayloadGeneratorTest {
     assertThat(payload).contains("temperature");
     assertThat(payload).contains("max_tokens");
   }
+
+  @Test
+  @DisplayName("generatePayload omits temperature/top_p/top_k for Claude Opus 4.7")
+  void generatePayloadOpus47() {
+    BedrockParameters params = mock(BedrockParameters.class);
+    when(params.getModelName()).thenReturn("anthropic.claude-opus-4-7-20260101-v1:0");
+    when(params.getTemperature()).thenReturn(0.7f);
+    when(params.getMaxTokenCount()).thenReturn(512);
+    when(params.getTopP()).thenReturn(0.9f);
+    when(params.getTopK()).thenReturn(40);
+
+    AnthropicClaudePayloadGenerator g = new AnthropicClaudePayloadGenerator();
+    String payload = g.generatePayload("Hello Opus", params);
+
+    assertThat(payload).contains(BedrockConstants.JsonKeys.MESSAGES);
+    assertThat(payload).contains("anthropic_version");
+    assertThat(payload).contains("max_tokens");
+    assertThat(payload).doesNotContain("temperature");
+    assertThat(payload).doesNotContain("top_p");
+    assertThat(payload).doesNotContain("top_k");
+  }
 }
