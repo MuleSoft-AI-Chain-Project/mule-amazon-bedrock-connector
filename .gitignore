@@ -49,3 +49,6 @@ generated-test-sources/
 
 .java-version
 /bin/
+
+# Local test credentials
+src/test/resources/automation-credentials.properties
