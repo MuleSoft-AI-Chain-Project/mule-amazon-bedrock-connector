@@ -14,13 +14,15 @@
   http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
 
     <munit:config name="BedrockOperations-test.xml" />
+    <configuration-properties file="automation-credentials.properties" />
 
     <!-- Chat: answer prompt -->
     <munit:test name="chat-answer-prompt-success-amazon">
         <munit:execution>
             <ms-bedrock:chat-answer-prompt config-ref="config-role"
                                           prompt="What is the capital of France?"
-                                          modelName="amazon.nova-lite-v1:0"/>
+                                          modelName="us.amazon.nova-lite-v1:0"
+                                           awsAccountId="610628048894"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -42,7 +44,8 @@
         <munit:execution>
             <ms-bedrock:chat-answer-prompt config-ref="config-role"
                                            prompt="What is the capital of France?"
-                                           modelName="meta.llama3-70b-instruct-v1:0"/>
+                                           modelName="meta.llama3-3-70b-instruct-v1:0"
+                                           awsAccountId="610628048894"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -100,7 +103,7 @@
         <munit:execution>
             <ms-bedrock:embedding-generate-from-text config-ref="config-role"
                                                       prompt="Sample text for embedding."
-                                                      modelName="amazon.titan-embed-text-v1"/>
+                                                      modelName="amazon.titan-embed-text-v2:0"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -112,7 +115,8 @@
         <munit:execution>
             <ms-bedrock:sentiment-analyze config-ref="config-role"
                                           TextToAnalyze="I am very happy with this product!"
-                                          modelName="amazon.nova-lite-v1:0"/>
+                                          modelName="us.amazon.nova-lite-v1:0"
+                                          awsAccountId="610628048894"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -128,7 +132,8 @@
                                                      template="Instructions: {{instructions}}. Data: {{dataset}}."
                                                      instructions="Answer briefly."
                                                      dataset="Sample data"
-                                                     modelName="amazon.nova-lite-v1:0"/>
+                                                     modelName="us.amazon.nova-lite-v1:0"
+                                                     awsAccountId="610628048894"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -148,7 +153,7 @@
     <!-- Agent: get Agent by id -->
     <munit:test name="get-agent-by-id">
         <munit:execution>
-            <ms-bedrock:agent-get-by-id config-ref="config-role" agentId="NCIK7YBSXH"/>
+            <ms-bedrock:agent-get-by-id config-ref="config-role" agentId="${config.agentId}"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
