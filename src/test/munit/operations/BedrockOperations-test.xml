@@ -22,7 +22,7 @@
             <ms-bedrock:chat-answer-prompt config-ref="config-role"
                                           prompt="What is the capital of France?"
                                           modelName="us.amazon.nova-lite-v1:0"
-                                           awsAccountId="610628048894"/>
+                                           awsAccountId="${config.accountID}"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -45,7 +45,7 @@
             <ms-bedrock:chat-answer-prompt config-ref="config-role"
                                            prompt="What is the capital of France?"
                                            modelName="meta.llama3-3-70b-instruct-v1:0"
-                                           awsAccountId="610628048894"/>
+                                           awsAccountId="${config.accountID}"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -116,7 +116,7 @@
             <ms-bedrock:sentiment-analyze config-ref="config-role"
                                           TextToAnalyze="I am very happy with this product!"
                                           modelName="us.amazon.nova-lite-v1:0"
-                                          awsAccountId="610628048894"/>
+                                          awsAccountId="${config.accountID}"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
@@ -133,7 +133,7 @@
                                                      instructions="Answer briefly."
                                                      dataset="Sample data"
                                                      modelName="us.amazon.nova-lite-v1:0"
-                                                     awsAccountId="610628048894"/>
+                                                     awsAccountId="${config.accountID}"/>
         </munit:execution>
         <munit:validation>
             <munit-tools:assert-that expression="#[payload]" is="#[MunitTools::notNullValue()]"/>
