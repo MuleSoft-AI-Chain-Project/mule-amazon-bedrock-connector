@@ -42,8 +42,6 @@
 
     <munit:test name="agent-chat-sse-with-multiple-kb-success">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="knowledgeBaseId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="knowledgeBaseId_1"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -61,11 +59,8 @@
 
     <munit:test name="agent-chat-sse-with-single-kb-success">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
-           <!-- <set-variable value="TGJ2IEDX2Q" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="KBId"/>
--->        </munit:behavior>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+        </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role" agentId="${config.agentId}" agentAliasId="${config.agentAliasId}" prompt="#[vars.content]" sessionId="#[uuid()]" knowledgeBaseId="${config.kbId_1}" numberOfResults="5"/>
         </munit:execution>
@@ -76,9 +71,7 @@
 
     <munit:test name="agent-chat-sse-with-multiple-kb-retry">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
             <!-- Record start time to validate exponential backoff duration -->
             <set-variable variableName="startTimeMs" value="#[now() as Number {unit: 'milliseconds'}]"/>
         </munit:behavior>
@@ -127,10 +120,7 @@
 
     <munit:test name="agent-chat-sse-with-no-retry-with-partial-chunks">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
-            <!-- Record start time to validate no-retry completes quickly -->
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
             <set-variable variableName="startTimeMs" value="#[now() as Number {unit: 'milliseconds'}]"/>
         </munit:behavior>
         <munit:execution>
@@ -179,9 +169,7 @@
 
     <munit:test name="agent-chat-sse-with-override-search-hybrid-metadata">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role"
@@ -205,9 +193,7 @@
 
     <munit:test name="agent-chat-sse-with-override-search-semantic-metadata-">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f" config-ref="config-role"
@@ -238,8 +224,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-sse-legacy-kb-semantic-single-filter">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -265,8 +249,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-sse-legacy-kb-hybrid-and-all-filter">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -293,8 +275,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-sse-legacy-kb-or-all-filter">
         <munit:behavior>
-           <!-- <set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -322,8 +302,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-sse-kb-only-id-no-vector-config">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -347,8 +325,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-sse-with-logging-params">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -385,8 +361,6 @@
     <!-- =================================================================== -->
     <munit:test name="agent-chat-with-kb-and-timeout">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" variableName="agentId"/>
-            <set-variable value="PVU2FTSDXC" doc:name="Set Variable" variableName="agentAlias"/>-->
             <set-variable value="explain HR onboarding" doc:name="Set Variable" variableName="content"/>
         </munit:behavior>
         <munit:execution>
@@ -418,9 +392,7 @@
 
     <munit:test name="agent-chat-sse-with-multiple-kb-with-reranking">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f"
@@ -450,9 +422,7 @@
 
     <munit:test name="agent-chat-sse-with-multiple-kb-with-reranking-with-selective-field-exclude">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f"
@@ -486,9 +456,7 @@
 
     <munit:test name="agent-chat-sse-with-multiple-kb-with-reranking-with-selective-field-include">
         <munit:behavior>
-            <!--<set-variable value="NCIK7YBSXH" doc:name="Set Variable" doc:id="7602b2fb-4b47-40aa-ae75-f98f9dac4321" variableName="agentId"/>
-            <set-variable value="KBMJXJZQWW" doc:name="Set Variable" doc:id="1a2235ed-4d27-4c86-9b57-d61d716f1006" variableName="agentAlias"/>
--->            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
+            <set-variable value="explain HR onboarding" doc:name="Set Variable" doc:id="88881319-ec3e-443c-8b96-c8025e7ad462" variableName="content"/>
         </munit:behavior>
         <munit:execution>
             <ms-bedrock:agent-chat-streaming-sse doc:name="Agent chat streaming (SSE)" doc:id="b8eeec20-3d76-46fc-930d-8fea3ec8654f"
