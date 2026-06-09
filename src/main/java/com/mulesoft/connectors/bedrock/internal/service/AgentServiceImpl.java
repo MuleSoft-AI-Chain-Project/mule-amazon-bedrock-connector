@@ -128,7 +128,7 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
       InvokeModelResponse invokeModelResponse = getConnection().answerPrompt(invokeModelRequest);
       return PromptPayloadHelper.formatBedrockResponse(bedrockParameters, invokeModelResponse);
     } catch (SdkClientException e) {
-      throw ErrorHandler.handleSdkClientException(e, bedrockParameters.getModelName());
+      throw ErrorHandler.handleSdkClientException(e, bedrockParameters != null ? bedrockParameters.getModelName() : null);
     } finally {
       logger.info("Agent operation [AGENT-define-prompt-template] session-end durationMs={}",
                   System.currentTimeMillis() - sessionStart);
@@ -945,6 +945,10 @@ public class AgentServiceImpl extends BedrockServiceImpl implements AgentService
                                      String requestId) {
     try {
       writerFuture.get(5, TimeUnit.SECONDS);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while waiting for writer thread - agentId: {}, sessionId: {}, requestId: {}",
+                  agentId, effectiveSessionId, requestId);
     } catch (java.util.concurrent.TimeoutException te) {
       logger.warn("Writer thread did not complete within 5s - agentId: {}, sessionId: {}, requestId: {}",
                   agentId, effectiveSessionId, requestId);

@@ -742,6 +742,59 @@ class AgentServiceImplTest {
     }
   }
 
+  // ==================== awaitWriterCompletion ====================
+
+  @Nested
+  @DisplayName("awaitWriterCompletion")
+  class AwaitWriterCompletion {
+
+    @Test
+    @DisplayName("returns normally when writer completes within timeout")
+    void writerCompletesNormally_returns() throws Exception {
+      Future<?> future = CompletableFuture.completedFuture(null);
+      invokeAwaitWriterCompletion(future);
+    }
+
+    @Test
+    @DisplayName("re-interrupts current thread on InterruptedException")
+    void interruptedException_reinterruptsThread() throws Exception {
+      Future<?> future = mock(Future.class);
+      when(future.get(anyLong(), any(TimeUnit.class)))
+          .thenThrow(new InterruptedException("interrupted"));
+
+      try {
+        invokeAwaitWriterCompletion(future);
+        assertThat(Thread.currentThread().isInterrupted()).isTrue();
+      } finally {
+        // Clear the interrupt so subsequent tests are not affected
+        Thread.interrupted();
+      }
+    }
+
+    @Test
+    @DisplayName("logs and continues on TimeoutException")
+    void timeoutException_logsAndReturns() throws Exception {
+      Future<?> future = mock(Future.class);
+      when(future.get(anyLong(), any(TimeUnit.class)))
+          .thenThrow(new java.util.concurrent.TimeoutException("timeout"));
+
+      invokeAwaitWriterCompletion(future);
+      // Method should return normally; thread interrupt flag should not be set
+      assertThat(Thread.currentThread().isInterrupted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("logs and continues on ExecutionException (writer thread failed)")
+    void executionException_logsAndReturns() throws Exception {
+      Future<?> future = mock(Future.class);
+      when(future.get(anyLong(), any(TimeUnit.class)))
+          .thenThrow(new java.util.concurrent.ExecutionException(new RuntimeException("boom")));
+
+      invokeAwaitWriterCompletion(future);
+      assertThat(Thread.currentThread().isInterrupted()).isFalse();
+    }
+  }
+
   // ==================== buildRetrievedReferenceJson ====================
 
   @Nested
@@ -1167,5 +1220,12 @@ class AgentServiceImplTest {
       sb.append(item);
     }
     return sb.toString();
+  }
+
+  private void invokeAwaitWriterCompletion(Future<?> writerFuture) throws Exception {
+    Method m = AgentServiceImpl.class.getDeclaredMethod("awaitWriterCompletion",
+                                                        Future.class, String.class, String.class, String.class);
+    m.setAccessible(true);
+    m.invoke(service, writerFuture, "agentId", "session1", "req1");
   }
 }
