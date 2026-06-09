@@ -80,6 +80,18 @@
         <formatterGoal>validate</formatterGoal>
         <skipVerifications>false</skipVerifications>
         <mule-sdk-api.version>0.11.4</mule-sdk-api.version>
+
+        <!--
+            SonarQube CPD (copy-paste detection) exclusions.
+            BedrockAgentsFilteringParameters declares the same five retrieval fields
+            (knowledgeBaseId, numberOfResults, overrideSearchType, retrievalMetadataFilterType,
+            metadataFilters) on the outer class and on the inner KnowledgeBaseConfig because
+            both must be exposed independently in the connector's public DSL. Refactoring to
+            a shared base class breaks the Mule SDK XSD generation for nested elements
+            (verified: <reranking-configuration> child becomes invalid). Exclude this file
+            from CPD until the DSL can absorb a breaking change.
+        -->
+        <sonar.cpd.exclusions>src/main/java/com/mulesoft/connectors/bedrock/api/parameter/BedrockAgentsFilteringParameters.java</sonar.cpd.exclusions>
     </properties>
 
     <dependencyManagement>
